@@ -1,13 +1,12 @@
 #!/bin/bash
 #
-# Construit Claudy.app en Release.
+# Construit Claudy.app en Release (binaire universel arm64 + x86_64).
 #
 #   ./Scripts/build-app.sh              → build/Claudy.app
 #   ./Scripts/build-app.sh --install    → installe dans /Applications et lance
+#   ./Scripts/build-app.sh --zip        → dist/Claudy-<version>.zip (artefact de release)
 #
-# Passe par xcodebuild quand il fonctionne, et retombe sinon sur une compilation
-# swiftc + assemblage manuel du bundle — utile tant que le contenu système de Xcode
-# n'est pas à jour (« xcodebuild failed to load a required plug-in »).
+# La version vient de MARKETING_VERSION dans le projet Xcode — unique source de vérité.
 
 set -euo pipefail
 
@@ -15,77 +14,64 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build"
 APP="$BUILD/Claudy.app"
 
-BUNDLE_ID="com.claudy.Claudy"
-VERSION="1.0"
-MIN_MACOS="13.0"
-
 install=false
-[[ "${1:-}" == "--install" ]] && install=true
+zip=false
+for arg in "$@"; do
+    case "$arg" in
+        --install) install=true ;;
+        --zip) zip=true ;;
+        *) echo "option inconnue : $arg (attendu : --install, --zip)" >&2; exit 1 ;;
+    esac
+done
+
+if ! command -v xcodebuild >/dev/null 2>&1; then
+    echo "xcodebuild introuvable — installe Xcode puis relance." >&2
+    exit 1
+fi
 
 rm -rf "$APP"
 mkdir -p "$BUILD"
 
-# ── 1. Chemin normal : xcodebuild ─────────────────────────────────────────────
-if xcodebuild -version >/dev/null 2>&1; then
-    echo "▸ xcodebuild (Release)"
-    xcodebuild \
-        -project "$ROOT/Claudy.xcodeproj" \
-        -scheme Claudy \
-        -configuration Release \
-        -derivedDataPath "$BUILD/DerivedData" \
-        build >/dev/null
+echo "▸ xcodebuild (Release, universel)"
+xcodebuild \
+    -project "$ROOT/Claudy.xcodeproj" \
+    -scheme Claudy \
+    -configuration Release \
+    -derivedDataPath "$BUILD/DerivedData" \
+    -destination 'generic/platform=macOS' \
+    ARCHS="arm64 x86_64" \
+    ONLY_ACTIVE_ARCH=NO \
+    -quiet build
 
-    cp -R "$BUILD/DerivedData/Build/Products/Release/Claudy.app" "$APP"
+ditto "$BUILD/DerivedData/Build/Products/Release/Claudy.app" "$APP"
 
-# ── 2. Repli : swiftc + bundle assemblé à la main ─────────────────────────────
-else
-    echo "▸ xcodebuild indisponible — repli sur swiftc"
-    echo "  (pour le réparer une fois pour toutes : sudo xcodebuild -runFirstLaunch)"
+# ── Vérifications post-build ──────────────────────────────────────────────────
+archs="$(lipo -archs "$APP/Contents/MacOS/Claudy")"
+if [[ "$archs" != *arm64* || "$archs" != *x86_64* ]]; then
+    echo "binaire non universel : $archs" >&2
+    exit 1
+fi
+codesign --verify --deep "$APP"
+plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
-    SDK="$(xcrun --show-sdk-path --sdk macosx)"
-    ARCH="$(uname -m)"
+VERSION="$(defaults read "$APP/Contents/Info.plist" CFBundleShortVersionString)"
+echo "▸ $APP (v$VERSION, $archs)"
 
-    mkdir -p "$APP/Contents/MacOS"
-
-    xcrun swiftc \
-        -sdk "$SDK" \
-        -target "$ARCH-apple-macos$MIN_MACOS" \
-        -O -whole-module-optimization \
-        $(find "$ROOT/Claudy" -name '*.swift') \
-        -o "$APP/Contents/MacOS/Claudy"
-
-    cat > "$APP/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleExecutable</key><string>Claudy</string>
-  <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
-  <key>CFBundleName</key><string>Claudy</string>
-  <key>CFBundleDisplayName</key><string>Claudy</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>$VERSION</string>
-  <key>CFBundleVersion</key><string>$VERSION</string>
-  <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
-  <key>LSMinimumSystemVersion</key><string>$MIN_MACOS</string>
-  <key>LSUIElement</key><true/>
-  <key>NSHighResolutionCapable</key><true/>
-</dict>
-</plist>
-PLIST
-
-    # Signature ad hoc : suffisante pour lancer localement.
-    # « Lancer au démarrage » (SMAppService) exige, lui, une vraie identité.
-    codesign --force --sign - "$APP"
+if $zip; then
+    mkdir -p "$ROOT/dist"
+    ZIP="$ROOT/dist/Claudy-$VERSION.zip"
+    rm -f "$ZIP"
+    # ditto préserve la signature et les métadonnées, contrairement à zip -r.
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    echo "▸ $ZIP"
 fi
 
-echo "▸ $APP"
-
 if $install; then
+    [[ -d "$APP/Contents" ]] || { echo "bundle invalide : $APP" >&2; exit 1; }
     # Une copie déjà en cours d'exécution garderait l'ancien binaire en mémoire.
     pkill -x Claudy 2>/dev/null || true
     rm -rf /Applications/Claudy.app
-    cp -R "$APP" /Applications/Claudy.app
+    ditto "$APP" /Applications/Claudy.app
     open /Applications/Claudy.app
     echo "▸ installé dans /Applications et lancé"
 fi

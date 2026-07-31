@@ -7,7 +7,29 @@ Les données sont **réelles et découvertes à l'exécution**. Rien n'est codé
 ni organisation, ni nom de projet, ni chemin. L'app fonctionne telle quelle sur n'importe quel
 Mac, et bascule sur un jeu de démonstration si Claude Code n'y est pas installé.
 
-## Lancer
+## Installer
+
+**Voie 1 — une commande (release précompilée) :**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Endikk/Claudy/main/Scripts/install.sh | bash
+```
+
+L'app arrive dans `/Applications` (trouvable via Spotlight). Claudy n'est **pas notarisé** :
+c'est une distribution gratuite, sans compte Apple Developer. La commande retire donc la
+quarantaine posée au téléchargement — sans quoi Gatekeeper refuserait de lancer l'app. Si tu
+préfères ne rien dé-quarantiner, compile toi-même (voie 2) : le code fait ~2 800 lignes,
+auditables en une heure, et ne fait aucune requête réseau.
+
+**Voie 2 — depuis les sources (nécessite Xcode) :**
+
+```bash
+git clone https://github.com/Endikk/Claudy.git
+cd Claudy
+./Scripts/build-app.sh --install
+```
+
+## Lancer (développement)
 
 ```bash
 open Claudy.xcodeproj
@@ -31,13 +53,14 @@ synchronisés : ajouter un `.swift` dans `Claudy/` suffit, rien à déclarer).
 ```bash
 ./Scripts/build-app.sh            # → build/Claudy.app
 ./Scripts/build-app.sh --install  # → /Applications/Claudy.app, puis le lance
+./Scripts/build-app.sh --zip      # → dist/Claudy-<version>.zip (artefact de release)
 ```
 
-Le script compile en Release via `xcodebuild`, et retombe automatiquement sur `swiftc` +
-assemblage manuel du bundle si `xcodebuild` refuse de démarrer. Résultat : un binaire universel
-(arm64 + x86_64), signé ad hoc — suffisant pour un usage local, mais pas pour
-« Lancer au démarrage » (voir plus bas) ni pour une distribution à d'autres machines, qui
-demanderait une identité Developer ID et une notarisation.
+Le script compile en Release via `xcodebuild` et vérifie le résultat (binaire universel
+arm64 + x86_64 via `lipo`, signature via `codesign --verify`, plist via `plutil -lint`).
+La version vient de `MARKETING_VERSION` dans le projet Xcode — unique source de vérité.
+Le binaire est signé ad hoc — suffisant pour tourner, mais pas pour « Lancer au démarrage »
+(voir plus bas).
 
 Depuis Xcode : *Product ▸ Archive*, puis *Distribute App ▸ Copy App*.
 
@@ -50,7 +73,7 @@ Tout passe par le **clic droit sur la carte** — et ⌘R / ⌘Q restent actifs 
 |---|---|
 | Glisser n'importe où sur la carte | Déplacer le widget (position sauvegardée) |
 | Clic droit | Rafraîchir · Mode minimal/complet · Toujours au premier plan · Lancer au démarrage · Quitter |
-| Clic sur l'avatar | Fiche compte (plan, e-mail, organisation, stats équipe, déconnexion) |
+| Clic sur l'avatar | Fiche compte (nom, e-mail, plan, organisation) |
 | Clic sur « Détails » | Accordéon : répartition par modèle et top projets |
 
 Rafraîchissement automatique toutes les 60 s.
@@ -66,13 +89,25 @@ compte. La seule source disponible est locale, et c'est celle que Claudy lit :
 | Compte, plan, organisation, rôle | `.claude.json`, bloc `oauthAccount` |
 | Nom affiché sans compte Claude | `NSFullUserName()` de la session macOS |
 
-`<config>` vaut `$CLAUDE_CONFIG_DIR` s'il est défini, sinon `~/.claude`. Quand la variable est
-définie, aucun repli vers le dossier personnel n'a lieu : rediriger la configuration isole
-complètement.
+`<config>` vaut, par ordre de priorité : le réglage `claudy.configDir`, puis `$CLAUDE_CONFIG_DIR`,
+sinon `~/.claude`. La variable d'environnement ne sert qu'aux lancements depuis un terminal —
+une app ouverte depuis le Finder ou le Dock n'hérite pas du shell. Pour rediriger la
+configuration de façon persistante :
+
+```bash
+defaults write com.claudy.Claudy claudy.configDir ~/mon-dossier-claude
+```
+
+Quand un répertoire personnalisé est défini, aucun repli vers le dossier personnel n'a lieu :
+rediriger la configuration isole complètement.
 
 Les tokens comptés sont la somme des quatre compteurs (`input`, `output`, `cache_creation`,
 `cache_read`). Les lectures de cache dominent : une semaine chargée dépasse couramment le
 milliard de tokens, d'où l'unité « Md » dans l'interface.
+
+Claude Code réécrit la même réponse sur plusieurs lignes du transcript (une par bloc de
+contenu), avec un bloc `usage` identique. Claudy **déduplique** sur `(message.id, requestId)` —
+la même clé que `ccusage` — sans quoi les totaux seraient gonflés d'un facteur ~2.
 
 Le nom d'un projet vient du champ `cwd` de la ligne, jamais du nom de dossier de transcript —
 celui-ci est une translittération qui perd accents et séparateurs
@@ -138,6 +173,10 @@ le nom vient de la session macOS, les projets portent des noms neutres. La bascu
 Si Claude Code est présent mais sans activité sur 7 jours, l'app affiche le vrai compte avec des
 compteurs à zéro : elle ne substitue pas des chiffres de démonstration à une absence d'usage.
 
+Toute autre panne (dossier `projects` illisible, droits manquants) n'entraîne **pas** de bascule
+en démonstration : le dernier relevé valide reste affiché et une pastille « erreur » (point rouge
+en mode minimal) apparaît, avec le détail au survol.
+
 ## Structure
 
 ```
@@ -183,11 +222,14 @@ Quatre points techniques valent d'être connus avant de la modifier :
 
 `SMAppService.mainApp.register()` exige une app signée avec une identité stable. Le projet est
 configuré en signature ad-hoc (`CODE_SIGN_IDENTITY = "-"`) pour compiler sans compte développeur :
-dans cet état, l'option du menu contextuel échoue et se remet à « désactivé » — c'est volontaire,
-l'interface n'affiche jamais un état qu'elle n'a pas obtenu.
+dans cet état, l'app détecte sa propre signature et le menu contextuel affiche l'option grisée
+« indisponible — app non signée » plutôt qu'une case qui se décocherait toute seule.
 
-Pour l'activer réellement : sélectionner sa Team dans *Signing & Capabilities* et repasser
-`CODE_SIGN_STYLE` en `Automatic`.
+**Alternative sans signature** : Réglages Système ▸ Général ▸ Ouverture et extensions ▸
+Ouvrir à l'ouverture de session ▸ « + » ▸ Claudy.
+
+Pour l'activer réellement dans l'app : sélectionner sa Team dans *Signing & Capabilities* et
+repasser `CODE_SIGN_STYLE` en `Automatic`.
 
 ## Vie privée
 
