@@ -50,5 +50,9 @@ struct MinimalView: View {
                      pace: session.isActive ? session.elapsed : nil)
         }
         .frame(width: Theme.Metric.minimalWidth)
+        .contentShape(Rectangle())
+        // Un seul clic suffit pour agrandir — le glisser, lui, déplace toujours la carte.
+        .onTapGesture { viewModel.toggleMode() }
+        .help("Clic : mode complet")
     }
 }

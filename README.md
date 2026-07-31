@@ -90,8 +90,9 @@ Tout passe par le **clic droit sur la carte** — et ⌘R / ⌘Q restent actifs 
 
 | Geste | Effet |
 |---|---|
-| Glisser n'importe où sur la carte | Déplacer le widget (position sauvegardée) |
-| Clic droit | Rafraîchir · Mode minimal/complet · Toujours au premier plan · Lancer au démarrage · Quitter |
+| Glisser n'importe où sur la carte | Déplacer le widget (le temps de la session — il revient en bas à droite au lancement) |
+| Clic sur la bande minimale | Passer en mode complet |
+| Clic droit | Rafraîchir · Mode minimal/complet · Connexion · Toujours au premier plan · Lancer au démarrage · Quitter |
 | Clic sur l'avatar | Fiche compte (nom, e-mail, plan, organisation) |
 | Clic sur « Détails » | Accordéon : répartition par modèle et top projets |
 
@@ -271,11 +272,10 @@ Quatre points techniques valent d'être connus avant de la modifier :
   ne reçoit ni clavier ni menu contextuel fiable.
 - La taille de la fenêtre suit la taille intrinsèque SwiftUI
   (`NSHostingController.sizingOptions = [.preferredContentSize]`). Ne pas coder de hauteur en dur.
-- La carte grandit **vers le bas** : `setContentSize` fige le coin haut-gauche.
-  `AppDelegate.windowDidResize` ne fait donc que du recadrage écran — sans lui, ouvrir l'accordéon
-  près du bas de l'écran ferait plonger la carte hors champ. Ne pas y rajouter de logique
-  d'ancrage : `windowDidMove` est notifié *pendant* le redimensionnement, et toute ancre
-  recalculée là est déjà périmée.
+- La carte est **ancrée par son coin bas-droit** : `setContentSize` fige le coin haut-gauche
+  (croissance vers le bas), donc `AppDelegate.windowDidResize` re-suspend la carte à son ancre —
+  elle grandit vers le haut et reste entièrement visible. L'ancre est réinitialisée en bas à
+  droite de l'écran à chaque lancement ; un déplacement à la souris la met à jour pour la session.
 
 ## Lancement au démarrage
 

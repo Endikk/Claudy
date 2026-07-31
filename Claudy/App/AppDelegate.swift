@@ -13,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Garde-fou : `setFrame` depuis `windowDidResize` renotifie.
     private var isAdjustingFrame = false
 
+    /// Coin **bas-droit** de la carte — son point d'ancrage. C'est lui qui reste fixe quand
+    /// la carte change de taille : elle grandit vers le haut et la gauche, jamais sous le
+    /// bord de l'écran. Réinitialisé en bas à droite de l'écran à chaque lancement.
+    private var anchor: CGPoint = .zero
+
     // MARK: - Cycle de vie
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,7 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = viewModel.isAlwaysOnTop ? .floating : .normal
         self.panel = panel
 
-        restoreFrame(for: panel)
+        // Position de départ : coin bas-droit de l'écran principal, à chaque lancement.
+        // C'est la place du widget ; un déplacement à la souris vaut pour la session.
+        let visible = (NSScreen.main?.visibleFrame) ?? panel.frame
+        anchor = CGPoint(x: visible.maxX, y: visible.minY)
+        applyAnchor()
         panel.orderFrontRegardless()
 
         // Moniteur débranché ou résolution changée : sans ce recadrage, la carte peut rester
@@ -66,22 +75,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Position
 
-    private func restoreFrame(for panel: NSPanel) {
-        let defaults = UserDefaults.standard
+    /// Replace la carte sur son ancre bas-droit puis recadre à l'écran. Appelé à chaque
+    /// changement de taille : la croissance part du bas, donc vers le haut — l'interface
+    /// entière reste toujours visible.
+    private func applyAnchor() {
+        guard let panel else { return }
+        var frame = panel.frame
+        frame.origin.x = anchor.x - frame.width
+        frame.origin.y = anchor.y
+        frame = clamped(frame, for: panel)
+        guard frame != panel.frame else { return }
 
-        guard defaults.object(forKey: Keys.originX) != nil else {
-            panel.center()
-            return
-        }
-
-        // Seule l'origine est restaurée : la taille réelle n'est connue qu'après la première
-        // passe de layout SwiftUI. Le recadrage à l'écran est fait par `windowDidResize`,
-        // qui lui travaille sur la taille définitive.
-        let origin = CGPoint(
-            x: defaults.double(forKey: Keys.originX),
-            y: defaults.double(forKey: Keys.originY)
-        )
-        panel.setFrame(clamped(NSRect(origin: origin, size: panel.frame.size), for: panel), display: false)
+        isAdjustingFrame = true
+        panel.setFrame(frame, display: true)
+        isAdjustingFrame = false
     }
 
     /// Ramène la carte dans la zone utile de l'écran.
@@ -101,38 +108,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return frame
     }
 
-    private func saveOrigin(_ origin: CGPoint) {
-        let defaults = UserDefaults.standard
-        defaults.set(origin.x, forKey: Keys.originX)
-        defaults.set(origin.y, forKey: Keys.originY)
-    }
-
-    /// Recadre la carte dans l'écran courant si elle en est sortie.
+    /// Écran débranché ou résolution changée : replace sur l'ancre, recadre, puis adopte
+    /// la position réellement obtenue comme nouvelle ancre (l'ancienne peut pointer sur un
+    /// écran qui n'existe plus).
     private func clampPanelToScreen() {
-        guard let panel else { return }
-        let frame = clamped(panel.frame, for: panel)
-        guard frame != panel.frame else { return }
-
-        isAdjustingFrame = true
-        panel.setFrame(frame, display: true)
-        isAdjustingFrame = false
-        saveOrigin(frame.origin)
+        applyAnchor()
+        if let frame = panel?.frame {
+            anchor = CGPoint(x: frame.maxX, y: frame.minY)
+        }
     }
 
     // MARK: - NSWindowDelegate
 
+    /// Déplacement à la souris : le coin bas-droit de la nouvelle position devient l'ancre.
     func windowDidMove(_ notification: Notification) {
-        guard !isAdjustingFrame, let window = notification.object as? NSWindow else { return }
-        saveOrigin(window.frame.origin)
+        guard !isAdjustingFrame, let panel, notification.object as? NSWindow === panel else { return }
+        anchor = CGPoint(x: panel.frame.maxX, y: panel.frame.minY)
     }
 
-    /// Quand la carte change de taille (bascule de mode, accordéon), AppKit conserve déjà le coin
-    /// *haut* gauche — `NSHostingController` passe par `setContentSize`. Il reste à empêcher la
-    /// carte de plonger sous le bas de l'écran en grandissant.
+    /// Changement de taille (bascule de mode, accordéon, onboarding) : AppKit fige le coin
+    /// *haut* gauche — la carte grandirait vers le bas, sous l'écran. On la re-suspend à
+    /// son ancre bas-droit : elle grandit vers le haut.
     func windowDidResize(_ notification: Notification) {
         guard !isAdjustingFrame, let panel, notification.object as? NSWindow === panel else { return }
-        saveOrigin(panel.frame.origin)
-        clampPanelToScreen()
+        applyAnchor()
     }
 
     // MARK: - Menu
@@ -155,10 +154,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func refreshNow() {
         Task { await viewModel.refresh() }
-    }
-
-    private enum Keys {
-        static let originX = "claudy.window.x"
-        static let originY = "claudy.window.y"
     }
 }
