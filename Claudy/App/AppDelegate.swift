@@ -126,11 +126,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         anchor = CGPoint(x: panel.frame.maxX, y: panel.frame.minY)
     }
 
-    /// Changement de taille (bascule de mode, accordéon, onboarding) : AppKit fige le coin
-    /// *haut* gauche — la carte grandirait vers le bas, sous l'écran. On la re-suspend à
-    /// son ancre bas-droit : elle grandit vers le haut.
+    /// Changement de taille (bascule de mode, accordéon, onboarding) : la carte revient
+    /// **systématiquement** à sa place attitrée — le coin bas-droit de l'écran où elle se
+    /// trouve — quelle que soit la position où elle avait été glissée entre-temps.
     func windowDidResize(_ notification: Notification) {
         guard !isAdjustingFrame, let panel, notification.object as? NSWindow === panel else { return }
+        if let visible = (panel.screen ?? NSScreen.main)?.visibleFrame {
+            anchor = CGPoint(x: visible.maxX, y: visible.minY)
+        }
         applyAnchor()
     }
 

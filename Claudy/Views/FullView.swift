@@ -11,8 +11,15 @@ struct FullView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
+            // Clic sur l'en-tête ou le bloc session : retour au mode minimal — symétrique
+            // du clic sur la bande. Les boutons (avatar) gardent la priorité sur le tap.
             header
+                .contentShape(Rectangle())
+                .onTapGesture { viewModel.toggleMode() }
             sessionBlock
+                .contentShape(Rectangle())
+                .onTapGesture { viewModel.toggleMode() }
+                .help("Clic : mode minimal")
 
             HStack(spacing: 9) {
                 StatColumn(window: snapshot.weekly)
