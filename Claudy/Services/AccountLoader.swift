@@ -48,15 +48,17 @@ enum AccountLoader {
         return full.isEmpty ? NSUserName() : full
     }
 
-    /// « default_claude_max_5x » → « Max 5× », « claude_pro » → « Pro ».
-    /// Transformation générique : aucun palier n'est énuméré, donc les futurs paliers passent aussi.
     private static func plan(from oauth: [String: Any]) -> String {
-        let raw = (oauth["organizationRateLimitTier"] as? String)
+        planLabel(from: (oauth["organizationRateLimitTier"] as? String)
             ?? (oauth["userRateLimitTier"] as? String)
             ?? (oauth["seatTier"] as? String)
             ?? (oauth["organizationType"] as? String)
-            ?? ""
+            ?? "")
+    }
 
+    /// « default_claude_max_5x » → « Max 5× », « claude_pro » → « Pro ».
+    /// Transformation générique : aucun palier n'est énuméré, donc les futurs paliers passent aussi.
+    static func planLabel(from raw: String) -> String {
         let words = raw
             .replacingOccurrences(of: "default_", with: "")
             .replacingOccurrences(of: "claude_", with: "")

@@ -87,8 +87,14 @@ compte. La seule source disponible est locale, et c'est celle que Claudy lit :
 |---|---|
 | Tokens, modèles, projets, sessions | `<config>/projects/**/*.jsonl` — un objet `message.usage` par réponse |
 | % de quota et heures de reset des jauges | `api.anthropic.com/api/oauth/usage`, avec le jeton local de Claude Code |
-| Compte, plan, organisation, rôle | `.claude.json`, bloc `oauthAccount` |
+| Compte, plan, organisation | `api.anthropic.com/api/oauth/profile`, repli `.claude.json` (bloc `oauthAccount`) |
+| Rôle (badge Admin) | `.claude.json`, bloc `oauthAccount` |
 | Nom affiché sans compte Claude | `NSFullUserName()` de la session macOS |
+
+Invariant : les **pourcentages** des jauges viennent uniquement de l'API ; les transcripts ne
+servent qu'au **détail en tokens** (totaux, répartitions, sparkline). Les deux ne sont jamais
+fusionnés en un seul chiffre — sauf la ligne « X sur Y tokens », où Y est une simple échelle
+d'affichage extrapolée du pourcentage.
 
 `<config>` vaut, par ordre de priorité : le réglage `claudy.configDir`, puis `$CLAUDE_CONFIG_DIR`,
 sinon `~/.claude`. La variable d'environnement ne sert qu'aux lancements depuis un terminal —
@@ -118,11 +124,29 @@ celui-ci est une translittération qui perd accents et séparateurs
 
 **Quotas réels d'abord.** Claudy lit le jeton OAuth que Claude Code garde localement
 (trousseau « Claude Code-credentials », sinon `<config>/.credentials.json`) et interroge
-`api.anthropic.com/api/oauth/usage` — le même point d'accès que claude.ai ▸ Réglages ▸
-Utilisation. Les trois jauges affichent alors les **pourcentages et heures de remise à zéro
-réels du compte** : session 5 h, hebdo tous modèles, et la limite hebdo du modèle suivi par
-Anthropic (« Fable », « Opus »… selon le compte). Le premier accès au trousseau déclenche la
-demande d'autorisation macOS habituelle — choisir « Toujours autoriser ».
+`api.anthropic.com/api/oauth/usage` et `/api/oauth/profile` — les mêmes points d'accès que
+claude.ai ▸ Réglages ▸ Utilisation. Les trois jauges affichent alors les **pourcentages et
+heures de remise à zéro réels du compte** (session 5 h, hebdo tous modèles, limite hebdo du
+modèle suivi — « Fable », « Opus »… selon le compte), et la fiche compte l'identité officielle.
+Le premier accès au trousseau déclenche la demande d'autorisation macOS habituelle — choisir
+« Toujours autoriser ».
+
+Ce qui rend la liaison fiable :
+
+- **Refresh autonome** : à moins de 2 min de l'expiration du jeton, Claudy rejoue lui-même le
+  grant `refresh_token` avec le client public de Claude Code et réécrit le magasin (trousseau
+  ou fichier, écriture atomique) — Claude Code récupère le jeton frais. Le refresh n'est jamais
+  tenté si le magasin n'est pas réinscriptible : une rotation non persistée invaliderait la
+  session de Claude Code.
+- **Retry unique sur 401**, jamais de boucle.
+- **Dernière valeur connue + backoff** : un échec (429, hors-ligne) ne remet rien à zéro — la
+  dernière valeur reste affichée avec une pastille « ⟳ », et les tentatives s'espacent
+  (60 s + 60 s × échecs, plafond 300 s).
+- **Journal** : chaque échec est horodaté dans `~/Library/Application Support/Claudy/api.log`
+  (code HTTP, refresh), pour distinguer un rate-limit d'un jeton mort.
+
+Ces points d'accès ne sont pas documentés et peuvent changer sans préavis — fragilité assumée,
+d'où le repli ci-dessous.
 
 Le nombre de tokens du quota n'étant pas exposé, la ligne « X sur Y tokens » extrapole Y depuis
 le pourcentage (Y ≈ tokens locaux ÷ %). Si d'autres appareils consomment sur le même compte,
@@ -248,8 +272,10 @@ repasser `CODE_SIGN_STYLE` en `Automatic`.
 
 ## Vie privée
 
-Une **seule** requête réseau existe : `GET api.anthropic.com/api/oauth/usage`, authentifiée
-avec le jeton que Claude Code garde déjà sur la machine, pour lire les quotas réels du compte.
-Rien d'autre n'est envoyé — pas de télémétrie, pas de contenu, et le jeton n'est jamais
-rafraîchi ni réécrit. Sans jeton ou hors-ligne, l'app fonctionne entièrement en local.
-Le sandbox est désactivé uniquement pour permettre la lecture de `~/.claude`.
+Le réseau ne sert qu'à trois requêtes vers Anthropic, authentifiées avec le jeton que Claude
+Code garde déjà sur la machine : `usage` (quotas), `profile` (identité du compte), et — quand
+le jeton arrive à expiration — le renouvellement OAuth standard. Rien d'autre n'est envoyé :
+pas de télémétrie, pas de contenu de conversation. Le jeton renouvelé est réécrit dans le
+magasin de Claude Code (trousseau ou `.credentials.json`), jamais ailleurs. Sans jeton ou
+hors-ligne, l'app fonctionne entièrement en local. Le sandbox est désactivé uniquement pour
+permettre la lecture de `~/.claude`.

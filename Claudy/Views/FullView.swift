@@ -67,6 +67,11 @@ struct FullView: View {
                     .help(message)
             }
 
+            if snapshot.quotaStale {
+                pill("⟳", tint: Theme.Accent.amber.color)
+                    .help("Quotas momentanément injoignables — dernière valeur connue affichée.")
+            }
+
             Spacer(minLength: 0)
 
             AvatarButton(

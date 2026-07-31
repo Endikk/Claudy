@@ -102,6 +102,10 @@ struct UsageSnapshot: Equatable {
     /// passer des valeurs inventées pour un relevé réel.
     var isDemo: Bool
 
+    /// Vrai quand les quotas affichés datent d'un passage précédent (API injoignable) :
+    /// l'interface le signale discrètement au lieu de remettre les jauges à zéro.
+    var quotaStale: Bool = false
+
     /// Aucune activité relevée sur la fenêtre de 7 jours.
     var isEmpty: Bool { weekTokens == 0 }
 

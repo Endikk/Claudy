@@ -19,16 +19,31 @@ enum UsageDataError: Error {
 actor LocalUsageDataSource: UsageDataSource {
 
     private let scanner = TranscriptScanner()
-    private let quotaLoader = QuotaLoader()
+    private let client = ClaudeAccountClient()
 
     func fetch() async throws -> UsageSnapshot {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
 
         let result = try await scanner.scan()
-        // Quotas réels du compte quand le jeton local le permet ; `nil` (hors-ligne, pas de
-        // jeton) fait retomber les jauges sur la référence personnelle.
-        let quotas = await quotaLoader.fetch()
-        return UsageAggregator.snapshot(from: result.entries, account: AccountLoader.load(), quotas: quotas)
+        // Quotas et profil réels du compte quand le jeton local le permet ; `nil` (hors-ligne,
+        // pas de jeton) fait retomber les jauges sur la référence personnelle.
+        let payload = await client.fetch()
+
+        // Le profil OAuth fait foi pour l'identité ; le rôle (admin) ne vient que de .claude.json.
+        var account = AccountLoader.load()
+        if let profile = payload.profile {
+            account = Account(
+                name: profile.name,
+                email: profile.email,
+                plan: profile.plan,
+                organization: profile.organization,
+                isAdmin: account.isAdmin
+            )
+        }
+
+        var snapshot = UsageAggregator.snapshot(from: result.entries, account: account, quotas: payload.limits)
+        snapshot.quotaStale = payload.isStale
+        return snapshot
     }
 }
 
