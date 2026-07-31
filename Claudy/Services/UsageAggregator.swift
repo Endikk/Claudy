@@ -2,20 +2,24 @@ import Foundation
 
 /// Transforme les relevés bruts en instantané affichable.
 ///
-/// **Pourquoi des pourcentages relatifs.** Anthropic n'expose aucune API publique donnant le
-/// quota restant d'une fenêtre 5 h ou hebdomadaire, et les transcripts n'en portent aucune trace.
-/// Un pourcentage « sur le quota réel » serait donc inventé. Claudy affiche à la place la
-/// consommation rapportée à la *référence personnelle* de la machine : le 90ᵉ centile des
-/// fenêtres déjà écoulées. 100 % signifie « au niveau de tes plus grosses fenêtres », pas
-/// « quota épuisé ». Chaque référence est remplaçable par une valeur explicite
-/// (`claudy.limit.session`, `claudy.limit.weekly`, `claudy.limit.model` dans les préférences).
+/// **D'où viennent les pourcentages.** Quand le jeton OAuth local le permet, les trois jauges
+/// affichent les **quotas réels** du compte (mêmes chiffres que claude.ai ▸ Utilisation), avec
+/// leurs vraies heures de remise à zéro. Sans jeton ni réseau, repli sur la *référence
+/// personnelle* de la machine : le 90ᵉ centile des fenêtres déjà écoulées — 100 % signifie
+/// alors « au niveau de tes plus grosses fenêtres », pas « quota épuisé ». En repli, chaque
+/// référence est remplaçable par une valeur explicite (`claudy.limit.session`,
+/// `claudy.limit.weekly`, `claudy.limit.model` dans les préférences).
 enum UsageAggregator {
+
+    /// Durée de la fenêtre hebdomadaire de quota.
+    private static let weeklyWindow: TimeInterval = 7 * 86_400
 
     /// Durée d'une fenêtre de session Claude Code.
     static let sessionWindow: TimeInterval = 5 * 3600
     private static let day: TimeInterval = 86_400
 
-    static func snapshot(from entries: [TranscriptEntry], account: Account, now: Date = Date()) -> UsageSnapshot {
+    static func snapshot(from entries: [TranscriptEntry], account: Account,
+                         quotas: [QuotaLimit]? = nil, now: Date = Date()) -> UsageSnapshot {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
 
@@ -54,29 +58,74 @@ enum UsageAggregator {
         let rolling = entries.filter { $0.date >= now.addingTimeInterval(-7 * day) }
         let rollingTokens = rolling.reduce(0) { $0 + $1.tokens }
 
-        return UsageSnapshot(
-            session: UsageWindow(
+        // — Jauges : quota réel quand l'API l'a donné, référence personnelle sinon —
+
+        var session = UsageWindow(
+            id: "session", title: "Session", window: "5h",
+            percent: ratio(active?.tokens ?? 0, sessionReference),
+            tokensUsed: active?.tokens ?? 0,
+            tokensLimit: sessionReference,
+            windowStart: active?.start ?? now,
+            // Sans fenêtre active, la prochaine démarrera au premier message : rien à décompter.
+            resetDate: active?.end ?? now,
+            accent: .coral
+        )
+        if let quota = quotas?.first(where: { $0.kind == "session" }), quota.resetsAt > now {
+            let start = quota.resetsAt.addingTimeInterval(-sessionWindow)
+            let used = entries.filter { $0.date >= start }.reduce(0) { $0 + $1.tokens }
+            session = UsageWindow(
                 id: "session", title: "Session", window: "5h",
-                percent: ratio(active?.tokens ?? 0, sessionReference),
-                tokensUsed: active?.tokens ?? 0,
-                tokensLimit: sessionReference,
-                windowStart: active?.start ?? now,
-                // Sans fenêtre active, la prochaine démarrera au premier message : rien à décompter.
-                resetDate: active?.end ?? now,
-                accent: .coral
-            ),
-            weekly: UsageWindow(
+                percent: min(quota.percent, 1),
+                tokensUsed: used,
+                tokensLimit: extrapolated(used: used, percent: quota.percent, fallback: sessionReference),
+                windowStart: start, resetDate: quota.resetsAt, accent: .coral
+            )
+        }
+
+        var weekly = UsageWindow(
+            id: "weekly", title: "Hebdo", window: "sem.",
+            percent: ratio(weekTokens, weekReference),
+            tokensUsed: weekTokens, tokensLimit: weekReference,
+            windowStart: week.start, resetDate: week.end, accent: .amber
+        )
+        if let quota = quotas?.first(where: { $0.kind == "weekly_all" }), quota.resetsAt > now {
+            let start = quota.resetsAt.addingTimeInterval(-weeklyWindow)
+            let used = entries.filter { $0.date >= start }.reduce(0) { $0 + $1.tokens }
+            weekly = UsageWindow(
                 id: "weekly", title: "Hebdo", window: "sem.",
-                percent: ratio(weekTokens, weekReference),
-                tokensUsed: weekTokens, tokensLimit: weekReference,
-                windowStart: week.start, resetDate: week.end, accent: .amber
-            ),
-            sonnet: UsageWindow(
-                id: "focus", title: ModelName.display(focus), window: "sem.",
-                percent: ratio(focusTokens, focusReference),
-                tokensUsed: focusTokens, tokensLimit: focusReference,
-                windowStart: week.start, resetDate: week.end, accent: ModelName.accent(focus)
-            ),
+                percent: min(quota.percent, 1),
+                tokensUsed: used,
+                tokensLimit: extrapolated(used: used, percent: quota.percent, fallback: weekReference),
+                windowStart: start, resetDate: quota.resetsAt, accent: .amber
+            )
+        }
+
+        var third = UsageWindow(
+            id: "focus", title: ModelName.display(focus), window: "sem.",
+            percent: ratio(focusTokens, focusReference),
+            tokensUsed: focusTokens, tokensLimit: focusReference,
+            windowStart: week.start, resetDate: week.end, accent: ModelName.accent(focus)
+        )
+        if let quota = quotas?.first(where: { $0.kind == "weekly_scoped" }),
+           quota.resetsAt > now, let scopeName = quota.scopeName {
+            let family = scopeName.lowercased()
+            let start = quota.resetsAt.addingTimeInterval(-weeklyWindow)
+            let used = entries
+                .filter { $0.date >= start && ModelName.family($0.model) == family }
+                .reduce(0) { $0 + $1.tokens }
+            third = UsageWindow(
+                id: "focus", title: scopeName, window: "sem.",
+                percent: min(quota.percent, 1),
+                tokensUsed: used,
+                tokensLimit: extrapolated(used: used, percent: quota.percent, fallback: focusReference),
+                windowStart: start, resetDate: quota.resetsAt, accent: ModelName.accent(family)
+            )
+        }
+
+        return UsageSnapshot(
+            session: session,
+            weekly: weekly,
+            sonnet: third,
             history: history(rolling, today: today, calendar: calendar),
             models: models(rolling, total: rollingTokens),
             projects: projects(rolling, total: rollingTokens),
@@ -178,6 +227,15 @@ enum UsageAggregator {
     private static func ratio(_ used: Int, _ reference: Int) -> Double {
         guard reference > 0 else { return 0 }
         return min(Double(used) / Double(reference), 1)
+    }
+
+    /// Quota total estimé depuis le pourcentage réel, pour que « X sur Y tokens » reste
+    /// affichable. Approximation : le pourcentage est celui du *compte*, les tokens comptés
+    /// sont ceux de *cette machine* — l'estimation minore le quota si d'autres appareils
+    /// consomment. Sous 1 %, l'extrapolation diverge : la référence personnelle sert de repli.
+    private static func extrapolated(used: Int, percent: Double, fallback: Int) -> Int {
+        guard percent >= 0.01, used > 0 else { return max(fallback, used) }
+        return max(Int(Double(used) / percent), used)
     }
 
     // MARK: - Répartitions

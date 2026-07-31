@@ -86,6 +86,7 @@ compte. La seule source disponible est locale, et c'est celle que Claudy lit :
 | Donnée | Source |
 |---|---|
 | Tokens, modèles, projets, sessions | `<config>/projects/**/*.jsonl` — un objet `message.usage` par réponse |
+| % de quota et heures de reset des jauges | `api.anthropic.com/api/oauth/usage`, avec le jeton local de Claude Code |
 | Compte, plan, organisation, rôle | `.claude.json`, bloc `oauthAccount` |
 | Nom affiché sans compte Claude | `NSFullUserName()` de la session macOS |
 
@@ -113,10 +114,22 @@ Le nom d'un projet vient du champ `cwd` de la ligne, jamais du nom de dossier de
 celui-ci est une translittération qui perd accents et séparateurs
 (`~/Documents/Développement/Ma-App` y devient `-Users-…-D-veloppement-Ma-App`).
 
-### Pourquoi les pourcentages sont relatifs
+### D'où viennent les pourcentages
 
-Aucun quota n'étant exposé, un pourcentage « sur le quota réel » serait inventé. Claudy affiche
-la consommation rapportée à une **référence personnelle**, calculée sur la machine :
+**Quotas réels d'abord.** Claudy lit le jeton OAuth que Claude Code garde localement
+(trousseau « Claude Code-credentials », sinon `<config>/.credentials.json`) et interroge
+`api.anthropic.com/api/oauth/usage` — le même point d'accès que claude.ai ▸ Réglages ▸
+Utilisation. Les trois jauges affichent alors les **pourcentages et heures de remise à zéro
+réels du compte** : session 5 h, hebdo tous modèles, et la limite hebdo du modèle suivi par
+Anthropic (« Fable », « Opus »… selon le compte). Le premier accès au trousseau déclenche la
+demande d'autorisation macOS habituelle — choisir « Toujours autoriser ».
+
+Le nombre de tokens du quota n'étant pas exposé, la ligne « X sur Y tokens » extrapole Y depuis
+le pourcentage (Y ≈ tokens locaux ÷ %). Si d'autres appareils consomment sur le même compte,
+Y est sous-estimé — le pourcentage, lui, reste exact.
+
+**Référence personnelle en repli.** Sans jeton ou hors-ligne, les jauges retombent sur la
+consommation rapportée à une référence calculée sur la machine :
 
 - **Session · 5h** — 90ᵉ centile des fenêtres de 5 h déjà écoulées.
 - **Hebdo · sem.** — 90ᵉ centile des journées terminées, multiplié par 7 (une semaine où chaque
@@ -126,10 +139,11 @@ la consommation rapportée à une **référence personnelle**, calculée sur la 
   n'utilise pas Sonnet, la jauge bascule sur la famille la plus consommée et prend son nom
   (« Opus · sem. »), plutôt que d'afficher une colonne morte à 0 %.
 
-**100 % signifie « au niveau de tes plus grosses fenêtres », pas « quota épuisé ».**
+**En repli, 100 % signifie « au niveau de tes plus grosses fenêtres », pas « quota épuisé ».**
 
 Sans historique, la consommation courante sert de référence : la jauge affiche 100 % et se
-recalibre dès la première fenêtre écoulée.
+recalibre dès la première fenêtre écoulée. Les préférences `claudy.limit.*` (ci-dessous) ne
+s'appliquent qu'à ce mode repli.
 
 ### Le repère de rythme
 
@@ -146,11 +160,12 @@ colonnes le résument à un signe (`+15` / `−14`). Sous 4 points d'écart, l'a
 
 Le repère disparaît quand aucune fenêtre n'est en cours — il n'y a alors pas de rythme à tenir.
 
-C'est ce repère qui impose la **semaine calendaire** pour les jauges hebdomadaires : une fenêtre
-glissante de 7 jours n'a ni début ni fin, donc aucun rythme attendu. Le premier jour de semaine
-suit la locale du système (lundi en France, dimanche aux États-Unis), et la remise à zéro
-affichée est réelle. L'historique, la sparkline et les répartitions restent, eux, sur 7 jours
-glissants : une courbe qui repart d'un point chaque lundi n'apprendrait rien.
+Avec les quotas réels, les fenêtres hebdomadaires sont **celles d'Anthropic** : 7 jours ancrés
+sur la vraie heure de remise à zéro du compte (par ex. lundi 17:00). En repli sans jeton, c'est
+la **semaine calendaire** qui sert de fenêtre — elle seule donne alors un instant de remise à
+zéro et donc un rythme attendu ; le premier jour suit la locale du système. L'historique, la
+sparkline et les répartitions restent, eux, sur 7 jours glissants : une courbe qui repart d'un
+point chaque lundi n'apprendrait rien.
 
 Les barres de la section « Détails » n'ont volontairement pas de repère : elles expriment une
 part du total, pas une durée.
@@ -233,5 +248,8 @@ repasser `CODE_SIGN_STYLE` en `Automatic`.
 
 ## Vie privée
 
-Tout reste sur la machine : aucune requête réseau, aucun envoi. Le sandbox est désactivé
-uniquement pour permettre la lecture de `~/.claude`.
+Une **seule** requête réseau existe : `GET api.anthropic.com/api/oauth/usage`, authentifiée
+avec le jeton que Claude Code garde déjà sur la machine, pour lire les quotas réels du compte.
+Rien d'autre n'est envoyé — pas de télémétrie, pas de contenu, et le jeton n'est jamais
+rafraîchi ni réécrit. Sans jeton ou hors-ligne, l'app fonctionne entièrement en local.
+Le sandbox est désactivé uniquement pour permettre la lecture de `~/.claude`.

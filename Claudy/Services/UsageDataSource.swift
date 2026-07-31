@@ -19,12 +19,16 @@ enum UsageDataError: Error {
 actor LocalUsageDataSource: UsageDataSource {
 
     private let scanner = TranscriptScanner()
+    private let quotaLoader = QuotaLoader()
 
     func fetch() async throws -> UsageSnapshot {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
 
         let result = try await scanner.scan()
-        return UsageAggregator.snapshot(from: result.entries, account: AccountLoader.load())
+        // Quotas réels du compte quand le jeton local le permet ; `nil` (hors-ligne, pas de
+        // jeton) fait retomber les jauges sur la référence personnelle.
+        let quotas = await quotaLoader.fetch()
+        return UsageAggregator.snapshot(from: result.entries, account: AccountLoader.load(), quotas: quotas)
     }
 }
 
