@@ -28,8 +28,9 @@ final class UsageViewModel: ObservableObject {
 
     @Published var isProfileVisible = false
 
-    /// Carte de bienvenue : visible tant que l'utilisateur n'a ni passé l'accueil ni été connecté.
-    @Published var isWelcomeVisible = !Defaults.welcomed
+    /// Faux jusqu'au premier relevé : le temps de savoir si une session Claude existe,
+    /// la carte affiche un chargement — ni onboarding fantôme, ni jauges placeholder.
+    @Published private(set) var hasLoaded = false
     @Published private(set) var isSigningIn = false
     /// Le port loopback était pris : la page affiche `code#state`, à coller dans la carte.
     @Published var isAwaitingManualCode = false
@@ -80,14 +81,13 @@ final class UsageViewModel: ObservableObject {
             withAnimation(Theme.Motion.gauge) {
                 snapshot = fresh
             }
-            // Déjà connecté (par exemple .credentials.json présent) : l'accueil n'a rien à vendre.
-            if fresh.isSignedIn, isWelcomeVisible {
-                dismissWelcome()
-            }
         } catch UsageDataError.projectsUnreadable {
             errorMessage = "Impossible de lire le dossier des transcripts (droits d'accès ?)."
         } catch {
             errorMessage = "Actualisation échouée : \(error.localizedDescription)"
+        }
+        withAnimation(Theme.Motion.mode) {
+            hasLoaded = true
         }
     }
 
@@ -164,16 +164,10 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
-    func dismissWelcome() {
-        withAnimation(Theme.Motion.popup) { isWelcomeVisible = false }
-        Defaults.welcomed = true
-    }
-
     private func completeSignIn(_ credentials: OAuthCredentials) async {
         await ClaudeAccountClient.shared.signIn(credentials)
         isSigningIn = false
         isAwaitingManualCode = false
-        dismissWelcome()
         await refresh()
     }
 
@@ -304,8 +298,4 @@ private enum Defaults {
         set { store.set(newValue, forKey: "claudy.detailsExpanded") }
     }
 
-    static var welcomed: Bool {
-        get { store.bool(forKey: "claudy.welcomed") }
-        set { store.set(newValue, forKey: "claudy.welcomed") }
-    }
 }

@@ -72,12 +72,6 @@ struct FullView: View {
                     .help("Quotas momentanément injoignables — dernière valeur connue affichée.")
             }
 
-            if !snapshot.isDemo && !snapshot.isSignedIn {
-                pill("estimé", tint: Theme.Accent.amber.color)
-                    .help("Quotas estimés depuis ta propre moyenne d'usage. "
-                          + "Connecte-toi (clic droit ▸ Se connecter à Claude) pour les vrais quotas.")
-            }
-
             Spacer(minLength: 0)
 
             AvatarButton(

@@ -5,8 +5,23 @@ struct RootView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @Environment(\.colorScheme) private var scheme
 
+    /// Ce que la carte affiche. Aucune jauge sans session Claude : à la place,
+    /// l'onboarding — pas de chiffres estimés.
+    private enum Display {
+        case loading, onboarding, minimal, full
+    }
+
+    private var display: Display {
+        if !viewModel.hasLoaded { return .loading }
+        if !viewModel.snapshot.isDemo && !viewModel.isSignedIn { return .onboarding }
+        return viewModel.isMinimal ? .minimal : .full
+    }
+
     private var corner: CGFloat {
-        viewModel.isMinimal ? Theme.Metric.minimalCorner : Theme.Metric.cardCorner
+        switch display {
+        case .minimal, .loading: Theme.Metric.minimalCorner
+        case .full, .onboarding: Theme.Metric.cardCorner
+        }
     }
 
     private var isDark: Bool { scheme == .dark }
@@ -21,10 +36,11 @@ struct RootView: View {
 
     private var card: some View {
         Group {
-            if viewModel.isMinimal {
-                MinimalView()
-            } else {
-                FullView()
+            switch display {
+            case .loading: LoadingCard()
+            case .onboarding: OnboardingView()
+            case .minimal: MinimalView()
+            case .full: FullView()
             }
         }
         .background(cardBackground)
@@ -44,7 +60,6 @@ struct RootView: View {
                 )
         )
         .overlay(profileLayer)
-        .overlay(welcomeLayer)
         .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
     }
 
@@ -89,24 +104,6 @@ struct RootView: View {
                 .transition(.scale(scale: 0.94, anchor: .topTrailing).combined(with: .opacity))
             }
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-        }
-    }
-
-    // MARK: - Accueil
-
-    @ViewBuilder
-    private var welcomeLayer: some View {
-        // Pas en mode minimal : la bande est trop petite pour accueillir la carte.
-        if viewModel.isWelcomeVisible && !viewModel.isMinimal {
-            ZStack {
-                Color.black.opacity(0.22)
-                    .contentShape(Rectangle())
-
-                WelcomeCard()
-                    .frame(width: 276)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-            .transition(.opacity)
         }
     }
 
