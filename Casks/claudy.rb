@@ -1,14 +1,18 @@
 # Cask Homebrew de Claudy.
 #
 # Publication : copier ce fichier dans le tap `Endikk/homebrew-claudy` (répertoire Casks/),
-# puis mettre à jour `version` et `sha256` à chaque release :
+# puis mettre à jour `version` ET `sha256` à chaque release :
 #   shasum -a 256 dist/Claudy-<version>.zip
+#
+# SÉCURITÉ : `sha256` doit toujours être épinglé (jamais `:no_check`). C'est la seule
+# vérification d'intégrité de la chaîne — le postflight ci-dessous retire la quarantaine,
+# il ne doit s'appliquer qu'à un artefact dont l'empreinte a été vérifiée par Homebrew.
 #
 # Installation utilisateur :
 #   brew install --cask Endikk/claudy/claudy
 cask "claudy" do
   version "1.1.0"
-  sha256 :no_check # remplacer par le SHA-256 du zip de la release correspondante
+  sha256 "67cd6da1b4e64ead08dfed598cdbc7cc871f830a2c997dcf3f55101bd81e878e"
 
   url "https://github.com/Endikk/Claudy/releases/download/v#{version}/Claudy-#{version}.zip"
   name "Claudy"
