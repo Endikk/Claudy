@@ -21,8 +21,8 @@ actor LocalUsageDataSource: UsageDataSource {
     func fetch() async throws -> UsageSnapshot {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
 
-        let entries = await scanner.scan()
-        return UsageAggregator.snapshot(from: entries, account: AccountLoader.load())
+        let result = await scanner.scan()
+        return UsageAggregator.snapshot(from: result.entries, account: AccountLoader.load())
     }
 }
 

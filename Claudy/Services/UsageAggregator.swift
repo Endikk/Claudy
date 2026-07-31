@@ -8,7 +8,7 @@ import Foundation
 /// consommation rapportée à la *référence personnelle* de la machine : le 90ᵉ centile des
 /// fenêtres déjà écoulées. 100 % signifie « au niveau de tes plus grosses fenêtres », pas
 /// « quota épuisé ». Chaque référence est remplaçable par une valeur explicite
-/// (`claudy.limit.session`, `claudy.limit.weekly`, `claudy.limit.sonnet` dans les préférences).
+/// (`claudy.limit.session`, `claudy.limit.weekly`, `claudy.limit.model` dans les préférences).
 enum UsageAggregator {
 
     /// Durée d'une fenêtre de session Claude Code.
