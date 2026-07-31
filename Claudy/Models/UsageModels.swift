@@ -106,6 +106,10 @@ struct UsageSnapshot: Equatable {
     /// l'interface le signale discrètement au lieu de remettre les jauges à zéro.
     var quotaStale: Bool = false
 
+    /// Vrai quand un jeton Claude est disponible : les jauges affichent les quotas réels.
+    /// Faux = mode « estimé » (référence personnelle), avec invitation à se connecter.
+    var isSignedIn: Bool = false
+
     /// Aucune activité relevée sur la fenêtre de 7 jours.
     var isEmpty: Bool { weekTokens == 0 }
 

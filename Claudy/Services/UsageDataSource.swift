@@ -19,7 +19,7 @@ enum UsageDataError: Error {
 actor LocalUsageDataSource: UsageDataSource {
 
     private let scanner = TranscriptScanner()
-    private let client = ClaudeAccountClient()
+    private let client = ClaudeAccountClient.shared
 
     func fetch() async throws -> UsageSnapshot {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
@@ -43,6 +43,7 @@ actor LocalUsageDataSource: UsageDataSource {
 
         var snapshot = UsageAggregator.snapshot(from: result.entries, account: account, quotas: payload.limits)
         snapshot.quotaStale = payload.isStale
+        snapshot.isSignedIn = payload.isSignedIn
         return snapshot
     }
 }

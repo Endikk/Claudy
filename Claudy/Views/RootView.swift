@@ -44,6 +44,7 @@ struct RootView: View {
                 )
         )
         .overlay(profileLayer)
+        .overlay(welcomeLayer)
         .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
     }
 
@@ -79,6 +80,7 @@ struct RootView: View {
 
                 ProfilePopup(
                     account: viewModel.snapshot.account,
+                    onSignOut: viewModel.isSignedIn ? { viewModel.signOut() } : nil,
                     onClose: viewModel.toggleProfile
                 )
                 .frame(width: 262)
@@ -87,6 +89,24 @@ struct RootView: View {
                 .transition(.scale(scale: 0.94, anchor: .topTrailing).combined(with: .opacity))
             }
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        }
+    }
+
+    // MARK: - Accueil
+
+    @ViewBuilder
+    private var welcomeLayer: some View {
+        // Pas en mode minimal : la bande est trop petite pour accueillir la carte.
+        if viewModel.isWelcomeVisible && !viewModel.isMinimal {
+            ZStack {
+                Color.black.opacity(0.22)
+                    .contentShape(Rectangle())
+
+                WelcomeCard()
+                    .frame(width: 276)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .transition(.opacity)
         }
     }
 
@@ -105,6 +125,18 @@ struct RootView: View {
                 viewModel.isMinimal ? "Mode complet" : "Mode minimal",
                 systemImage: viewModel.isMinimal ? "rectangle.expand.vertical" : "rectangle.compress.vertical"
             )
+        }
+
+        Divider()
+
+        if viewModel.isSignedIn {
+            Button("Se déconnecter de Claude") { viewModel.signOut() }
+        } else {
+            Button {
+                viewModel.startSignIn()
+            } label: {
+                Label("Se connecter à Claude…", systemImage: "person.crop.circle.badge.checkmark")
+            }
         }
 
         Divider()

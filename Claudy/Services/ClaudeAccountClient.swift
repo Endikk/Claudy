@@ -50,10 +50,16 @@ actor ClaudeAccountClient {
         let profile: OAuthProfile?
         /// Vrai quand `limits`/`profile` datent d'un passage précédent (échecs en cours).
         let isStale: Bool
+        /// Vrai quand un jeton est disponible (connexion OAuth faite ou `.credentials.json` lisible).
+        let isSignedIn: Bool
     }
 
+    /// Instance partagée : la source de données et les actions de connexion/déconnexion
+    /// du ViewModel doivent parler au même état.
+    static let shared = ClaudeAccountClient()
+
     /// Client OAuth public de Claude Code — celui au nom duquel le jeton a été émis.
-    private static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+    static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let profileURL = URL(string: "https://api.anthropic.com/api/oauth/profile")!
     private static let tokenURL = URL(string: "https://console.anthropic.com/v1/oauth/token")!
@@ -72,16 +78,19 @@ actor ClaudeAccountClient {
 
         // claude.ai se met à jour à la minute : inutile d'interroger plus souvent.
         if let lastSuccess, now.timeIntervalSince(lastSuccess) < 30 {
-            return Payload(limits: lastLimits, profile: lastProfile, isStale: false)
+            return Payload(limits: lastLimits, profile: lastProfile, isStale: false, isSignedIn: true)
         }
         // Backoff en cours : resservir la dernière valeur connue sans toucher au réseau.
         guard now >= nextAttempt else {
-            return Payload(limits: lastLimits, profile: lastProfile, isStale: true)
+            return Payload(limits: lastLimits, profile: lastProfile, isStale: true,
+                           isSignedIn: credentials != nil)
         }
 
         await ensureFreshCredentials()
         guard let token = credentials?.accessToken else {
-            return recordFailure("aucun jeton disponible")
+            // Pas de jeton = pas connecté : état normal avant la première connexion,
+            // pas une panne — pas de backoff ni de journal.
+            return Payload(limits: nil, profile: nil, isStale: false, isSignedIn: false)
         }
 
         var (data, status) = await get(Self.usageURL, token: token)
@@ -107,7 +116,7 @@ actor ClaudeAccountClient {
         lastSuccess = now
         failureCount = 0
         nextAttempt = .distantPast
-        return Payload(limits: limits, profile: lastProfile, isStale: false)
+        return Payload(limits: limits, profile: lastProfile, isStale: false, isSignedIn: true)
     }
 
     private func recordFailure(_ reason: String) -> Payload {
@@ -115,7 +124,31 @@ actor ClaudeAccountClient {
         let delay = min(60.0 + 60.0 * Double(failureCount - 1), 300.0)
         nextAttempt = Date().addingTimeInterval(delay)
         DiagnosticLog.append("\(reason) — échec n°\(failureCount), prochaine tentative dans \(Int(delay)) s")
-        return Payload(limits: lastLimits, profile: lastProfile, isStale: lastLimits != nil)
+        return Payload(limits: lastLimits, profile: lastProfile, isStale: lastLimits != nil,
+                       isSignedIn: credentials != nil)
+    }
+
+    // MARK: - Connexion / déconnexion
+
+    /// Injecte les jetons obtenus par le flux OAuth et les persiste dans l'item de Claudy.
+    func signIn(_ newCredentials: OAuthCredentials) {
+        credentials = newCredentials
+        ClaudeCredentialsStore.persist(newCredentials)
+        lastSuccess = nil
+        failureCount = 0
+        nextAttempt = .distantPast
+    }
+
+    /// Oublie tout : jetons, dernières valeurs, backoff. Ne touche pas aux magasins de Claude Code.
+    func signOut() {
+        ClaudeCredentialsStore.erase()
+        credentials = nil
+        lastLimits = nil
+        lastProfile = nil
+        lastSuccess = nil
+        failureCount = 0
+        nextAttempt = .distantPast
+        DiagnosticLog.append("déconnexion — jeton Claudy supprimé")
     }
 
     // MARK: - Requêtes

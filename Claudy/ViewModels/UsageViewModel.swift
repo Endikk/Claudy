@@ -28,7 +28,16 @@ final class UsageViewModel: ObservableObject {
 
     @Published var isProfileVisible = false
 
+    /// Carte de bienvenue : visible tant que l'utilisateur n'a ni passé l'accueil ni été connecté.
+    @Published var isWelcomeVisible = !Defaults.welcomed
+    @Published private(set) var isSigningIn = false
+    /// Le port loopback était pris : la page affiche `code#state`, à coller dans la carte.
+    @Published var isAwaitingManualCode = false
+
+    var isSignedIn: Bool { snapshot.isSignedIn }
+
     private let source: UsageDataSource
+    private let oauth = ClaudeOAuth()
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
 
@@ -71,6 +80,10 @@ final class UsageViewModel: ObservableObject {
             withAnimation(Theme.Motion.gauge) {
                 snapshot = fresh
             }
+            // Déjà connecté (par exemple .credentials.json présent) : l'accueil n'a rien à vendre.
+            if fresh.isSignedIn, isWelcomeVisible {
+                dismissWelcome()
+            }
         } catch UsageDataError.projectsUnreadable {
             errorMessage = "Impossible de lire le dossier des transcripts (droits d'accès ?)."
         } catch {
@@ -101,6 +114,74 @@ final class UsageViewModel: ObservableObject {
     /// (un `register()` refusé ne doit pas laisser la case cochée).
     func setLaunchAtLogin(_ enabled: Bool) {
         launchAtLogin = LaunchAtLogin.set(enabled)
+    }
+
+    // MARK: - Connexion Claude
+
+    func startSignIn() {
+        guard !isSigningIn else { return }
+        isSigningIn = true
+        errorMessage = nil
+
+        switch oauth.begin() {
+        case .manual:
+            isAwaitingManualCode = true
+        case .loopback:
+            Task {
+                do {
+                    let credentials = try await oauth.awaitLoopbackCode()
+                    await completeSignIn(credentials)
+                } catch {
+                    failSignIn(error)
+                }
+            }
+        }
+    }
+
+    func submitManualCode(_ pasted: String) {
+        guard isAwaitingManualCode else { return }
+        Task {
+            do {
+                let credentials = try await oauth.redeemManualCode(pasted)
+                await completeSignIn(credentials)
+            } catch {
+                failSignIn(error)
+            }
+        }
+    }
+
+    func cancelSignIn() {
+        oauth.cancel()
+        isSigningIn = false
+        isAwaitingManualCode = false
+    }
+
+    func signOut() {
+        Task {
+            await ClaudeAccountClient.shared.signOut()
+            withAnimation(Theme.Motion.popup) { isProfileVisible = false }
+            await refresh()
+        }
+    }
+
+    func dismissWelcome() {
+        withAnimation(Theme.Motion.popup) { isWelcomeVisible = false }
+        Defaults.welcomed = true
+    }
+
+    private func completeSignIn(_ credentials: OAuthCredentials) async {
+        await ClaudeAccountClient.shared.signIn(credentials)
+        isSigningIn = false
+        isAwaitingManualCode = false
+        dismissWelcome()
+        await refresh()
+    }
+
+    private func failSignIn(_ error: Error) {
+        isSigningIn = false
+        isAwaitingManualCode = false
+        errorMessage = (error as? OAuthError)?.errorDescription
+            ?? "Connexion échouée : \(error.localizedDescription)"
     }
 
     private func startAutoRefresh() {
@@ -221,5 +302,10 @@ private enum Defaults {
     static var isDetailsExpanded: Bool {
         get { store.bool(forKey: "claudy.detailsExpanded") }
         set { store.set(newValue, forKey: "claudy.detailsExpanded") }
+    }
+
+    static var welcomed: Bool {
+        get { store.bool(forKey: "claudy.welcomed") }
+        set { store.set(newValue, forKey: "claudy.welcomed") }
     }
 }
