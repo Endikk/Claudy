@@ -1,15 +1,34 @@
-# Claudy
+# ✳︎ Claudy
 
-Widget de bureau macOS affichant la consommation de tokens Claude : carte flottante sans bordure,
-toujours au premier plan, déplaçable à la souris, en mode compact ou détaillé.
+**Tes quotas Claude, en vrai, sur ton bureau.**
 
-Les données sont **réelles et découvertes à l'exécution**. Rien n'est codé en dur : ni compte,
-ni organisation, ni nom de projet, ni chemin. L'app fonctionne telle quelle sur n'importe quel
-Mac, et bascule sur un jeu de démonstration si Claude Code n'y est pas installé.
+[![Téléchargements](https://img.shields.io/github/downloads/Endikk/Claudy/total?label=t%C3%A9l%C3%A9chargements&color=D97757)](https://github.com/Endikk/Claudy/releases)
+[![Stars](https://img.shields.io/github/stars/Endikk/Claudy?color=D97757)](https://github.com/Endikk/Claudy/stargazers)
+[![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
+
+<p align="center">
+  <img src="docs/screenshot.png" width="368" alt="Le widget Claudy : session 5 h, quotas hebdo, totaux du jour, sparkline 7 jours">
+</p>
+
+Widget de bureau macOS affichant ta consommation Claude : carte flottante sans bordure,
+toujours au premier plan, déplaçable à la souris, en mode compact ou détaillé. Les jauges
+affichent les **quotas réels de ton compte** — les mêmes chiffres que claude.ai ▸ Utilisation —
+et le détail en tokens vient des transcripts locaux de Claude Code.
+
+**Tes données restent chez toi.** Pas de télémétrie, pas de serveur tiers, aucune conversation
+lue ni envoyée. Les seules requêtes réseau vont à l'API d'Anthropic, avec un jeton obtenu par
+*ta* connexion. ~3 000 lignes de Swift, auditables en une heure.
 
 ## Installer
 
-**Voie 1 — une commande (release précompilée) :**
+**Homebrew :**
+
+```bash
+brew install --cask Endikk/claudy/claudy
+```
+
+**Ou en une commande (release précompilée) :**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Endikk/Claudy/main/Scripts/install.sh | bash
@@ -86,7 +105,7 @@ compte. La seule source disponible est locale, et c'est celle que Claudy lit :
 | Donnée | Source |
 |---|---|
 | Tokens, modèles, projets, sessions | `<config>/projects/**/*.jsonl` — un objet `message.usage` par réponse |
-| % de quota et heures de reset des jauges | `api.anthropic.com/api/oauth/usage`, avec le jeton local de Claude Code |
+| % de quota et heures de reset des jauges | `api.anthropic.com/api/oauth/usage`, avec le jeton de *ta* connexion Claudy |
 | Compte, plan, organisation | `api.anthropic.com/api/oauth/profile`, repli `.claude.json` (bloc `oauthAccount`) |
 | Rôle (badge Admin) | `.claude.json`, bloc `oauthAccount` |
 | Nom affiché sans compte Claude | `NSFullUserName()` de la session macOS |
@@ -122,22 +141,22 @@ celui-ci est une translittération qui perd accents et séparateurs
 
 ### D'où viennent les pourcentages
 
-**Quotas réels d'abord.** Claudy lit le jeton OAuth que Claude Code garde localement
-(trousseau « Claude Code-credentials », sinon `<config>/.credentials.json`) et interroge
-`api.anthropic.com/api/oauth/usage` et `/api/oauth/profile` — les mêmes points d'accès que
-claude.ai ▸ Réglages ▸ Utilisation. Les trois jauges affichent alors les **pourcentages et
-heures de remise à zéro réels du compte** (session 5 h, hebdo tous modèles, limite hebdo du
-modèle suivi — « Fable », « Opus »… selon le compte), et la fiche compte l'identité officielle.
-Le premier accès au trousseau déclenche la demande d'autorisation macOS habituelle — choisir
-« Toujours autoriser ».
+**Quotas réels d'abord.** À la première ouverture, Claudy propose « Se connecter à Claude » :
+une connexion OAuth standard dans ton navigateur (même mécanisme que `claude login`). Claudy
+obtient ainsi **son propre jeton**, rangé dans son propre item de trousseau — il ne touche
+jamais aux secrets de Claude Code, donc **aucun dialogue macOS « informations
+confidentielles »**, jamais. Une fois connecté, il interroge `api.anthropic.com/api/oauth/usage`
+et `/api/oauth/profile` — les mêmes points d'accès que claude.ai ▸ Réglages ▸ Utilisation. Les
+trois jauges affichent alors les **pourcentages et heures de remise à zéro réels du compte**
+(session 5 h, hebdo tous modèles, limite hebdo du modèle suivi — « Fable », « Opus »… selon le
+compte), et la fiche compte l'identité officielle. Déconnexion à tout moment via la fiche
+compte ou le clic droit.
 
 Ce qui rend la liaison fiable :
 
-- **Refresh autonome** : à moins de 2 min de l'expiration du jeton, Claudy rejoue lui-même le
-  grant `refresh_token` avec le client public de Claude Code et réécrit le magasin (trousseau
-  ou fichier, écriture atomique) — Claude Code récupère le jeton frais. Le refresh n'est jamais
-  tenté si le magasin n'est pas réinscriptible : une rotation non persistée invaliderait la
-  session de Claude Code.
+- **Refresh autonome** : à moins de 2 min de l'expiration, Claudy rejoue lui-même le grant
+  `refresh_token` et réécrit son item de trousseau. Session indépendante de celle de Claude
+  Code : aucune rotation de jeton partagée.
 - **Retry unique sur 401**, jamais de boucle.
 - **Dernière valeur connue + backoff** : un échec (429, hors-ligne) ne remet rien à zéro — la
   dernière valeur reste affichée avec une pastille « ⟳ », et les tentatives s'espacent
@@ -152,8 +171,9 @@ Le nombre de tokens du quota n'étant pas exposé, la ligne « X sur Y tokens »
 le pourcentage (Y ≈ tokens locaux ÷ %). Si d'autres appareils consomment sur le même compte,
 Y est sous-estimé — le pourcentage, lui, reste exact.
 
-**Référence personnelle en repli.** Sans jeton ou hors-ligne, les jauges retombent sur la
-consommation rapportée à une référence calculée sur la machine :
+**Référence personnelle en repli.** Sans connexion (bouton « Plus tard », hors-ligne), les
+jauges portent une pastille « estimé » et retombent sur la consommation rapportée à une
+référence calculée sur la machine :
 
 - **Session · 5h** — 90ᵉ centile des fenêtres de 5 h déjà écoulées.
 - **Hebdo · sem.** — 90ᵉ centile des journées terminées, multiplié par 7 (une semaine où chaque
@@ -272,10 +292,18 @@ repasser `CODE_SIGN_STYLE` en `Automatic`.
 
 ## Vie privée
 
-Le réseau ne sert qu'à trois requêtes vers Anthropic, authentifiées avec le jeton que Claude
-Code garde déjà sur la machine : `usage` (quotas), `profile` (identité du compte), et — quand
-le jeton arrive à expiration — le renouvellement OAuth standard. Rien d'autre n'est envoyé :
-pas de télémétrie, pas de contenu de conversation. Le jeton renouvelé est réécrit dans le
-magasin de Claude Code (trousseau ou `.credentials.json`), jamais ailleurs. Sans jeton ou
-hors-ligne, l'app fonctionne entièrement en local. Le sandbox est désactivé uniquement pour
+Le réseau ne sert qu'à parler à Anthropic : la connexion OAuth initiale (dans ton navigateur,
+sur claude.ai), puis `usage` (quotas), `profile` (identité du compte) et le renouvellement
+standard du jeton. Rien d'autre n'est envoyé : pas de télémétrie, pas de contenu de
+conversation, pas de serveur tiers. Le jeton vit dans un item de trousseau **propre à Claudy**
+(« Claudy-credentials ») — les secrets de Claude Code ne sont jamais lus ni écrits, c'est
+pourquoi macOS n'affiche aucun avertissement. La déconnexion supprime l'item. Sans connexion
+ou hors-ligne, l'app fonctionne entièrement en local. Le sandbox est désactivé uniquement pour
 permettre la lecture de `~/.claude`.
+
+## Contribuer
+
+Un bug, une idée, un chiffre qui ne colle pas avec claude.ai ? Ouvre une
+[issue GitHub](https://github.com/Endikk/Claudy/issues) — capture d'écran et contenu de
+`~/Library/Application Support/Claudy/api.log` bienvenus. Les PR sont ouvertes ; le projet est
+sous licence MIT, maintenu par [@Endikk](https://github.com/Endikk).
