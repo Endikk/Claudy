@@ -77,10 +77,6 @@ struct Account: Equatable {
         let letter = name.trimmingCharacters(in: .whitespaces).prefix(1).uppercased()
         return letter.isEmpty ? "?" : letter
     }
-
-    /// Un compte Claude a été trouvé. Faux quand le nom provient seulement de la session macOS :
-    /// proposer « Déconnexion » n'aurait alors aucun sens.
-    var isSignedIn: Bool { !email.isEmpty || !plan.isEmpty }
 }
 
 /// État complet rendu par la vue à un instant donné.

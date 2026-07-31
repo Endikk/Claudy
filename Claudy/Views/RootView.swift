@@ -79,8 +79,6 @@ struct RootView: View {
 
                 ProfilePopup(
                     account: viewModel.snapshot.account,
-                    onTeamStats: { NSLog("[Claudy] Stats équipe (maquette).") },
-                    onSignOut: viewModel.signOut,
                     onClose: viewModel.toggleProfile
                 )
                 .frame(width: 262)

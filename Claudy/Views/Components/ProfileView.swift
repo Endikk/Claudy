@@ -38,8 +38,6 @@ struct AvatarButton: View {
 /// l'esthétique du widget.
 struct ProfilePopup: View {
     let account: Account
-    let onTeamStats: () -> Void
-    let onSignOut: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -103,19 +101,6 @@ struct ProfilePopup: View {
                     }
                 }
             }
-
-            if account.isSignedIn {
-                Divider()
-                    .padding(.vertical, 11)
-
-                VStack(spacing: 2) {
-                    if account.isAdmin {
-                        PopupRow(title: "Stats équipe", icon: "person.2.fill", action: onTeamStats)
-                    }
-                    PopupRow(title: "Déconnexion", icon: "rectangle.portrait.and.arrow.right",
-                             tint: Theme.danger, action: onSignOut)
-                }
-            }
         }
         .padding(14)
         .background(
@@ -140,35 +125,3 @@ struct ProfilePopup: View {
     }
 }
 
-/// Ligne d'action de la fiche compte, avec surbrillance au survol.
-private struct PopupRow: View {
-    let title: String
-    let icon: String
-    var tint: Color = .primary
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 10, weight: .semibold))
-                    .frame(width: 14)
-                Text(title)
-                    .font(Theme.Font.label(11.5, .medium))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(tint.opacity(0.85))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.primary.opacity(isHovering ? 0.08 : 0))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-    }
-}

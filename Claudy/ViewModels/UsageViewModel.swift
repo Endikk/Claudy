@@ -103,11 +103,6 @@ final class UsageViewModel: ObservableObject {
         launchAtLogin = LaunchAtLogin.set(enabled)
     }
 
-    func signOut() {
-        NSLog("[Claudy] Déconnexion demandée (maquette).")
-        withAnimation(Theme.Motion.popup) { isProfileVisible = false }
-    }
-
     private func startAutoRefresh() {
         let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
