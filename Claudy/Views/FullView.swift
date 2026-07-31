@@ -62,6 +62,11 @@ struct FullView: View {
                     .help("Claude Code n'a pas été trouvé sur cette machine — données d'exemple.")
             }
 
+            if let message = viewModel.errorMessage {
+                pill("erreur", tint: Theme.danger)
+                    .help(message)
+            }
+
             Spacer(minLength: 0)
 
             AvatarButton(

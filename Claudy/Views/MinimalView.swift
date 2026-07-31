@@ -24,6 +24,13 @@ struct MinimalView: View {
                         .foregroundStyle(.primary.opacity(0.4))
                 }
 
+                if let message = viewModel.errorMessage {
+                    Circle()
+                        .fill(Theme.danger)
+                        .frame(width: 5, height: 5)
+                        .help(message)
+                }
+
                 Spacer(minLength: 6)
 
                 VStack(alignment: .trailing, spacing: 0) {

@@ -69,12 +69,12 @@ actor TranscriptScanner {
     }()
 
     /// Toutes les réponses relevées sur la fenêtre de rétention, du plus ancien au plus récent.
-    func scan() -> ScanResult {
+    func scan() throws -> ScanResult {
         let now = Date()
         let cutoff = now.addingTimeInterval(-retention)
         skippedLines = 0
 
-        let discovered = transcriptURLs(modifiedSince: cutoff)
+        let discovered = try transcriptURLs(modifiedSince: cutoff)
         for url in discovered {
             ingest(url, cutoff: cutoff, now: now)
         }
@@ -100,14 +100,22 @@ actor TranscriptScanner {
 
     // MARK: - Découverte
 
-    private func transcriptURLs(modifiedSince cutoff: Date) -> [URL] {
+    private func transcriptURLs(modifiedSince cutoff: Date) throws -> [URL] {
         let manager = FileManager.default
         let root = ClaudeHome.projectsDirectory
-        guard let projects = try? manager.contentsOfDirectory(
-            at: root,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        let projects: [URL]
+        do {
+            projects = try manager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            // Dossier absent : rien à lire, ce n'est pas une panne. Présent mais illisible
+            // (droits, disque) : à signaler — sinon l'interface afficherait « aucune activité ».
+            if manager.fileExists(atPath: root.path) { throw UsageDataError.projectsUnreadable }
+            return []
+        }
 
         var found: [URL] = []
         for project in projects {

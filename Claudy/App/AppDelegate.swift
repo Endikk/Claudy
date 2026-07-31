@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let viewModel = UsageViewModel()
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
+    private var screenObserver: NSObjectProtocol?
 
     /// Garde-fou : `setFrame` depuis `windowDidResize` renotifie.
     private var isAdjustingFrame = false
@@ -31,6 +32,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         restoreFrame(for: panel)
         panel.orderFrontRegardless()
+
+        // Moniteur débranché ou résolution changée : sans ce recadrage, la carte peut rester
+        // hors champ sans aucun moyen de la récupérer (pas de Dock, pas de barre de menus).
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            // La notification arrive pendant la reconfiguration : les frames d'écran ne sont
+            // parfois pas encore définitives, d'où le différé.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                MainActor.assumeIsolated {
+                    (NSApp.delegate as? AppDelegate)?.clampPanelToScreen()
+                }
+            }
+        }
 
         bind()
         Task { await viewModel.refresh() }
@@ -90,6 +107,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         defaults.set(origin.y, forKey: Keys.originY)
     }
 
+    /// Recadre la carte dans l'écran courant si elle en est sortie.
+    private func clampPanelToScreen() {
+        guard let panel else { return }
+        let frame = clamped(panel.frame, for: panel)
+        guard frame != panel.frame else { return }
+
+        isAdjustingFrame = true
+        panel.setFrame(frame, display: true)
+        isAdjustingFrame = false
+        saveOrigin(frame.origin)
+    }
+
     // MARK: - NSWindowDelegate
 
     func windowDidMove(_ notification: Notification) {
@@ -101,18 +130,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// *haut* gauche — `NSHostingController` passe par `setContentSize`. Il reste à empêcher la
     /// carte de plonger sous le bas de l'écran en grandissant.
     func windowDidResize(_ notification: Notification) {
-        guard !isAdjustingFrame, let window = notification.object as? NSWindow else { return }
-
-        let frame = clamped(window.frame, for: window)
-        guard frame != window.frame else {
-            saveOrigin(window.frame.origin)
-            return
-        }
-
-        isAdjustingFrame = true
-        window.setFrame(frame, display: true)
-        isAdjustingFrame = false
-        saveOrigin(frame.origin)
+        guard !isAdjustingFrame, let panel, notification.object as? NSWindow === panel else { return }
+        saveOrigin(panel.frame.origin)
+        clampPanelToScreen()
     }
 
     // MARK: - Menu

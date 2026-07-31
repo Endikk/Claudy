@@ -8,6 +8,8 @@ protocol UsageDataSource: Sendable {
 enum UsageDataError: Error {
     /// Aucune trace de Claude Code sur cette machine.
     case claudeNotInstalled
+    /// Le dossier des transcripts existe mais ne se laisse pas lire (droits, disque).
+    case projectsUnreadable
 }
 
 /// Source réelle : transcripts locaux de Claude Code.
@@ -21,7 +23,7 @@ actor LocalUsageDataSource: UsageDataSource {
     func fetch() async throws -> UsageSnapshot {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
 
-        let result = await scanner.scan()
+        let result = try await scanner.scan()
         return UsageAggregator.snapshot(from: result.entries, account: AccountLoader.load())
     }
 }
@@ -36,7 +38,9 @@ struct AdaptiveUsageDataSource: UsageDataSource {
     func fetch() async throws -> UsageSnapshot {
         do {
             return try await local.fetch()
-        } catch {
+        } catch UsageDataError.claudeNotInstalled {
+            // Seule l'absence de Claude Code justifie la démonstration : toute autre panne
+            // doit remonter à l'interface plutôt que d'afficher des chiffres inventés.
             return try await demo.fetch()
         }
     }

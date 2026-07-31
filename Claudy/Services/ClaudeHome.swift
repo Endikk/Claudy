@@ -4,9 +4,16 @@ import Foundation
 /// Rien n'est codé en dur : tout se déduit de l'environnement de l'utilisateur qui lance l'app.
 enum ClaudeHome {
 
-    /// Répertoire personnalisé par `CLAUDE_CONFIG_DIR`, s'il est défini.
+    /// Répertoire personnalisé, s'il est défini. Le réglage `claudy.configDir`
+    /// (`defaults write com.claudy.Claudy claudy.configDir <chemin>`) prime : une app lancée
+    /// depuis le Finder ou le Dock n'hérite pas des variables du shell, `CLAUDE_CONFIG_DIR`
+    /// ne sert donc qu'aux lancements depuis un terminal.
     private static var customDirectory: URL? {
-        guard let path = ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"], !path.isEmpty else { return nil }
+        let candidates = [
+            UserDefaults.standard.string(forKey: "claudy.configDir"),
+            ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"],
+        ]
+        guard let path = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) else { return nil }
         return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
 

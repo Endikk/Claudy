@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import Combine
 
@@ -9,6 +10,10 @@ final class UsageViewModel: ObservableObject {
 
     @Published private(set) var snapshot: UsageSnapshot = .placeholder
     @Published private(set) var isRefreshing = false
+
+    /// Dernière panne d'actualisation, `nil` quand tout va bien. Le dernier instantané
+    /// valide reste affiché : la panne se signale, elle ne remplace pas les données.
+    @Published private(set) var errorMessage: String?
 
     // MARK: - Préférences (persistées)
 
@@ -25,6 +30,7 @@ final class UsageViewModel: ObservableObject {
 
     private let source: UsageDataSource
     private var timer: Timer?
+    private var wakeObserver: NSObjectProtocol?
 
     init(source: UsageDataSource = AdaptiveUsageDataSource()) {
         self.source = source
@@ -33,10 +39,23 @@ final class UsageViewModel: ObservableObject {
         self.isDetailsExpanded = Defaults.isDetailsExpanded
         self.launchAtLogin = LaunchAtLogin.isEnabled
         startAutoRefresh()
+
+        // Après une veille, le timer de 60 s ne se rattrape pas : sans ce rafraîchissement
+        // immédiat, la carte afficherait des données périmées jusqu'au prochain tick.
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in await self?.refresh() }
+        }
     }
 
     deinit {
         timer?.invalidate()
+        if let wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+        }
     }
 
     // MARK: - Actions
@@ -46,9 +65,16 @@ final class UsageViewModel: ObservableObject {
         isRefreshing = true
         defer { isRefreshing = false }
 
-        guard let fresh = try? await source.fetch() else { return }
-        withAnimation(Theme.Motion.gauge) {
-            snapshot = fresh
+        do {
+            let fresh = try await source.fetch()
+            errorMessage = nil
+            withAnimation(Theme.Motion.gauge) {
+                snapshot = fresh
+            }
+        } catch UsageDataError.projectsUnreadable {
+            errorMessage = "Impossible de lire le dossier des transcripts (droits d'accès ?)."
+        } catch {
+            errorMessage = "Actualisation échouée : \(error.localizedDescription)"
         }
     }
 
@@ -83,9 +109,13 @@ final class UsageViewModel: ObservableObject {
     }
 
     private func startAutoRefresh() {
-        timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+        // `.common` : le tick survit aux drags de fenêtre et aux menus ouverts,
+        // là où le mode par défaut le gèle.
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     // MARK: - Formatage

@@ -5,9 +5,20 @@ import Foundation
 /// *cette* machine, et à défaut le nom complet de la session macOS.
 enum AccountLoader {
 
+    /// `.claude.json` atteint couramment plusieurs mégaoctets : on ne le relit que si sa
+    /// date de modification a changé depuis le dernier passage.
+    private static var cache: (mtime: Date, account: Account)?
+
     static func load() -> Account {
-        guard let url = ClaudeHome.configFile,
-              let data = try? Data(contentsOf: url),
+        guard let url = ClaudeHome.configFile else { return fallback() }
+
+        let mtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate
+        if let cache, let mtime, cache.mtime == mtime {
+            return cache.account
+        }
+
+        guard let data = try? Data(contentsOf: url),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let oauth = root["oauthAccount"] as? [String: Any] else {
             return fallback()
@@ -16,13 +27,15 @@ enum AccountLoader {
         let name = (oauth["displayName"] as? String)?.trimmed ?? ""
         let role = (oauth["organizationRole"] as? String) ?? ""
 
-        return Account(
+        let account = Account(
             name: name.isEmpty ? systemName : name,
             email: (oauth["emailAddress"] as? String)?.trimmed ?? "",
             plan: plan(from: oauth),
             organization: (oauth["organizationName"] as? String)?.trimmed ?? "",
             isAdmin: role.lowercased().contains("admin")
         )
+        if let mtime { cache = (mtime, account) }
+        return account
     }
 
     static func fallback() -> Account {

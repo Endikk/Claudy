@@ -113,13 +113,20 @@ struct RootView: View {
 
         Toggle("Toujours au premier plan", isOn: $viewModel.isAlwaysOnTop)
 
-        Toggle(
-            "Lancer au démarrage",
-            isOn: Binding(
-                get: { viewModel.launchAtLogin },
-                set: { viewModel.setLaunchAtLogin($0) }
+        if LaunchAtLogin.isAdHocSigned {
+            // `SMAppService.register()` refuse les binaires ad hoc : annoncer l'option
+            // indisponible vaut mieux qu'une case qui se décoche toute seule.
+            Button("Lancer au démarrage (indisponible — app non signée)") {}
+                .disabled(true)
+        } else {
+            Toggle(
+                "Lancer au démarrage",
+                isOn: Binding(
+                    get: { viewModel.launchAtLogin },
+                    set: { viewModel.setLaunchAtLogin($0) }
+                )
             )
-        )
+        }
 
         Divider()
 
