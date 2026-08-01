@@ -18,7 +18,7 @@ et le détail en tokens vient des transcripts locaux de Claude Code.
 
 **Tes données restent chez toi.** Pas de télémétrie, pas de serveur tiers, aucune conversation
 lue ni envoyée. Les seules requêtes réseau vont à l'API d'Anthropic, avec un jeton obtenu par
-*ta* connexion. ~3 000 lignes de Swift, auditables en une heure.
+*ta* connexion. Le code est court et auditable.
 
 ## Installer
 
@@ -43,8 +43,8 @@ curl -fsSL https://raw.githubusercontent.com/Endikk/Claudy/main/Scripts/install.
 L'app arrive dans `/Applications` (trouvable via Spotlight). Claudy n'est **pas notarisé** :
 c'est une distribution gratuite, sans compte Apple Developer. La commande retire donc la
 quarantaine posée au téléchargement — sans quoi Gatekeeper refuserait de lancer l'app. Si tu
-préfères ne rien dé-quarantiner, compile toi-même (voie 2) : le code fait ~2 800 lignes,
-auditables en une heure, et ne fait aucune requête réseau.
+préfères ne rien dé-quarantiner, compile toi-même (voie 2) : le code est court, auditable, et
+ne fait aucune requête réseau.
 
 **Voie 2 — depuis les sources (nécessite Xcode) :**
 
