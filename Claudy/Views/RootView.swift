@@ -59,7 +59,7 @@ struct RootView: View {
                     lineWidth: 1
                 )
         )
-        .overlay(crackLayer)
+        .overlay(strainBorder)
         .overlay(profileLayer)
         .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
     }
@@ -81,6 +81,7 @@ struct RootView: View {
                 startRadius: 0,
                 endRadius: 240
             )
+            fractureLayer
         }
     }
 
@@ -110,21 +111,35 @@ struct RootView: View {
 
     // MARK: - Surcharge
 
-    /// Au-delà de 95 %, la carte se fissure — et le liseré vire au rouge.
+    /// Au-delà de 95 %, le verre de la carte se fend. La fracture est **dans le fond**,
+    /// sous le contenu : elle change la matière de la carte sans jamais gêner la lecture.
     @ViewBuilder
-    private var crackLayer: some View {
-        let strain = viewModel.snapshot.strain
-        if strain > 0, display == .full || display == .minimal {
-            ZStack {
-                CrackOverlay(intensity: strain)
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .strokeBorder(Theme.danger.opacity(0.55 * strain), lineWidth: 1)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-            .allowsHitTesting(false)
-            .transition(.opacity)
-            .animation(Theme.Motion.gauge, value: strain)
+    private var fractureLayer: some View {
+        if isStrained {
+            GlassFracture(intensity: viewModel.snapshot.strain)
+                .transition(.opacity)
+                .animation(Theme.Motion.gauge, value: viewModel.snapshot.strain)
         }
+    }
+
+    /// Le liseré de la carte vire au rouge avec la surcharge. Il reste au-dessus du contenu :
+    /// c'est le bord de la carte, il ne recouvre rien.
+    @ViewBuilder
+    private var strainBorder: some View {
+        if isStrained {
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                // Même retenue que la fracture : le liseré teinte le bord, il ne l'entoure
+                // pas d'un trait rouge franc.
+                .strokeBorder(Theme.danger.opacity(0.28 * viewModel.snapshot.strain), lineWidth: 1)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+                .animation(Theme.Motion.gauge, value: viewModel.snapshot.strain)
+        }
+    }
+
+    /// Surcharge visible : au-delà de 95 %, et seulement sur les modes qui portent des jauges.
+    private var isStrained: Bool {
+        viewModel.snapshot.strain > 0 && (display == .full || display == .minimal)
     }
 
     // MARK: - Menu contextuel

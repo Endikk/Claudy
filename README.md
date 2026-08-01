@@ -8,7 +8,7 @@
 ![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
 
 <p align="center">
-  <img src="docs/screenshot.png" width="368" alt="Le widget Claudy : session 5 h, quotas hebdo, totaux du jour, sparkline 7 jours">
+  <img src="docs/video-readme.gif" width="620" alt="Le widget Claudy en action : session 5 h, quotas hebdo, totaux du jour, sparkline 7 jours">
 </p>
 
 Widget de bureau macOS affichant ta consommation Claude : carte flottante sans bordure,
