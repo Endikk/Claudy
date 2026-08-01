@@ -25,8 +25,14 @@ lue ni envoyée. Les seules requêtes réseau vont à l'API d'Anthropic, avec un
 **Homebrew :**
 
 ```bash
-brew install --cask Endikk/claudy/claudy
+brew tap Endikk/claudy
+brew trust Endikk/claudy
+brew install --cask claudy
 ```
+
+Depuis Homebrew 6, `brew trust` est obligatoire pour tout tap tiers : Homebrew refuse de
+charger du code d'un dépôt qui n'est pas le sien tant que tu ne l'as pas approuvé
+explicitement. C'est une bonne chose — tu déclares faire confiance à ce dépôt précis.
 
 **Ou en une commande (release précompilée) :**
 
