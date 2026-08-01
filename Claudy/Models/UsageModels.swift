@@ -113,6 +113,13 @@ struct UsageSnapshot: Equatable {
     /// Aucune activité relevée sur la fenêtre de 7 jours.
     var isEmpty: Bool { weekTokens == 0 }
 
+    /// Surcharge : 0 en dessous de 95 % sur toutes les jauges, 1 à 100 %. Au-delà de 0,
+    /// la carte se craquèle — un signal qu'on voit sans lire un chiffre.
+    var strain: Double {
+        let peak = max(session.percent, weekly.percent, sonnet.percent)
+        return min(max((peak - 0.95) / 0.05, 0), 1)
+    }
+
     /// État affiché avant le premier `fetch()` — jamais visible plus de quelques millisecondes,
     /// mais évite un optionnel dans toutes les vues.
     static let placeholder = UsageSnapshot(

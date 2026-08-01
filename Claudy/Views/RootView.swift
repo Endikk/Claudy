@@ -59,6 +59,7 @@ struct RootView: View {
                     lineWidth: 1
                 )
         )
+        .overlay(crackLayer)
         .overlay(profileLayer)
         .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
     }
@@ -104,6 +105,25 @@ struct RootView: View {
                 .transition(.scale(scale: 0.94, anchor: .topTrailing).combined(with: .opacity))
             }
             .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        }
+    }
+
+    // MARK: - Surcharge
+
+    /// Au-delà de 95 %, la carte se fissure — et le liseré vire au rouge.
+    @ViewBuilder
+    private var crackLayer: some View {
+        let strain = viewModel.snapshot.strain
+        if strain > 0, display == .full || display == .minimal {
+            ZStack {
+                CrackOverlay(intensity: strain)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .strokeBorder(Theme.danger.opacity(0.55 * strain), lineWidth: 1)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .allowsHitTesting(false)
+            .transition(.opacity)
+            .animation(Theme.Motion.gauge, value: strain)
         }
     }
 

@@ -243,9 +243,15 @@ final class UsageViewModel: ObservableObject {
         return ("\(points) pts sous le rythme", Theme.Accent.sage.color)
     }
 
-    /// Initiale du jour pour l'axe de la sparkline : L, M, M, J, V, S, D.
+    /// Initiale française du jour pour l'axe de la sparkline : L M M J V S D.
+    /// Table explicite plutôt qu'un `DateFormatter` : l'interface est en français, l'axe
+    /// ne doit pas basculer en « S M T W » sur un système configuré en anglais.
     static func dayInitial(_ date: Date) -> String {
-        String(dayFormatter.string(from: date).prefix(1)).uppercased()
+        // `.weekday` vaut 1 pour dimanche, quel que soit le premier jour de la semaine.
+        let weekday = Calendar.current.component(.weekday, from: date)
+        let initials = ["D", "L", "M", "M", "J", "V", "S"]
+        guard initials.indices.contains(weekday - 1) else { return "" }
+        return initials[weekday - 1]
     }
 
     /// `minimumFractionDigits = 0` : « 18 M » plutôt que « 18,00 M ».
@@ -269,12 +275,6 @@ final class UsageViewModel: ObservableObject {
         return formatter
     }()
 
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = .current
-        formatter.setLocalizedDateFormatFromTemplate("EEEE")
-        return formatter
-    }()
 }
 
 // MARK: - Persistance

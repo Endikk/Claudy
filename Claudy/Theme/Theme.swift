@@ -56,7 +56,11 @@ enum Theme {
         static let cardCorner: CGFloat = 20
         static let minimalCorner: CGFloat = 15
         /// Marge transparente autour de la carte : c'est là que vit l'ombre portée.
+        /// La fenêtre est donc plus grande que la carte visible de `shadowInset` sur chaque
+        /// bord — tout positionnement à l'écran doit raisonner sur le rectangle *visuel*.
         static let shadowInset: CGFloat = 14
+        /// Écart entre la carte visible et le bord de l'écran, dans son coin d'ancrage.
+        static let screenMargin: CGFloat = 10
         static let padding: CGFloat = 16
     }
 

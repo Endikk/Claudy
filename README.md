@@ -205,6 +205,10 @@ colonnes le résument à un signe (`+15` / `−14`). Sous 4 points d'écart, l'a
 
 Le repère disparaît quand aucune fenêtre n'est en cours — il n'y a alors pas de rythme à tenir.
 
+Au-delà de **95 %** sur n'importe quelle jauge, la carte se **fissure** : un impact et ses
+fêlures se propagent sur le verre, et le liseré vire au rouge. L'intensité monte jusqu'à 100 %.
+Un signal qu'on voit du coin de l'œil, sans avoir à lire un chiffre.
+
 Avec les quotas réels, les fenêtres hebdomadaires sont **celles d'Anthropic** : 7 jours ancrés
 sur la vraie heure de remise à zéro du compte (par ex. lundi 17:00). En repli sans jeton, c'est
 la **semaine calendaire** qui sert de fenêtre — elle seule donne alors un instant de remise à
