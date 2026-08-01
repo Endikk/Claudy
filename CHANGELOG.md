@@ -1,5 +1,20 @@
 # Journal des versions
 
+## 1.2.1 — 1er août 2026
+
+**La fissure passe derrière le contenu.** À l'arrivée du seuil de 95 %, la carte se fend
+toujours, mais la fracture vit désormais dans le fond : plus un seul trait ne barre les
+chiffres ni les libellés. La carte reste entièrement lisible à 100 % de charge.
+
+**Fracture redessinée.** Un impact au coin haut-droit, une toile serrée autour du point de
+choc, trois longues fractures qui filent vers le corps de la carte — au lieu du réseau de
+traits étalé sur toute la surface. L'effet est rendu en profondeur (éclat de verre déplacé,
+creux flouté, arête claire décalée) plutôt qu'en lignes peintes, et son opacité est
+plafonnée : c'est un signal perçu du coin de l'œil, pas un dessin qui prend la carte.
+Le liseré rouge suit la même retenue.
+
+**README animé.** La capture fixe laisse place à une démonstration en mouvement.
+
 ## 1.2.0 — 1er août 2026
 
 **Connexion Claude propre à Claudy.** L'app obtient désormais son propre jeton via une
