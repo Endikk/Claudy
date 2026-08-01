@@ -19,7 +19,7 @@ enum UsageAggregator {
     private static let day: TimeInterval = 86_400
 
     static func snapshot(from entries: [TranscriptEntry], account: Account,
-                         quotas: [QuotaLimit]? = nil, now: Date = Date()) -> UsageSnapshot {
+                         quotas: [QuotaLimit]?, now: Date = Date()) -> UsageSnapshot {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
 
@@ -61,7 +61,7 @@ enum UsageAggregator {
         // — Jauges : quota réel quand l'API l'a donné, référence personnelle sinon —
 
         var session = UsageWindow(
-            id: "session", title: "Session", window: "5h",
+            title: "Session", window: "5h",
             percent: ratio(active?.tokens ?? 0, sessionReference),
             tokensUsed: active?.tokens ?? 0,
             tokensLimit: sessionReference,
@@ -74,7 +74,7 @@ enum UsageAggregator {
             let start = quota.resetsAt.addingTimeInterval(-sessionWindow)
             let used = entries.filter { $0.date >= start }.reduce(0) { $0 + $1.tokens }
             session = UsageWindow(
-                id: "session", title: "Session", window: "5h",
+                title: "Session", window: "5h",
                 percent: min(quota.percent, 1),
                 tokensUsed: used,
                 tokensLimit: extrapolated(used: used, percent: quota.percent, fallback: sessionReference),
@@ -83,7 +83,7 @@ enum UsageAggregator {
         }
 
         var weekly = UsageWindow(
-            id: "weekly", title: "Hebdo", window: "sem.",
+            title: "Hebdo", window: "sem.",
             percent: ratio(weekTokens, weekReference),
             tokensUsed: weekTokens, tokensLimit: weekReference,
             windowStart: week.start, resetDate: week.end, accent: .amber
@@ -92,7 +92,7 @@ enum UsageAggregator {
             let start = quota.resetsAt.addingTimeInterval(-weeklyWindow)
             let used = entries.filter { $0.date >= start }.reduce(0) { $0 + $1.tokens }
             weekly = UsageWindow(
-                id: "weekly", title: "Hebdo", window: "sem.",
+                title: "Hebdo", window: "sem.",
                 percent: min(quota.percent, 1),
                 tokensUsed: used,
                 tokensLimit: extrapolated(used: used, percent: quota.percent, fallback: weekReference),
@@ -101,7 +101,7 @@ enum UsageAggregator {
         }
 
         var third = UsageWindow(
-            id: "focus", title: ModelName.display(focus), window: "sem.",
+            title: ModelName.display(focus), window: "sem.",
             percent: ratio(focusTokens, focusReference),
             tokensUsed: focusTokens, tokensLimit: focusReference,
             windowStart: week.start, resetDate: week.end, accent: ModelName.accent(focus)
@@ -114,7 +114,7 @@ enum UsageAggregator {
                 .filter { $0.date >= start && ModelName.family($0.model) == family }
                 .reduce(0) { $0 + $1.tokens }
             third = UsageWindow(
-                id: "focus", title: scopeName, window: "sem.",
+                title: scopeName, window: "sem.",
                 percent: min(quota.percent, 1),
                 tokensUsed: used,
                 tokensLimit: extrapolated(used: used, percent: quota.percent, fallback: focusReference),
@@ -145,7 +145,7 @@ enum UsageAggregator {
 
     // MARK: - Fenêtres de session
 
-    struct Block {
+    private struct Block {
         let start: Date
         var end: Date { start.addingTimeInterval(sessionWindow) }
         var tokens: Int
@@ -154,7 +154,7 @@ enum UsageAggregator {
     /// Découpe en fenêtres de 5 h, à la manière de Claude Code : une fenêtre s'ouvre au premier
     /// message (calé sur l'heure ronde) et se referme au bout de 5 h — ou plus tôt si l'activité
     /// s'interrompt plus longtemps que la fenêtre elle-même.
-    static func sessionBlocks(_ entries: [TranscriptEntry]) -> [Block] {
+    private static func sessionBlocks(_ entries: [TranscriptEntry]) -> [Block] {
         var blocks: [Block] = []
         var previous: Date?
 

@@ -5,7 +5,7 @@ import Charts
 /// le détail chiffré vit dans la section « Détails ».
 struct SparklineChart: View {
     let samples: [TokenSample]
-    var tint: Color = Theme.Accent.coral.color
+    let tint: Color
 
     private var upperBound: Double {
         let peak = samples.map(\.tokens).max() ?? 1

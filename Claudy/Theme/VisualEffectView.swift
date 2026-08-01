@@ -4,8 +4,8 @@ import SwiftUI
 /// `.behindWindow` échantillonne le bureau et les fenêtres situées dessous,
 /// ce qui donne au widget son intégration au fond d'écran.
 struct VisualEffectView: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .hudWindow
-    var blending: NSVisualEffectView.BlendingMode = .behindWindow
+    let material: NSVisualEffectView.Material
+    let blending: NSVisualEffectView.BlendingMode
 
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()

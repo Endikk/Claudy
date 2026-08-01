@@ -1,8 +1,7 @@
 import Foundation
 
 /// Une fenêtre de quota (session 5h, hebdomadaire, quota Sonnet…).
-struct UsageWindow: Identifiable, Equatable {
-    let id: String
+struct UsageWindow {
     /// Titre affiché : « Session », « Hebdo », « Sonnet ».
     let title: String
     /// Qualificatif de fenêtre : « 5h », « 7j ».
@@ -47,7 +46,7 @@ struct TokenSample: Identifiable, Equatable {
 }
 
 /// Répartition par modèle sur 7 jours.
-struct ModelUsage: Identifiable, Equatable {
+struct ModelUsage: Identifiable {
     let id: String
     let name: String
     var tokens: Int
@@ -57,7 +56,7 @@ struct ModelUsage: Identifiable, Equatable {
 }
 
 /// Répartition par projet sur 7 jours.
-struct ProjectUsage: Identifiable, Equatable {
+struct ProjectUsage: Identifiable {
     let id: String
     let name: String
     var tokens: Int
@@ -66,7 +65,7 @@ struct ProjectUsage: Identifiable, Equatable {
 }
 
 /// Compte connecté.
-struct Account: Equatable {
+struct Account {
     let name: String
     let email: String
     let plan: String
@@ -81,7 +80,7 @@ struct Account: Equatable {
 
 /// État complet rendu par la vue à un instant donné.
 /// Une seule structure : le ViewModel n'expose qu'elle, donc pas d'état partiel incohérent à l'écran.
-struct UsageSnapshot: Equatable {
+struct UsageSnapshot {
     var session: UsageWindow
     var weekly: UsageWindow
     var sonnet: UsageWindow
@@ -110,9 +109,6 @@ struct UsageSnapshot: Equatable {
     /// Faux = la carte affiche l'onboarding — jamais de quotas estimés.
     var isSignedIn: Bool = false
 
-    /// Aucune activité relevée sur la fenêtre de 7 jours.
-    var isEmpty: Bool { weekTokens == 0 }
-
     /// Surcharge : 0 en dessous de 95 % sur toutes les jauges, 1 à 100 %. Au-delà de 0,
     /// la carte se craquèle — un signal qu'on voit sans lire un chiffre.
     var strain: Double {
@@ -123,13 +119,13 @@ struct UsageSnapshot: Equatable {
     /// État affiché avant le premier `fetch()` — jamais visible plus de quelques millisecondes,
     /// mais évite un optionnel dans toutes les vues.
     static let placeholder = UsageSnapshot(
-        session: UsageWindow(id: "session", title: "Session", window: "5h",
+        session: UsageWindow(title: "Session", window: "5h",
                              percent: 0, tokensUsed: 0, tokensLimit: 1,
                              windowStart: .now, resetDate: .now, accent: .coral),
-        weekly: UsageWindow(id: "weekly", title: "Hebdo", window: "7j",
+        weekly: UsageWindow(title: "Hebdo", window: "7j",
                             percent: 0, tokensUsed: 0, tokensLimit: 1,
                             windowStart: .now, resetDate: .now, accent: .amber),
-        sonnet: UsageWindow(id: "sonnet", title: "Sonnet", window: "7j",
+        sonnet: UsageWindow(title: "Sonnet", window: "7j",
                             percent: 0, tokensUsed: 0, tokensLimit: 1,
                             windowStart: .now, resetDate: .now, accent: .violet),
         history: [],

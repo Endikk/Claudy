@@ -28,7 +28,6 @@ enum LaunchAtLogin {
     }()
 
     /// Retourne l'état réellement obtenu, qui peut différer de celui demandé.
-    @discardableResult
     static func set(_ enabled: Bool) -> Bool {
         do {
             if enabled {

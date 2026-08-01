@@ -15,14 +15,6 @@ struct TranscriptEntry {
     let dedupKey: String?
 }
 
-/// Résultat d'un passage de scan.
-struct ScanResult {
-    let entries: [TranscriptEntry]
-    /// Lignes qui ressemblaient à une réponse assistant mais n'ont pas pu être lues.
-    /// Un compteur qui grimpe signale un changement de format des transcripts.
-    let skippedLines: Int
-}
-
 /// Lecture des transcripts `<config>/projects/**/*.jsonl`.
 ///
 /// Les transcripts ne font que grossir : le scanner mémorise donc un curseur par fichier et ne
@@ -69,7 +61,7 @@ actor TranscriptScanner {
     }()
 
     /// Toutes les réponses relevées sur la fenêtre de rétention, du plus ancien au plus récent.
-    func scan() throws -> ScanResult {
+    func scan() throws -> [TranscriptEntry] {
         let now = Date()
         let cutoff = now.addingTimeInterval(-retention)
         skippedLines = 0
@@ -92,10 +84,12 @@ actor TranscriptScanner {
         var all = files.values.flatMap(\.entries)
         all.sort { $0.date < $1.date }
 
+        // Canari de format : un compteur qui grimpe signale que les transcripts ont changé
+        // de forme et que le parsing laisse passer des réponses.
         if skippedLines > 0 {
             NSLog("[Claudy] %d ligne(s) de transcript illisible(s) ignorée(s).", skippedLines)
         }
-        return ScanResult(entries: all, skippedLines: skippedLines)
+        return all
     }
 
     // MARK: - Découverte

@@ -5,7 +5,7 @@ import SwiftUI
 struct UsageBar: View {
     let percent: Double
     let tint: Color
-    var height: CGFloat = 7
+    let height: CGFloat
     var showsGlow: Bool = true
 
     /// Position 0…1 du repère : la part de la fenêtre déjà écoulée. Le remplissage à gauche du

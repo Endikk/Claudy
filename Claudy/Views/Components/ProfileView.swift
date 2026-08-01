@@ -39,7 +39,7 @@ struct AvatarButton: View {
 struct ProfilePopup: View {
     let account: Account
     /// Présent seulement quand une session Claude est ouverte via Claudy.
-    var onSignOut: (() -> Void)? = nil
+    let onSignOut: (() -> Void)?
     let onClose: () -> Void
 
     var body: some View {

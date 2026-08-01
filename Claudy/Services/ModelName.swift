@@ -30,10 +30,6 @@ enum ModelName {
         return .sage
     }
 
-    static func isSonnet(_ identifier: String) -> Bool {
-        family(identifier) == "sonnet"
-    }
-
     /// Famille du modèle, en minuscules : « opus », « sonnet », « haiku »…
     /// Sert à regrouper les versions successives d'une même famille dans une seule jauge.
     static func family(_ identifier: String) -> String {

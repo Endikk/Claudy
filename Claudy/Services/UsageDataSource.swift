@@ -24,7 +24,7 @@ actor LocalUsageDataSource: UsageDataSource {
     func fetch() async throws -> UsageSnapshot {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
 
-        let result = try await scanner.scan()
+        let entries = try await scanner.scan()
         // Quotas et profil réels du compte quand le jeton local le permet ; `nil` (hors-ligne,
         // pas de jeton) fait retomber les jauges sur la référence personnelle.
         let payload = await client.fetch()
@@ -41,7 +41,7 @@ actor LocalUsageDataSource: UsageDataSource {
             )
         }
 
-        var snapshot = UsageAggregator.snapshot(from: result.entries, account: account, quotas: payload.limits)
+        var snapshot = UsageAggregator.snapshot(from: entries, account: account, quotas: payload.limits)
         snapshot.quotaStale = payload.isStale
         snapshot.isSignedIn = payload.isSignedIn
         return snapshot

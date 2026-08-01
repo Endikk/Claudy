@@ -7,7 +7,7 @@ enum Theme {
     // MARK: - Accents
 
     /// Palette d'accents. Chaque jauge / modèle porte un accent, jamais une couleur brute.
-    enum Accent: CaseIterable {
+    enum Accent {
         case coral, amber, violet, sage, sky
 
         var color: Color {
@@ -40,10 +40,10 @@ enum Theme {
         static func hero(_ size: CGFloat) -> SwiftUI.Font {
             .system(size: size, weight: .semibold, design: .rounded).monospacedDigit()
         }
-        static func value(_ size: CGFloat, _ weight: SwiftUI.Font.Weight = .semibold) -> SwiftUI.Font {
+        static func value(_ size: CGFloat, _ weight: SwiftUI.Font.Weight) -> SwiftUI.Font {
             .system(size: size, weight: weight, design: .rounded).monospacedDigit()
         }
-        static func label(_ size: CGFloat, _ weight: SwiftUI.Font.Weight = .semibold) -> SwiftUI.Font {
+        static func label(_ size: CGFloat, _ weight: SwiftUI.Font.Weight) -> SwiftUI.Font {
             .system(size: size, weight: weight, design: .rounded)
         }
     }
@@ -78,7 +78,7 @@ enum Theme {
 
 extension View {
     /// Label discret en capitales : titres de section, en-têtes de colonnes.
-    func microLabel(_ opacity: Double = 0.55) -> some View {
+    func microLabel(_ opacity: Double) -> some View {
         self.font(Theme.Font.label(9.5, .semibold))
             .tracking(0.9)
             .textCase(.uppercase)

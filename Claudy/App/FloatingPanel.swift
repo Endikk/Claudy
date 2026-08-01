@@ -32,6 +32,4 @@ final class FloatingPanel: NSPanel {
     /// Sans cet override, un panneau `.borderless` ne devient jamais key :
     /// ni clavier, ni menu contextuel fiable.
     override var canBecomeKey: Bool { true }
-
-    override var canBecomeMain: Bool { false }
 }

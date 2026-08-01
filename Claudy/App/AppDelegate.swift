@@ -61,6 +61,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         Task { await viewModel.refresh() }
     }
 
+    deinit {
+        if let screenObserver {
+            NotificationCenter.default.removeObserver(screenObserver)
+        }
+    }
+
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
 
     private func bind() {
@@ -129,8 +135,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Le recadrage porte sur le rectangle **visuel** (fenêtre moins la marge d'ombre) :
     /// clamper la fenêtre entière laisserait une bande vide de 14 pt le long des bords.
     private func clamped(_ frame: NSRect, for window: NSWindow) -> NSRect {
-        guard window.screen != nil || NSScreen.main != nil else { return frame }
-
         let inset = Theme.Metric.shadowInset
         let margin = Theme.Metric.screenMargin
         let bounds = layoutBounds(on: window.screen).insetBy(dx: margin, dy: margin)

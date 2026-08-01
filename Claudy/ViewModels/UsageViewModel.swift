@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import Combine
 
 /// Source de vérité unique de l'interface : l'instantané d'usage + les préférences du widget.
 @MainActor

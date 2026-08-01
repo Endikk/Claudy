@@ -40,7 +40,7 @@ actor DemoUsageDataSource: UsageDataSource {
 
         return UsageSnapshot(
             session: UsageWindow(
-                id: "session", title: "Session", window: "5h",
+                title: "Session", window: "5h",
                 percent: sessionPercent,
                 tokensUsed: Int(Double(sessionLimit) * sessionPercent),
                 tokensLimit: sessionLimit,
@@ -49,14 +49,14 @@ actor DemoUsageDataSource: UsageDataSource {
                 accent: .coral
             ),
             weekly: UsageWindow(
-                id: "weekly", title: "Hebdo", window: "sem.",
+                title: "Hebdo", window: "sem.",
                 percent: weeklyPercent,
                 tokensUsed: weekTokens, tokensLimit: weeklyLimit,
                 windowStart: week.start, resetDate: week.end,
                 accent: .amber
             ),
             sonnet: UsageWindow(
-                id: "sonnet", title: "Sonnet", window: "sem.",
+                title: "Sonnet", window: "sem.",
                 percent: min(Double(sonnetTokens) / Double(sonnetLimit), 1),
                 tokensUsed: sonnetTokens, tokensLimit: sonnetLimit,
                 windowStart: week.start, resetDate: week.end,
