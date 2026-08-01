@@ -19,7 +19,7 @@ cask "claudy" do
   desc "Widget de bureau affichant les quotas et la consommation Claude en temps réel"
   homepage "https://github.com/Endikk/Claudy"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "Claudy.app"
 
