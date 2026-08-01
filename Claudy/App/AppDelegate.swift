@@ -74,14 +74,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Position
 
+    /// Zone dans laquelle la carte se pose.
+    ///
+    /// Bords gauche, droit et bas : ceux de l'écran **physique**, pas `visibleFrame`. Le Dock
+    /// réserve une soixantaine de points en bas, mais c'est une pilule centrée : le coin
+    /// bas-droit est libre, s'en écarter laisserait un vide inexplicable. Seule la barre de
+    /// menus est respectée en haut, elle occupe toute la largeur.
+    private func layoutBounds(on screen: NSScreen?) -> NSRect {
+        guard let screen = screen ?? NSScreen.main else { return panel?.frame ?? .zero }
+        let full = screen.frame
+        return NSRect(
+            x: full.minX,
+            y: full.minY,
+            width: full.width,
+            height: screen.visibleFrame.maxY - full.minY
+        )
+    }
+
     /// Coin bas-droit **visuel** que la carte doit occuper sur un écran donné.
     /// L'ombre portée vit dans une marge transparente : sans la retrancher, la carte
     /// flotterait à 14 pt du bord au lieu d'être collée au coin.
     private func homeAnchor(on screen: NSScreen?) -> CGPoint {
-        let visible = (screen ?? NSScreen.main)?.visibleFrame ?? panel?.frame ?? .zero
+        let bounds = layoutBounds(on: screen)
         return CGPoint(
-            x: visible.maxX - Theme.Metric.screenMargin,
-            y: visible.minY + Theme.Metric.screenMargin
+            x: bounds.maxX - Theme.Metric.screenMargin,
+            y: bounds.minY + Theme.Metric.screenMargin
         )
     }
 
@@ -112,11 +129,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// Le recadrage porte sur le rectangle **visuel** (fenêtre moins la marge d'ombre) :
     /// clamper la fenêtre entière laisserait une bande vide de 14 pt le long des bords.
     private func clamped(_ frame: NSRect, for window: NSWindow) -> NSRect {
-        guard let screen = (window.screen ?? NSScreen.main) else { return frame }
+        guard window.screen != nil || NSScreen.main != nil else { return frame }
 
         let inset = Theme.Metric.shadowInset
         let margin = Theme.Metric.screenMargin
-        let bounds = screen.visibleFrame.insetBy(dx: margin, dy: margin)
+        let bounds = layoutBounds(on: window.screen).insetBy(dx: margin, dy: margin)
         var visual = frame.insetBy(dx: inset, dy: inset)
 
         visual.origin.x = min(max(visual.minX, bounds.minX), max(bounds.minX, bounds.maxX - visual.width))

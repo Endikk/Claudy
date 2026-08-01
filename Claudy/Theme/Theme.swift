@@ -60,7 +60,7 @@ enum Theme {
         /// bord — tout positionnement à l'écran doit raisonner sur le rectangle *visuel*.
         static let shadowInset: CGFloat = 14
         /// Écart entre la carte visible et le bord de l'écran, dans son coin d'ancrage.
-        static let screenMargin: CGFloat = 10
+        static let screenMargin: CGFloat = 8
         static let padding: CGFloat = 16
     }
 
