@@ -110,7 +110,7 @@ struct UsageSnapshot {
     var isSignedIn: Bool = false
 
     /// Surcharge : 0 en dessous de 95 % sur toutes les jauges, 1 à 100 %. Au-delà de 0,
-    /// la carte se craquèle — un signal qu'on voit sans lire un chiffre.
+    /// le liseré de la carte rougit — un signal qu'on voit sans lire un chiffre.
     var strain: Double {
         let peak = max(session.percent, weekly.percent, sonnet.percent)
         return min(max((peak - 0.95) / 0.05, 0), 1)
