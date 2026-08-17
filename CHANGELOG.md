@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 1.2.2 — 17 août 2026
+
+**Retrait de l'effet de verre brisé.** La fissure de surcharge disparaît : elle lisait comme
+un écran cassé pour de faux, en décalage avec le reste de la carte. Au-delà de 95 %, le
+liseré rouge reste le signal — discret, dans le bord, sans jamais toucher au contenu.
+
 ## 1.2.1 — 1er août 2026
 
 **La fissure passe derrière le contenu.** À l'arrivée du seuil de 95 %, la carte se fend
