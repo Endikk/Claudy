@@ -1,61 +1,122 @@
-# Journal des versions
+# Changelog
 
-## 1.2.2 — 17 août 2026
+All notable changes to this project are documented here. Dates are release dates.
 
-**Retrait de l'effet de verre brisé.** La fissure de surcharge disparaît : elle lisait comme
-un écran cassé pour de faux, en décalage avec le reste de la carte. Au-delà de 95 %, le
-liseré rouge reste le signal — discret, dans le bord, sans jamais toucher au contenu.
+## 1.3.0 — 2 September 2026
 
-## 1.2.1 — 1er août 2026
+The counter now shows the account's own figures, or nothing at all.
 
-**La fissure passe derrière le contenu.** À l'arrivée du seuil de 95 %, la carte se fend
-toujours, mais la fracture vit désormais dans le fond : plus un seul trait ne barre les
-chiffres ni les libellés. La carte reste entièrement lisible à 100 % de charge.
+### Fixed
 
-**Fracture redessinée.** Un impact au coin haut-droit, une toile serrée autour du point de
-choc, trois longues fractures qui filent vers le corps de la carte — au lieu du réseau de
-traits étalé sur toute la surface. L'effet est rendu en profondeur (éclat de verre déplacé,
-creux flouté, arête claire décalée) plutôt qu'en lignes peintes, et son opacité est
-plafonnée : c'est un signal perçu du coin de l'œil, pas un dessin qui prend la carte.
-Le liseré rouge suit la même retenue.
+- **Every token refresh had been failing since 18 August.** Tokens are renewed at
+  `platform.claude.com`, not at `console.anthropic.com`, which the app was still using. The
+  refresh grant also now sends its `scope`; without it a renewed token loses `user:profile` and
+  the API stops returning quotas altogether.
+- **Silent fallback to an invented percentage.** When the account gave no quota the app filled the
+  gap with the 90th percentile of local transcript windows. That was wrong by construction:
+  Anthropic's response carries `limit_dollars: null` and `used_dollars: null`, so the quota is not
+  a token tally and no local count can reproduce it. Gauges now read "—" behind an "offline" badge.
+- **A stale reading past its reset time was served as current.** The window had reopened at zero
+  since, making the figure wrong rather than merely old. Such windows are now dropped, and the
+  whole reading is abandoned when none survives.
+- **An expired borrowed token sent the card back to onboarding**, wiping a valid reading. The last
+  known reading is now served, dated; onboarding returns only if there never was one.
+- **A brief network drop froze the counter for five minutes.** Backoff now follows the nature of
+  the fault: 30 s → 5 min for a transient network or server error, 5 → 15 → 30 → 60 min for a rate
+  limit or a refused token, with `Retry-After` honoured throughout.
+- **The refresh button could not break an ongoing backoff.** A user-initiated refresh now lifts it.
+- **A gauge at 0 % or without a measurement still drew a coloured dot**, which read as consumption
+  that did not exist.
 
-**README animé.** La capture fixe laisse place à une démonstration en mouvement.
+### Changed
 
-## 1.2.0 — 1er août 2026
+- **The OAuth token is borrowed from Claude Code, read-only.** Claude Code renews it on every
+  launch and before every expiry, so it is always fresh and Claudy has nothing to refresh. The
+  `refresh_token` is never read or spent — rotating it would invalidate Claude Code's own session.
+  The read goes through `/usr/bin/security`, the binary that created the keychain item and which
+  its ACL already trusts, so no macOS "confidential information" dialog appears. Claudy's own OAuth
+  sign-in remains as a second choice and is abandoned on `invalid_grant`.
+- **Polling every 3 minutes instead of every 60 seconds**, with a 60-second cache and the profile
+  re-read only every 6 hours. The old rhythm produced cascades of HTTP 429.
+- **The origin of the figures is always stated.** A badge reads "relay", "⟳" (last known reading,
+  dated), "offline" or "demo", and hovering explains it in one sentence.
+- **Token counts are labelled as local**: "12.4 M tokens on this machine" rather than an
+  extrapolated "X of Y tokens". They never mix with the account percentage.
+- **The interface, source comments and documentation are now in English.** A French README remains
+  at [README.fr.md](README.fr.md).
 
-**Connexion Claude propre à Claudy.** L'app obtient désormais son propre jeton via une
-connexion OAuth dans le navigateur, rangé dans son propre trousseau. Elle ne lit plus les
-secrets de Claude Code : macOS n'affiche plus l'avertissement « informations
-confidentielles ». Déconnexion depuis la fiche compte ou le clic droit.
+### Added
 
-**Onboarding plein écran.** Sans session ouverte, la carte n'affiche plus de quotas estimés :
-elle présente Claudy et propose la connexion. Aucun chiffre inventé.
+- **Optional status-line bridge.** Claude Code receives its quota counters in the
+  `anthropic-ratelimit-unified-*` headers of every API response. One status-line command relays
+  them to Claudy: same values, no request, immune to rate limiting. Documented in the README.
 
-**Fissures au-delà de 95 %.** Un impact et ses fêlures se propagent sur la carte, le liseré
-vire au rouge, l'intensité monte jusqu'à 100 %.
+### Removed
 
-**Position et gestes.**
-- La carte se cale au coin bas-droit physique de l'écran, à 8 pt des bords, à chaque lancement
-  et à chaque changement de taille.
-- Un clic sur la bande minimale l'agrandit ; un clic sur l'en-tête ou le bloc session la replie.
-- Elle grandit vers le haut : l'interface reste entièrement visible.
+- The `claudy.limit.session`, `claudy.limit.weekly` and `claudy.limit.model` preferences, which
+  only ever tuned the estimation mode that no longer exists.
 
-**Divers.** Initiales des jours en français sur la sparkline (D L M M J V S). Suppression du
-code mort après audit symbole par symbole. Empreinte SHA-256 épinglée dans le cask Homebrew.
+### Verified
 
-## 1.1.0 — 31 juillet 2026
+Against the live API, at three different values (23 %, 25 %, 39 %): session, weekly and per-model
+gauges matched to the digit, with identical reset times.
 
-- Jauges branchées sur les **quotas réels** du compte (`api.anthropic.com/api/oauth/usage`) :
-  mêmes pourcentages et mêmes heures de remise à zéro que claude.ai.
-- Identité du compte lue depuis `/api/oauth/profile`.
-- Renouvellement autonome du jeton, retry unique sur 401, backoff exponentiel, dernière valeur
-  connue conservée en cas de panne, journal dans `~/Library/Application Support/Claudy/api.log`.
-- Icône d'application, script d'installation en une commande, cask Homebrew.
-- Retrait des boutons « Déconnexion » et « Stats équipe » qui ne faisaient rien.
+## 1.2.2 — 17 August 2026
 
-## 1.0.0 — 31 juillet 2026
+**Broken-glass effect removed.** The overload crack is gone: it read as a fake broken screen, out
+of step with the rest of the card. Past 95 %, the red hairline remains the signal — discreet, kept
+to the edge, never touching the content.
 
-Première version : widget flottant, lecture incrémentale des transcripts, déduplication des
-réponses sur `(message.id, requestId)` — sans quoi les totaux étaient gonflés d'un facteur ~1,9.
-Erreurs signalées à l'écran plutôt que masquées par le mode démonstration. Fenêtre récupérable
-après débranchement d'un écran, rafraîchissement au réveil.
+## 1.2.1 — 1 August 2026
+
+**The crack moves behind the content.** At the 95 % threshold the card still splits, but the
+fracture now lives in the background: not a single line crosses the figures or the labels. The card
+stays fully legible at 100 % load.
+
+**Fracture redrawn.** An impact in the top-right corner, a tight web around the point of impact,
+three long fractures running into the body of the card — instead of a network of lines spread over
+the whole surface. The effect is rendered in depth (displaced glass shard, blurred hollow, offset
+bright edge) rather than in painted lines, and its opacity is capped: a signal caught out of the
+corner of the eye, not a drawing that takes over the card. The red hairline follows the same
+restraint.
+
+**Animated README.** The still capture gives way to a moving demonstration.
+
+## 1.2.0 — 1 August 2026
+
+**Claudy's own Claude sign-in.** The app now obtains its own token through an OAuth sign-in in the
+browser, stored in its own keychain item. It no longer reads Claude Code's secrets, so macOS stops
+showing the "confidential information" warning. Sign out from the account card or the right-click
+menu.
+
+**Full-card onboarding.** With no session open, the card no longer shows estimated quotas: it
+introduces Claudy and offers to sign in. No invented figures.
+
+**Cracks past 95 %.** An impact and its fractures spread across the card, the hairline turns red,
+and the intensity rises to 100 %.
+
+**Position and gestures.**
+- The card settles into the screen's physical bottom-right corner, 8 pt from the edges, on every
+  launch and every size change.
+- A click on the minimal strip expands it; a click on the header or the session block folds it back.
+- It grows upward, so the interface stays fully visible.
+
+**Miscellaneous.** French day initials on the sparkline (D L M M J V S). Dead code removed after a
+symbol-by-symbol audit. SHA-256 digest pinned in the Homebrew cask.
+
+## 1.1.0 — 31 July 2026
+
+- Gauges wired to the account's **real quotas** (`api.anthropic.com/api/oauth/usage`): the same
+  percentages and reset times as claude.ai.
+- Account identity read from `/api/oauth/profile`.
+- Autonomous token renewal, single retry on 401, exponential backoff, last known value kept on
+  failure, log at `~/Library/Application Support/Claudy/api.log`.
+- Application icon, one-command install script, Homebrew cask.
+- Removed the "Sign out" and "Team stats" buttons, which did nothing.
+
+## 1.0.0 — 31 July 2026
+
+First release: floating widget, incremental transcript reading, response deduplication on
+`(message.id, requestId)` — without which totals were inflated roughly 1.9-fold. Errors surfaced on
+screen rather than hidden behind demo mode. Window recoverable after a display is unplugged, and a
+refresh on wake.

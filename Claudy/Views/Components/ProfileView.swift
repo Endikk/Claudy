@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pastille du compte, en haut à droite de l'en-tête.
+/// Account chip, at the top right of the header.
 struct AvatarButton: View {
     let account: Account
     let isActive: Bool
@@ -27,18 +27,15 @@ struct AvatarButton: View {
                 .shadow(color: Theme.Accent.coral.color.opacity(0.4), radius: 5, y: 1)
         }
         .buttonStyle(.plain)
-        .help("Compte")
+        .help("Account")
     }
 }
 
-/// Fiche compte.
-///
-/// Volontairement rendue *dans* la carte plutôt qu'en `.popover` : un `NSPopover` attaché à un
-/// panneau `.borderless` / `.nonactivatingPanel` s'affiche de façon peu fiable et casse
-/// l'esthétique du widget.
+/// Account card, rendered *inside* the widget rather than as a `.popover`: an `NSPopover`
+/// attached to a `.borderless` / `.nonactivatingPanel` window displays unreliably.
 struct ProfilePopup: View {
     let account: Account
-    /// Présent seulement quand une session Claude est ouverte via Claudy.
+    /// Present only when a Claude session is open through Claudy.
     let onSignOut: (() -> Void)?
     let onClose: () -> Void
 
@@ -63,7 +60,6 @@ struct ProfilePopup: View {
                     Text(account.name)
                         .font(Theme.Font.label(13, .semibold))
                         .foregroundStyle(.primary)
-                    // Compte non connecté : pas de ligne vide, pas d'adresse inventée.
                     if !account.email.isEmpty {
                         Text(account.email)
                             .font(Theme.Font.label(10.5, .regular))
@@ -93,7 +89,7 @@ struct ProfilePopup: View {
             ].filter { !$0.0.isEmpty }
 
             if badges.isEmpty {
-                Text("Aucun compte Claude connecté sur cette machine")
+                Text("No Claude account signed in on this machine")
                     .font(Theme.Font.label(10, .regular))
                     .foregroundStyle(.primary.opacity(0.4))
             } else {
@@ -107,7 +103,7 @@ struct ProfilePopup: View {
             if let onSignOut {
                 Divider()
                     .padding(.vertical, 11)
-                PopupRow(title: "Déconnexion", icon: "rectangle.portrait.and.arrow.right",
+                PopupRow(title: "Sign out", icon: "rectangle.portrait.and.arrow.right",
                          tint: Theme.danger, action: onSignOut)
             }
         }

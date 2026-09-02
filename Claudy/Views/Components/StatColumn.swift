@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Colonne secondaire : « Hebdo · 7j », « Sonnet · 7j ».
+/// Secondary column: "Weekly · 7d", "Sonnet · 7d".
 struct StatColumn: View {
     let window: UsageWindow
 
     private var tint: Color { Theme.tint(window.accent, at: window.percent) }
 
-    /// Écart au rythme en points de pourcentage.
+    /// Distance from the expected pace, in percentage points.
     private var points: Int { Int((abs(window.paceDelta) * 100).rounded()) }
 
     var body: some View {
@@ -20,26 +20,26 @@ struct StatColumn: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(Int(window.percent * 100))")
+                Text(window.isMeasured ? "\(Int(window.percent * 100))" : "—")
                     .font(Theme.Font.value(19, .semibold))
-                Text("%")
-                    .font(Theme.Font.label(11, .medium))
-                    .foregroundStyle(.primary.opacity(0.45))
+                if window.isMeasured {
+                    Text("%")
+                        .font(Theme.Font.label(11, .medium))
+                        .foregroundStyle(.primary.opacity(0.45))
+                }
             }
-            .foregroundStyle(.primary.opacity(0.92))
+            .foregroundStyle(.primary.opacity(window.isMeasured ? 0.92 : 0.4))
 
             UsageBar(percent: window.percent, tint: tint, height: 5, showsGlow: false,
                      pace: window.isActive ? window.elapsed : nil)
 
             HStack(spacing: 4) {
-                Text(UsageViewModel.tokens(window.tokensUsed) + " / " + UsageViewModel.tokens(window.tokensLimit))
+                Text(window.isMeasured ? UsageViewModel.tokens(window.tokensUsed) + " here" : "no quota")
                     .font(Theme.Font.value(9.5, .medium))
                     .foregroundStyle(.primary.opacity(0.38))
 
                 Spacer(minLength: 0)
 
-                // Pas de place pour une phrase dans une colonne : l'écart au rythme se résume
-                // à un signe et une valeur, le repère sur la barre donnant le détail.
                 if let pace = UsageViewModel.pace(window), window.paceDelta.magnitude >= 0.04 {
                     Text(window.paceDelta > 0 ? "+\(points)" : "−\(points)")
                         .font(Theme.Font.value(9.5, .semibold))

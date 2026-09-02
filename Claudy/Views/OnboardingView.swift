@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// Carte affichée tant qu'aucune session Claude n'est ouverte.
+/// Card shown while no Claude session is open.
 ///
-/// Claudy n'affiche **jamais** de quotas estimés : la connexion OAuth est la porte
-/// d'entrée. Cette carte remplace entièrement les jauges — pas de chiffres inventés
-/// derrière un voile, pas de pastille d'excuse.
+/// Claudy **never** shows estimated quotas, so signing in is the way in. This card replaces the
+/// gauges outright: no invented figures behind a veil, no apologetic badge.
 struct OnboardingView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @State private var manualCode = ""
@@ -19,21 +18,21 @@ struct OnboardingView: View {
                 .font(Theme.Font.label(20, .semibold))
                 .foregroundStyle(.primary.opacity(0.92))
 
-            Text("Tes quotas Claude, en vrai.")
+            Text("Your real Claude quotas.")
                 .font(Theme.Font.label(11, .medium))
                 .foregroundStyle(.primary.opacity(0.5))
                 .padding(.top, 3)
 
             VStack(alignment: .leading, spacing: 13) {
                 feature("gauge.with.needle.fill", .coral,
-                        "Quotas réels",
-                        "Les mêmes chiffres que claude.ai, à la minute près.")
+                        "Real quotas",
+                        "The same figures as claude.ai, to the minute.")
                 feature("metronome.fill", .amber,
-                        "Ton rythme",
-                        "En avance ou sous le rythme de chaque fenêtre, d'un coup d'œil.")
+                        "Your pace",
+                        "Ahead of or behind each window, at a glance.")
                 feature("lock.shield.fill", .sage,
-                        "Rien ne quitte ton Mac",
-                        "Seul échange : l'API Anthropic, avec ton propre jeton.")
+                        "Nothing leaves your Mac",
+                        "The only exchange is Anthropic's API, with your own token.")
             }
             .padding(.vertical, 20)
 
@@ -91,24 +90,22 @@ struct OnboardingView: View {
         }
     }
 
-    // MARK: - Connexion
-
     @ViewBuilder
     private var action: some View {
         if viewModel.isAwaitingManualCode {
             VStack(alignment: .leading, spacing: 7) {
-                Text("Colle le code affiché par la page :")
+                Text("Paste the code the page shows:")
                     .font(Theme.Font.label(10.5, .medium))
                     .foregroundStyle(.primary.opacity(0.6))
                 TextField("code#state", text: $manualCode)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.Font.value(11, .regular))
                 HStack(spacing: 12) {
-                    Button("Valider") { viewModel.submitManualCode(manualCode) }
+                    Button("Submit") { viewModel.submitManualCode(manualCode) }
                         .buttonStyle(.borderedProminent)
                         .tint(Theme.Accent.coral.color)
                         .disabled(manualCode.trimmed.isEmpty)
-                    Button("Annuler") { viewModel.cancelSignIn() }
+                    Button("Cancel") { viewModel.cancelSignIn() }
                         .buttonStyle(.plain)
                         .font(Theme.Font.label(10.5, .medium))
                         .foregroundStyle(.primary.opacity(0.5))
@@ -121,7 +118,7 @@ struct OnboardingView: View {
                     .font(Theme.Font.label(10.5, .medium))
                     .foregroundStyle(.primary.opacity(0.6))
                 Spacer(minLength: 0)
-                Button("Annuler") { viewModel.cancelSignIn() }
+                Button("Cancel") { viewModel.cancelSignIn() }
                     .buttonStyle(.plain)
                     .font(Theme.Font.label(10.5, .medium))
                     .foregroundStyle(.primary.opacity(0.5))
@@ -132,7 +129,7 @@ struct OnboardingView: View {
                 Button {
                     viewModel.startSignIn()
                 } label: {
-                    Text("Se connecter à Claude")
+                    Text("Sign in to Claude")
                         .font(Theme.Font.label(12.5, .semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
@@ -151,7 +148,7 @@ struct OnboardingView: View {
                 }
                 .buttonStyle(.plain)
 
-                Text("Connexion officielle claude.ai — révocable à tout moment.")
+                Text("Official claude.ai sign-in — revocable at any time.")
                     .font(Theme.Font.label(9, .medium))
                     .foregroundStyle(.primary.opacity(0.35))
 
@@ -166,8 +163,8 @@ struct OnboardingView: View {
     }
 }
 
-/// Micro-carte affichée le temps du tout premier relevé, avant de savoir si une
-/// session existe — évite un flash d'onboarding aux utilisateurs déjà connectés.
+/// Micro-card shown during the very first reading, before we know whether a session exists —
+/// it spares already signed-in users a flash of onboarding.
 struct LoadingCard: View {
     var body: some View {
         HStack(spacing: 10) {

@@ -2,19 +2,19 @@ import Foundation
 import Security
 import ServiceManagement
 
-/// Enregistrement au démarrage via `SMAppService`.
+/// Login-item registration through `SMAppService`.
 ///
-/// Attention : `register()` échoue tant que l'app n'est pas signée avec une identité stable
-/// (`Error Domain=SMAppServiceErrorDomain Code=1`). En build ad-hoc, l'échec est donc normal —
-/// on le remonte plutôt que de laisser l'interface prétendre que l'option est active.
+/// `register()` fails until the app is signed with a stable identity
+/// (`Error Domain=SMAppServiceErrorDomain Code=1`), so failure is expected in ad-hoc builds.
+/// It is reported rather than swallowed, so the UI never claims the option is on when it is not.
 enum LaunchAtLogin {
 
     static var isEnabled: Bool {
         SMAppService.mainApp.status == .enabled
     }
 
-    /// Vrai si le binaire courant est signé ad hoc : `register()` refusera systématiquement,
-    /// l'interface doit donc annoncer l'option comme indisponible plutôt que la proposer.
+    /// True when the running binary is ad-hoc signed. `register()` will always be refused, so
+    /// the UI announces the option as unavailable instead of offering it.
     static let isAdHocSigned: Bool = {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
@@ -27,7 +27,7 @@ enum LaunchAtLogin {
         return SecCodeSignatureFlags(rawValue: rawFlags).contains(.adhoc)
     }()
 
-    /// Retourne l'état réellement obtenu, qui peut différer de celui demandé.
+    /// Returns the state actually reached, which may differ from the one requested.
     static func set(_ enabled: Bool) -> Bool {
         do {
             if enabled {
@@ -36,7 +36,7 @@ enum LaunchAtLogin {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            NSLog("[Claudy] Lancement au démarrage indisponible : \(error.localizedDescription)")
+            NSLog("[Claudy] Launch at login unavailable: \(error.localizedDescription)")
         }
         return isEnabled
     }

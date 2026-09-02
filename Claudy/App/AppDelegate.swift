@@ -10,23 +10,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
 
-    /// Garde-fou : `setFrame` depuis `windowDidResize` renotifie.
+    /// Guard: `setFrame` from `windowDidResize` re-notifies.
     private var isAdjustingFrame = false
 
-    /// Coin **bas-droit** de la carte — son point d'ancrage. C'est lui qui reste fixe quand
-    /// la carte change de taille : elle grandit vers le haut et la gauche, jamais sous le
-    /// bord de l'écran. Réinitialisé en bas à droite de l'écran à chaque lancement.
+    /// The card's **bottom-right** corner, its anchor point. This is what stays fixed when the
+    /// card resizes: it grows up and to the left, never under the screen edge. Reset to the
+    /// screen's bottom right on every launch.
     private var anchor: CGPoint = .zero
-
-    // MARK: - Cycle de vie
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         installMainMenu()
 
         let controller = NSHostingController(rootView: RootView().environmentObject(viewModel))
-        // La fenêtre suit la taille intrinsèque de SwiftUI : bascule de mode et
-        // ouverture de l'accordéon redimensionnent la carte sans mesure manuelle.
         controller.sizingOptions = [.preferredContentSize]
 
         let panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 220))
@@ -35,21 +31,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.level = viewModel.isAlwaysOnTop ? .floating : .normal
         self.panel = panel
 
-        // Position de départ : coin bas-droit de l'écran principal, à chaque lancement.
-        // C'est la place du widget ; un déplacement à la souris vaut pour la session.
         anchor = homeAnchor(on: NSScreen.main)
         applyAnchor()
         panel.orderFrontRegardless()
 
-        // Moniteur débranché ou résolution changée : sans ce recadrage, la carte peut rester
-        // hors champ sans aucun moyen de la récupérer (pas de Dock, pas de barre de menus).
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
         ) { _ in
-            // La notification arrive pendant la reconfiguration : les frames d'écran ne sont
-            // parfois pas encore définitives, d'où le différé.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 MainActor.assumeIsolated {
                     (NSApp.delegate as? AppDelegate)?.clampPanelToScreen()
@@ -78,14 +68,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
 
-    // MARK: - Position
-
-    /// Zone dans laquelle la carte se pose.
+    /// The area the card settles into.
     ///
-    /// Bords gauche, droit et bas : ceux de l'écran **physique**, pas `visibleFrame`. Le Dock
-    /// réserve une soixantaine de points en bas, mais c'est une pilule centrée : le coin
-    /// bas-droit est libre, s'en écarter laisserait un vide inexplicable. Seule la barre de
-    /// menus est respectée en haut, elle occupe toute la largeur.
+    /// Left, right and bottom edges come from the **physical** screen, not `visibleFrame`. The
+    /// Dock reserves some sixty points at the bottom, but it is a centred pill: the bottom-right
+    /// corner is free, and keeping clear of it would leave an unexplainable gap. Only the menu
+    /// bar is respected at the top, since it spans the full width.
     private func layoutBounds(on screen: NSScreen?) -> NSRect {
         guard let screen = screen ?? NSScreen.main else { return panel?.frame ?? .zero }
         let full = screen.frame
@@ -97,9 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
     }
 
-    /// Coin bas-droit **visuel** que la carte doit occuper sur un écran donné.
-    /// L'ombre portée vit dans une marge transparente : sans la retrancher, la carte
-    /// flotterait à 14 pt du bord au lieu d'être collée au coin.
+    /// The **visual** bottom-right corner the card should occupy on a given screen. The drop
+    /// shadow lives in a transparent margin; without subtracting it the card would float 14 pt
+    /// from the edge instead of hugging the corner.
     private func homeAnchor(on screen: NSScreen?) -> CGPoint {
         let bounds = layoutBounds(on: screen)
         return CGPoint(
@@ -108,15 +96,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         )
     }
 
-    /// Replace la carte sur son ancre bas-droit puis recadre à l'écran. Appelé à chaque
-    /// changement de taille : la croissance part du bas, donc vers le haut — l'interface
-    /// entière reste toujours visible.
+    /// Puts the card back on its bottom-right anchor, then clamps it to the screen. Called on
+    /// every size change: growth starts from the bottom and goes upward, so the whole interface
+    /// always stays visible.
     private func applyAnchor() {
         guard let panel else { return }
         let inset = Theme.Metric.shadowInset
 
-        // `anchor` désigne le coin bas-droit de la carte *visible* ; la fenêtre déborde
-        // de `inset` sur chaque bord (marge d'ombre transparente).
         var frame = panel.frame
         frame.origin.x = anchor.x + inset - frame.width
         frame.origin.y = anchor.y - inset
@@ -128,12 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         isAdjustingFrame = false
     }
 
-    /// Ramène la carte dans la zone utile de l'écran.
-    /// Sans ça : widget hors champ après un moniteur externe débranché, ou carte qui plonge
-    /// sous le bas de l'écran quand l'accordéon la fait grandir.
+    /// Brings the card back into the usable screen area. Without it: the widget goes off-screen
+    /// after an external monitor is unplugged, or the card dives below the bottom edge when the
+    /// accordion makes it taller.
     ///
-    /// Le recadrage porte sur le rectangle **visuel** (fenêtre moins la marge d'ombre) :
-    /// clamper la fenêtre entière laisserait une bande vide de 14 pt le long des bords.
+    /// Clamping applies to the **visual** rectangle (window minus the shadow margin); clamping the
+    /// whole window would leave an empty 14 pt band along the edges.
     private func clamped(_ frame: NSRect, for window: NSWindow) -> NSRect {
         let inset = Theme.Metric.shadowInset
         let margin = Theme.Metric.screenMargin
@@ -141,7 +127,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         var visual = frame.insetBy(dx: inset, dy: inset)
 
         visual.origin.x = min(max(visual.minX, bounds.minX), max(bounds.minX, bounds.maxX - visual.width))
-        // Une carte plus haute que l'écran est alignée en haut plutôt que tronquée en bas.
         if visual.height >= bounds.height {
             visual.origin.y = bounds.maxY - visual.height
         } else {
@@ -150,9 +135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return visual.insetBy(dx: -inset, dy: -inset)
     }
 
-    /// Écran débranché ou résolution changée : replace sur l'ancre, recadre, puis adopte
-    /// la position réellement obtenue comme nouvelle ancre (l'ancienne peut pointer sur un
-    /// écran qui n'existe plus).
+    /// Screen unplugged or resolution changed: reapply the anchor, clamp, then adopt the
+    /// position actually reached as the new anchor — the old one may point at a screen that no
+    /// longer exists.
     private func clampPanelToScreen() {
         applyAnchor()
         if let panel {
@@ -160,7 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    /// Coin bas-droit de la carte visible, déduit de la fenêtre courante.
+    /// Bottom-right corner of the visible card, derived from the current window.
     private func visualAnchor(of window: NSWindow) -> CGPoint {
         let inset = Theme.Metric.shadowInset
         return CGPoint(x: window.frame.maxX - inset, y: window.frame.minY + inset)
@@ -168,15 +153,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - NSWindowDelegate
 
-    /// Déplacement à la souris : le coin bas-droit de la nouvelle position devient l'ancre.
+    /// Mouse drag: the bottom-right corner of the new position becomes the anchor.
     func windowDidMove(_ notification: Notification) {
         guard !isAdjustingFrame, let panel, notification.object as? NSWindow === panel else { return }
         anchor = visualAnchor(of: panel)
     }
 
-    /// Changement de taille (bascule de mode, accordéon, onboarding) : la carte revient
-    /// **systématiquement** à sa place attitrée — le coin bas-droit de l'écran où elle se
-    /// trouve — quelle que soit la position où elle avait été glissée entre-temps.
+    /// Size change (mode switch, accordion, onboarding): the card **always** returns to its
+    /// assigned place — the bottom-right corner of whichever screen it is on — whatever position
+    /// it had been dragged to meanwhile.
     func windowDidResize(_ notification: Notification) {
         guard !isAdjustingFrame, let panel, notification.object as? NSWindow === panel else { return }
         anchor = homeAnchor(on: panel.screen)
@@ -185,13 +170,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Menu
 
-    /// `LSUIElement` supprime la barre de menus : sans ce menu minimal, ⌘Q et ⌘R ne répondraient pas.
+    /// `LSUIElement` removes the menu bar; without this minimal menu, ⌘Q and ⌘R would not respond.
     private func installMainMenu() {
         let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "Rafraîchir", action: #selector(refreshNow), keyEquivalent: "r")
+        appMenu.addItem(withTitle: "Refresh", action: #selector(refreshNow), keyEquivalent: "r")
             .target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quitter Claudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Claudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         let appItem = NSMenuItem()
         appItem.submenu = appMenu

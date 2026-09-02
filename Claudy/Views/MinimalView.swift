@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Mode compact : une bande horizontale — marque, pourcentage de la fenêtre 5h, heure de reset.
+/// Compact mode: one horizontal strip — the mark, the 5h window percentage, the reset time.
 struct MinimalView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
 
@@ -16,12 +16,14 @@ struct MinimalView: View {
                     .shadow(color: tint.opacity(0.45), radius: 5)
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text("\(Int(session.percent * 100))")
+                    Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")
                         .font(Theme.Font.hero(28))
-                        .foregroundStyle(.primary.opacity(0.95))
-                    Text("%")
-                        .font(Theme.Font.label(13, .medium))
-                        .foregroundStyle(.primary.opacity(0.4))
+                        .foregroundStyle(.primary.opacity(session.isMeasured ? 0.95 : 0.45))
+                    if session.isMeasured {
+                        Text("%")
+                            .font(Theme.Font.label(13, .medium))
+                            .foregroundStyle(.primary.opacity(0.4))
+                    }
                 }
 
                 if let message = viewModel.errorMessage {
@@ -34,9 +36,10 @@ struct MinimalView: View {
                 Spacer(minLength: 6)
 
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(session.isActive ? "reset" : "session")
+                    Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
                         .microLabel(0.35)
-                    Text(session.isActive ? UsageViewModel.clock(session.resetDate) : "inactive")
+                    Text(session.isActive ? UsageViewModel.clock(session.resetDate)
+                                          : (session.isMeasured ? "idle" : "unavailable"))
                         .font(Theme.Font.value(12, .medium))
                         .foregroundStyle(.primary.opacity(0.65))
                 }
@@ -45,14 +48,12 @@ struct MinimalView: View {
             .padding(.top, 9)
             .padding(.bottom, 8)
 
-            // Barre affleurant le bord bas : la carte elle-même sert de jauge.
             UsageBar(percent: session.percent, tint: tint, height: 3, showsGlow: false,
                      pace: session.isActive ? session.elapsed : nil)
         }
         .frame(width: Theme.Metric.minimalWidth)
         .contentShape(Rectangle())
-        // Un seul clic suffit pour agrandir — le glisser, lui, déplace toujours la carte.
         .onTapGesture { viewModel.toggleMode() }
-        .help("Clic : mode complet")
+        .help("Click for full mode")
     }
 }

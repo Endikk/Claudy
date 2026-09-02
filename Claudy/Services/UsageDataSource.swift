@@ -1,21 +1,23 @@
 import Foundation
 
-/// Source des données d'usage.
+/// Source of usage data.
 protocol UsageDataSource: Sendable {
     func fetch() async throws -> UsageSnapshot
 }
 
 enum UsageDataError: Error {
-    /// Aucune trace de Claude Code sur cette machine.
+    /// No trace of Claude Code on this machine.
     case claudeNotInstalled
-    /// Le dossier des transcripts existe mais ne se laisse pas lire (droits, disque).
+    /// The transcript folder exists but will not be read (permissions, disk).
     case projectsUnreadable
 }
 
-/// Source réelle : transcripts locaux de Claude Code.
+/// Real source: the account's quotas for the gauges, Claude Code's local transcripts for the
+/// token detail.
 ///
-/// Il n'existe pas d'API publique donnant la consommation d'un compte ; la seule source
-/// disponible est `<config>/projects/**/*.jsonl`, que Claude Code écrit à chaque réponse.
+/// Source order is deliberate. The account reading comes first; failing that, the counters
+/// Claude Code already received in its headers and relayed through the status line — same
+/// figures, zero requests. A stale reading yields to a fresh bridge.
 actor LocalUsageDataSource: UsageDataSource {
 
     private let scanner = TranscriptScanner()
@@ -25,11 +27,14 @@ actor LocalUsageDataSource: UsageDataSource {
         guard ClaudeHome.isInstalled else { throw UsageDataError.claudeNotInstalled }
 
         let entries = try await scanner.scan()
-        // Quotas et profil réels du compte quand le jeton local le permet ; `nil` (hors-ligne,
-        // pas de jeton) fait retomber les jauges sur la référence personnelle.
         let payload = await client.fetch()
 
-        // Le profil OAuth fait foi pour l'identité ; le rôle (admin) ne vient que de .claude.json.
+        var reading = payload.reading
+        if let bridge = UsageBridge.read() {
+            let apiIsFresh = reading.map { $0.source == .api } ?? false
+            if !apiIsFresh { reading = bridge }
+        }
+
         var account = AccountLoader.load()
         if let profile = payload.profile {
             account = Account(
@@ -41,26 +46,25 @@ actor LocalUsageDataSource: UsageDataSource {
             )
         }
 
-        var snapshot = UsageAggregator.snapshot(from: entries, account: account, quotas: payload.limits)
-        snapshot.quotaStale = payload.isStale
+        var snapshot = UsageAggregator.snapshot(from: entries, account: account, reading: reading)
         snapshot.isSignedIn = payload.isSignedIn
         return snapshot
     }
 }
 
-/// Bascule automatique : les vraies données si Claude Code est présent, la démonstration sinon.
-/// Le choix est refait à chaque rafraîchissement — installer Claude Code après coup suffit.
+/// Automatic switch: real data when Claude Code is present, the demo set otherwise. The choice is
+/// remade on every refresh, so installing Claude Code afterwards is enough.
 struct AdaptiveUsageDataSource: UsageDataSource {
 
     private let local = LocalUsageDataSource()
     private let demo = DemoUsageDataSource()
 
+    /// Only the absence of Claude Code justifies the demo set: any other failure must surface in
+    /// the UI rather than show invented figures.
     func fetch() async throws -> UsageSnapshot {
         do {
             return try await local.fetch()
         } catch UsageDataError.claudeNotInstalled {
-            // Seule l'absence de Claude Code justifie la démonstration : toute autre panne
-            // doit remonter à l'interface plutôt que d'afficher des chiffres inventés.
             return try await demo.fetch()
         }
     }

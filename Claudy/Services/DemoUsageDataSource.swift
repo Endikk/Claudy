@@ -1,16 +1,15 @@
 import Foundation
 
-/// Jeu de démonstration, utilisé quand Claude Code n'est pas installé sur la machine.
+/// Sample data set, used when Claude Code is not installed on the machine.
 ///
-/// Rien d'identifiant n'y est écrit : le nom vient de la session macOS courante, les projets
-/// portent des noms neutres, et l'instantané est marqué `isDemo` pour que l'interface l'annonce.
+/// Nothing identifying is written into it: the name comes from the current macOS session, the
+/// projects carry neutral names, and the snapshot is marked as demo so the UI announces it.
 actor DemoUsageDataSource: UsageDataSource {
 
     private var drift: Double = 0
     private var start = Date()
 
     func fetch() async throws -> UsageSnapshot {
-        // Latence simulée : rend l'indicateur de rafraîchissement perceptible.
         try? await Task.sleep(nanoseconds: 250_000_000)
 
         let now = Date()
@@ -23,7 +22,6 @@ actor DemoUsageDataSource: UsageDataSource {
         if drift >= 0.62 { drift = 0; start = now }
 
         let sessionPercent = min(0.34 + drift, 0.99)
-        let sessionLimit = 2_400_000
         let weeklyLimit = 16_000_000
         let sonnetLimit = 7_000_000
 
@@ -42,23 +40,22 @@ actor DemoUsageDataSource: UsageDataSource {
             session: UsageWindow(
                 title: "Session", window: "5h",
                 percent: sessionPercent,
-                tokensUsed: Int(Double(sessionLimit) * sessionPercent),
-                tokensLimit: sessionLimit,
+                tokensUsed: Int(2_400_000 * sessionPercent),
                 windowStart: start,
                 resetDate: start.addingTimeInterval(UsageAggregator.sessionWindow),
                 accent: .coral
             ),
             weekly: UsageWindow(
-                title: "Hebdo", window: "sem.",
+                title: "Weekly", window: "7d",
                 percent: weeklyPercent,
-                tokensUsed: weekTokens, tokensLimit: weeklyLimit,
+                tokensUsed: weekTokens,
                 windowStart: week.start, resetDate: week.end,
                 accent: .amber
             ),
             sonnet: UsageWindow(
-                title: "Sonnet", window: "sem.",
+                title: "Sonnet", window: "7d",
                 percent: min(Double(sonnetTokens) / Double(sonnetLimit), 1),
-                tokensUsed: sonnetTokens, tokensLimit: sonnetLimit,
+                tokensUsed: sonnetTokens,
                 windowStart: week.start, resetDate: week.end,
                 accent: .violet
             ),
@@ -72,9 +69,9 @@ actor DemoUsageDataSource: UsageDataSource {
                            share: 0.17, accent: .sky)
             ],
             projects: [
-                ProjectUsage(id: "a", name: "projet-principal", tokens: Int(Double(weekTokens) * 0.44), share: 0.44),
+                ProjectUsage(id: "a", name: "main-project", tokens: Int(Double(weekTokens) * 0.44), share: 0.44),
                 ProjectUsage(id: "b", name: "api", tokens: Int(Double(weekTokens) * 0.27), share: 0.27),
-                ProjectUsage(id: "c", name: "site-web", tokens: Int(Double(weekTokens) * 0.18), share: 0.18),
+                ProjectUsage(id: "c", name: "website", tokens: Int(Double(weekTokens) * 0.18), share: 0.18),
                 ProjectUsage(id: "d", name: "scripts", tokens: Int(Double(weekTokens) * 0.11), share: 0.11)
             ],
             account: AccountLoader.fallback(),
@@ -83,7 +80,7 @@ actor DemoUsageDataSource: UsageDataSource {
             weekTokens: weekTokens,
             sessionCount: 3,
             updatedAt: now,
-            isDemo: true
+            quotaSource: .demo
         )
     }
 }

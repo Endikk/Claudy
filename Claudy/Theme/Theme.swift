@@ -1,12 +1,10 @@
 import SwiftUI
 
-/// Jetons de design de Claudy : couleurs, typographie, métriques.
-/// Tout le style visible passe par ici — aucune valeur brute dans les vues.
+/// Claudy's design tokens: colours, type, metrics. Every visible style goes through here, so no
+/// raw values ever appear in the views.
 enum Theme {
 
-    // MARK: - Accents
-
-    /// Palette d'accents. Chaque jauge / modèle porte un accent, jamais une couleur brute.
+    /// Accent palette. Every gauge and model carries an accent, never a raw colour.
     enum Accent {
         case coral, amber, violet, sage, sky
 
@@ -23,8 +21,8 @@ enum Theme {
 
     static let danger = Color(hex: 0xE05C4B)
 
-    /// Teinte effective d'une jauge : l'accent de base, sauf en zone de charge haute
-    /// où la sémantique « attention » prend le dessus.
+    /// Effective tint of a gauge: its base accent, except in the high-load band where the
+    /// "warning" meaning takes over.
     static func tint(_ accent: Accent, at percent: Double) -> Color {
         switch percent {
         case 0.90...:      return danger
@@ -33,10 +31,8 @@ enum Theme {
         }
     }
 
-    // MARK: - Typographie
-
     enum Font {
-        /// Le grand pourcentage. Chiffres à chasse fixe : sinon la valeur tressaute à chaque refresh.
+        /// The large percentage. Monospaced digits, or the value jitters on every refresh.
         static func hero(_ size: CGFloat) -> SwiftUI.Font {
             .system(size: size, weight: .semibold, design: .rounded).monospacedDigit()
         }
@@ -48,23 +44,19 @@ enum Theme {
         }
     }
 
-    // MARK: - Métriques
-
     enum Metric {
         static let fullWidth: CGFloat = 340
         static let minimalWidth: CGFloat = 252
         static let cardCorner: CGFloat = 20
         static let minimalCorner: CGFloat = 15
-        /// Marge transparente autour de la carte : c'est là que vit l'ombre portée.
-        /// La fenêtre est donc plus grande que la carte visible de `shadowInset` sur chaque
-        /// bord — tout positionnement à l'écran doit raisonner sur le rectangle *visuel*.
+        /// Transparent margin around the card, where the drop shadow lives. The window is
+        /// therefore larger than the visible card by `shadowInset` on each edge, so any on-screen
+        /// positioning must reason about the *visual* rectangle.
         static let shadowInset: CGFloat = 14
-        /// Écart entre la carte visible et le bord de l'écran, dans son coin d'ancrage.
+        /// Gap between the visible card and the screen edge, in its anchor corner.
         static let screenMargin: CGFloat = 8
         static let padding: CGFloat = 16
     }
-
-    // MARK: - Animations
 
     enum Motion {
         static let gauge = SwiftUI.Animation.spring(response: 0.55, dampingFraction: 0.85)
@@ -74,10 +66,8 @@ enum Theme {
     }
 }
 
-// MARK: - Styles partagés
-
 extension View {
-    /// Label discret en capitales : titres de section, en-têtes de colonnes.
+    /// Quiet uppercase label: section titles and column headers.
     func microLabel(_ opacity: Double) -> some View {
         self.font(Theme.Font.label(9.5, .semibold))
             .tracking(0.9)

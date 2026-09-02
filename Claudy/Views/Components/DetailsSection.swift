@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Accordéon « Détails » : répartition par modèle et top projets.
+/// "Details" accordion: split by model and top projects.
 struct DetailsSection: View {
     @EnvironmentObject private var viewModel: UsageViewModel
 
@@ -10,7 +10,7 @@ struct DetailsSection: View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: viewModel.toggleDetails) {
                 HStack(spacing: 6) {
-                    Text("Détails")
+                    Text("Details")
                         .microLabel(0.6)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .bold))
@@ -25,12 +25,12 @@ struct DetailsSection: View {
             if viewModel.isDetailsExpanded {
                 VStack(alignment: .leading, spacing: 12) {
                     if snapshot.models.isEmpty && snapshot.projects.isEmpty {
-                        Text("Aucune activité relevée sur les 7 derniers jours.")
+                        Text("No activity recorded over the last 7 days.")
                             .font(Theme.Font.label(10.5, .regular))
                             .foregroundStyle(.primary.opacity(0.4))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
-                        group("Par modèle") {
+                        group("By model") {
                             ForEach(snapshot.models) { model in
                                 MiniBarRow(
                                     name: model.name,
@@ -41,7 +41,7 @@ struct DetailsSection: View {
                             }
                         }
 
-                        group("Top projets") {
+                        group("Top projects") {
                             ForEach(snapshot.projects) { project in
                                 MiniBarRow(
                                     name: project.name,
@@ -69,7 +69,7 @@ struct DetailsSection: View {
     }
 }
 
-/// Ligne de répartition : nom, volume, part, et une barre fine sur toute la largeur.
+/// One split row: name, volume, share, and a thin full-width bar.
 struct MiniBarRow: View {
     let name: String
     let tokens: Int

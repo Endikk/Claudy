@@ -1,37 +1,31 @@
 import AppKit
 import SwiftUI
 
-/// Source de vérité unique de l'interface : l'instantané d'usage + les préférences du widget.
+/// The UI's single source of truth: the usage snapshot plus the widget's preferences.
 @MainActor
 final class UsageViewModel: ObservableObject {
-
-    // MARK: - Données
 
     @Published private(set) var snapshot: UsageSnapshot = .placeholder
     @Published private(set) var isRefreshing = false
 
-    /// Dernière panne d'actualisation, `nil` quand tout va bien. Le dernier instantané
-    /// valide reste affiché : la panne se signale, elle ne remplace pas les données.
+    /// Last refresh failure, `nil` when all is well. The last valid snapshot stays on screen:
+    /// a failure announces itself, it does not replace the data.
     @Published private(set) var errorMessage: String?
-
-    // MARK: - Préférences (persistées)
 
     @Published var isMinimal: Bool { didSet { Defaults.isMinimal = isMinimal } }
     @Published var isAlwaysOnTop: Bool { didSet { Defaults.isAlwaysOnTop = isAlwaysOnTop } }
     @Published var isDetailsExpanded: Bool { didSet { Defaults.isDetailsExpanded = isDetailsExpanded } }
 
-    /// Non persisté volontairement : l'état réel appartient à `SMAppService`, pas à nos préférences.
+    /// Deliberately not persisted: the real state belongs to `SMAppService`, not to our prefs.
     @Published var launchAtLogin: Bool
-
-    // MARK: - État de vue
 
     @Published var isProfileVisible = false
 
-    /// Faux jusqu'au premier relevé : le temps de savoir si une session Claude existe,
-    /// la carte affiche un chargement — ni onboarding fantôme, ni jauges placeholder.
+    /// False until the first reading: while we work out whether a Claude session exists the card
+    /// shows a loading state — no ghost onboarding, no placeholder gauges.
     @Published private(set) var hasLoaded = false
     @Published private(set) var isSigningIn = false
-    /// Le port loopback était pris : la page affiche `code#state`, à coller dans la carte.
+    /// The loopback port was taken: the page shows `code#state` for pasting into the card.
     @Published var isAwaitingManualCode = false
 
     var isSignedIn: Bool { snapshot.isSignedIn }
@@ -49,8 +43,6 @@ final class UsageViewModel: ObservableObject {
         self.launchAtLogin = LaunchAtLogin.isEnabled
         startAutoRefresh()
 
-        // Après une veille, le timer de 60 s ne se rattrape pas : sans ce rafraîchissement
-        // immédiat, la carte afficherait des données périmées jusqu'au prochain tick.
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification,
             object: nil,
@@ -67,12 +59,14 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Actions
-
-    func refresh() async {
+    /// Takes a usage reading. `userInitiated` lifts any backoff in progress: a click on
+    /// "refresh" must attempt something, even mid-way through an hour-long wait after a 429.
+    func refresh(userInitiated: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
+
+        if userInitiated { await ClaudeAccountClient.shared.resetBackoff() }
 
         do {
             let fresh = try await source.fetch()
@@ -81,9 +75,9 @@ final class UsageViewModel: ObservableObject {
                 snapshot = fresh
             }
         } catch UsageDataError.projectsUnreadable {
-            errorMessage = "Impossible de lire le dossier des transcripts (droits d'accès ?)."
+            errorMessage = "Could not read the transcripts folder (permissions?)."
         } catch {
-            errorMessage = "Actualisation échouée : \(error.localizedDescription)"
+            errorMessage = "Refresh failed: \(error.localizedDescription)"
         }
         withAnimation(Theme.Motion.mode) {
             hasLoaded = true
@@ -109,13 +103,11 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
-    /// Applique la demande puis recale l'affichage sur l'état réellement obtenu
-    /// (un `register()` refusé ne doit pas laisser la case cochée).
+    /// Applies the request, then realigns the UI with the state actually reached — a refused
+    /// `register()` must not leave the box ticked.
     func setLaunchAtLogin(_ enabled: Bool) {
         launchAtLogin = LaunchAtLogin.set(enabled)
     }
-
-    // MARK: - Connexion Claude
 
     func startSignIn() {
         guard !isSigningIn else { return }
@@ -174,29 +166,29 @@ final class UsageViewModel: ObservableObject {
         isSigningIn = false
         isAwaitingManualCode = false
         errorMessage = (error as? OAuthError)?.errorDescription
-            ?? "Connexion échouée : \(error.localizedDescription)"
+            ?? "Sign-in failed: \(error.localizedDescription)"
     }
 
+    /// Three minutes: Anthropic's quotas move by the minute, and polling faster brought nothing
+    /// but a cascade of 429s (the client caches for 60 s anyway). Opening the card and waking the
+    /// machine each trigger an immediate reading.
+    private static let refreshInterval: TimeInterval = 180
+
     private func startAutoRefresh() {
-        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: Self.refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
-        // `.common` : le tick survit aux drags de fenêtre et aux menus ouverts,
-        // là où le mode par défaut le gèle.
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
     }
 
-    // MARK: - Formatage
-
-    /// « 3,14 Md », « 2,34 M », « 640 k » — séparateur décimal selon la locale système.
-    /// Le palier des milliards n'est pas décoratif : en comptant les lectures de cache,
-    /// une semaine chargée dépasse couramment le milliard de tokens.
+    /// "3.14 B", "2.34 M", "640 k" — decimal separator follows the system locale. The billions
+    /// step is not decorative: counting cache reads, a busy week routinely passes a billion tokens.
     static func tokens(_ count: Int) -> String {
         let value = Double(count)
         switch count {
         case 1_000_000_000...:
-            return "\(number(value / 1_000_000_000, digits: 2)) Md"
+            return "\(number(value / 1_000_000_000, digits: 2)) B"
         case 1_000_000...:
             return "\(number(value / 1_000_000, digits: 2)) M"
         case 10_000...:
@@ -208,24 +200,24 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
-    /// « 2h 14 » ou « 14 min » : temps restant avant remise à zéro d'une fenêtre.
+    /// "2 h 14 min" or "14 min": time left before a window resets.
     static func countdown(to date: Date) -> String {
         let remaining = Int(date.timeIntervalSinceNow)
-        guard remaining > 0 else { return "imminent" }
+        guard remaining > 0 else { return "any moment" }
         let hours = remaining / 3600
         let minutes = (remaining % 3600) / 60
-        if hours >= 24 { return "\(hours / 24) j \(hours % 24) h" }
+        if hours >= 24 { return "\(hours / 24) d \(hours % 24) h" }
         return hours > 0 ? "\(hours) h \(minutes) min" : "\(minutes) min"
     }
 
-    /// « 14:30 »
+    /// "14:30"
     static func clock(_ date: Date) -> String {
         clockFormatter.string(from: date)
     }
 
-    /// Écart au rythme d'une fenêtre, prêt à afficher. `nil` si aucune fenêtre n'est en cours.
-    ///
-    /// Le seuil de 4 points évite de qualifier d'« avance » le bruit d'une requête isolée.
+    /// A window's distance from its expected pace, ready to display. `nil` when no window is
+    /// running. The four-point threshold keeps the noise of a single request from being called
+    /// "ahead".
     static func pace(_ window: UsageWindow) -> (text: String, color: Color)? {
         guard window.isActive else { return nil }
 
@@ -233,27 +225,38 @@ final class UsageViewModel: ObservableObject {
         let points = Int((abs(delta) * 100).rounded())
 
         if points < 4 {
-            return ("dans le rythme", Theme.Accent.sage.color)
+            return ("on pace", Theme.Accent.sage.color)
         }
         if delta > 0 {
-            return ("\(points) pts au-dessus du rythme",
+            return ("\(points) pts ahead of pace",
                     delta > 0.20 ? Theme.danger : Theme.Accent.amber.color)
         }
-        return ("\(points) pts sous le rythme", Theme.Accent.sage.color)
+        return ("\(points) pts behind pace", Theme.Accent.sage.color)
     }
 
-    /// Initiale française du jour pour l'axe de la sparkline : L M M J V S D.
-    /// Table explicite plutôt qu'un `DateFormatter` : l'interface est en français, l'axe
-    /// ne doit pas basculer en « S M T W » sur un système configuré en anglais.
+    /// Day initial for the sparkline axis: S M T W T F S. An explicit table rather than a
+    /// `DateFormatter`, so the axis stays in the app's language whatever the system locale is.
+    /// `.weekday` is 1 for Sunday, whichever day the week starts on.
     static func dayInitial(_ date: Date) -> String {
-        // `.weekday` vaut 1 pour dimanche, quel que soit le premier jour de la semaine.
         let weekday = Calendar.current.component(.weekday, from: date)
-        let initials = ["D", "L", "M", "M", "J", "V", "S"]
+        let initials = ["S", "M", "T", "W", "T", "F", "S"]
         guard initials.indices.contains(weekday - 1) else { return "" }
         return initials[weekday - 1]
     }
 
-    /// `minimumFractionDigits = 0` : « 18 M » plutôt que « 18,00 M ».
+    /// A reading's age in one short phrase: "4 min", "2 h", "3 d". On stale data the age is what
+    /// lets the reader judge — a clock time alone never says it.
+    static func age(since date: Date, now: Date = Date()) -> String {
+        let seconds = max(now.timeIntervalSince(date), 0)
+        switch seconds {
+        case ..<60: return "less than a minute"
+        case ..<3600: return "\(Int(seconds / 60)) min"
+        case ..<86_400: return "\(Int(seconds / 3600)) h"
+        default: return "\(Int(seconds / 86_400)) d"
+        }
+    }
+
+    /// `minimumFractionDigits = 0`, so "18 M" rather than "18.00 M".
     private static func number(_ value: Double, digits: Int) -> String {
         numberFormatter.maximumFractionDigits = digits
         numberFormatter.minimumFractionDigits = 0
@@ -276,9 +279,7 @@ final class UsageViewModel: ObservableObject {
 
 }
 
-// MARK: - Persistance
-
-/// Petit wrapper `UserDefaults` : `@AppStorage` n'est pas utilisable depuis une classe.
+/// Small `UserDefaults` wrapper: `@AppStorage` is not usable from a class.
 private enum Defaults {
     private static let store = UserDefaults.standard
 

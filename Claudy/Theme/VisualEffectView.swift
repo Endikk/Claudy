@@ -1,8 +1,7 @@
 import SwiftUI
 
-/// Pont vers `NSVisualEffectView` : le flou « glass » derrière la carte.
-/// `.behindWindow` échantillonne le bureau et les fenêtres situées dessous,
-/// ce qui donne au widget son intégration au fond d'écran.
+/// Bridge to `NSVisualEffectView` for the glass blur behind the card. `.behindWindow` samples
+/// the desktop and the windows underneath, which is what settles the widget into the wallpaper.
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blending: NSVisualEffectView.BlendingMode

@@ -1,16 +1,16 @@
 #!/usr/bin/env swift
 //
-// Génère Claudy/Assets.xcassets/AppIcon.appiconset à partir de la géométrie
+// Generates Claudy/Assets.xcassets/AppIcon.appiconset from the geometry
 // vectorielle de ClaudeMark (Claudy/Views/Components/ClaudeMark.swift).
 //
 //   swift Scripts/generate-icon.swift
 //
-// À relancer uniquement si la marque ou le style de l'icône change : les PNG
-// générés sont committés, personne d'autre n'a besoin d'exécuter ce script.
+// Re-run only when the mark or the icon style changes: the generated PNGs
+// generated files are committed, so nobody else needs to run this script.
 
 import AppKit
 
-// Même table que ClaudeMark.rays : (angle en degrés, longueur relative, demi-largeur relative).
+// Same table as ClaudeMark.rays: (angle in degrees, relative length, relative half-width).
 let rays: [(angle: Double, length: Double, width: Double)] = [
     (0, 1.00, 0.150), (33, 0.76, 0.120), (72, 0.94, 0.140),
     (104, 0.68, 0.112), (145, 1.00, 0.150), (180, 0.80, 0.128),
@@ -66,14 +66,14 @@ func render(pixels: Int) -> NSBitmapImageRep {
     let cg = ctx.cgContext
     let side = CGFloat(pixels)
 
-    // Grille d'icône macOS : carré 824/1024 centré, coins ~185/1024.
+    // macOS icon grid: centred 824/1024 square, ~185/1024 corners.
     let inset = side * (100.0 / 1024.0)
     let square = CGRect(x: inset, y: inset, width: side - 2 * inset, height: side - 2 * inset)
     let corner = side * (185.0 / 1024.0)
     cg.addPath(CGPath(roundedRect: square, cornerWidth: corner, cornerHeight: corner, transform: nil))
     cg.clip()
 
-    // Fond : dégradé sombre, même famille que la carte du widget.
+    // Background: dark gradient, same family as the widget card.
     let space = CGColorSpaceCreateDeviceRGB()
     let background = CGGradient(
         colorsSpace: space,
@@ -90,7 +90,7 @@ func render(pixels: Int) -> NSBitmapImageRep {
         options: []
     )
 
-    // Halo corail derrière la marque.
+    // Coral halo behind the mark.
     let halo = CGGradient(
         colorsSpace: space,
         colors: [coral.withAlphaComponent(0.32).cgColor, coral.withAlphaComponent(0).cgColor] as CFArray,

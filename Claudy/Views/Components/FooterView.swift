@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Pied de carte : nombre de sessions, dernière mise à jour, rafraîchissement manuel.
+/// Card footer: session count, last update, manual refresh.
 struct FooterView: View {
     let sessionCount: Int
     let updatedAt: Date
@@ -12,7 +12,7 @@ struct FooterView: View {
             Text("\(sessionCount) session\(sessionCount > 1 ? "s" : "")")
             Text("·")
                 .foregroundStyle(.primary.opacity(0.25))
-            Text("maj \(UsageViewModel.clock(updatedAt))")
+            Text("updated \(UsageViewModel.clock(updatedAt))")
 
             Spacer(minLength: 0)
 
@@ -31,7 +31,7 @@ struct FooterView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Rafraîchir")
+            .help("Refresh")
         }
         .font(Theme.Font.label(9.5, .medium))
         .foregroundStyle(.primary.opacity(0.4))

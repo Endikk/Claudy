@@ -1,12 +1,12 @@
 import Foundation
 
-/// Lit le compte connecté dans `.claude.json` (bloc `oauthAccount`).
-/// Aucune valeur n'est codée en dur : sur une machine inconnue, l'app affiche le compte de
-/// *cette* machine, et à défaut le nom complet de la session macOS.
+/// Reads the signed-in account from `.claude.json` (`oauthAccount` block). Nothing is hardcoded:
+/// on an unknown machine the app shows *that* machine's account, falling back to the macOS
+/// session's full name.
 enum AccountLoader {
 
-    /// `.claude.json` atteint couramment plusieurs mégaoctets : on ne le relit que si sa
-    /// date de modification a changé depuis le dernier passage.
+    /// `.claude.json` routinely reaches several megabytes, so it is only re-read when its
+    /// modification date changes.
     private static var cache: (mtime: Date, account: Account)?
 
     static func load() -> Account {
@@ -42,7 +42,7 @@ enum AccountLoader {
         Account(name: systemName, email: "", plan: "", organization: "", isAdmin: false)
     }
 
-    /// `NSFullUserName()` renvoie le nom complet du compte macOS ; `NSUserName()` sert de filet.
+    /// `NSFullUserName()` gives the macOS account's full name; `NSUserName()` is the safety net.
     private static var systemName: String {
         let full = NSFullUserName().trimmed
         return full.isEmpty ? NSUserName() : full
@@ -56,8 +56,8 @@ enum AccountLoader {
             ?? "")
     }
 
-    /// « default_claude_max_5x » → « Max 5× », « claude_pro » → « Pro ».
-    /// Transformation générique : aucun palier n'est énuméré, donc les futurs paliers passent aussi.
+    /// "default_claude_max_5x" → "Max 5×", "claude_pro" → "Pro". Purely generic: no tier is
+    /// enumerated, so tiers introduced later render correctly too.
     static func planLabel(from raw: String) -> String {
         let words = raw
             .replacingOccurrences(of: "default_", with: "")
@@ -69,7 +69,6 @@ enum AccountLoader {
         guard !words.isEmpty else { return "" }
 
         return words.map { word -> String in
-            // « 5x » → « 5× »
             if word.count <= 3, word.hasSuffix("x"), Int(word.dropLast()) != nil {
                 return word.dropLast() + "×"
             }

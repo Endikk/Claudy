@@ -1,17 +1,6 @@
 import Foundation
 
-/// Une limite réelle du compte, telle que rapportée par l'API OAuth d'Anthropic.
-struct QuotaLimit {
-    /// `session` (fenêtre 5 h), `weekly_all` (hebdo tous modèles), `weekly_scoped` (hebdo d'un modèle).
-    let kind: String
-    /// 0…1
-    let percent: Double
-    let resetsAt: Date
-    /// Nom du modèle concerné pour `weekly_scoped` (« Fable », « Opus »…), `nil` sinon.
-    let scopeName: String?
-}
-
-/// Identité du compte, telle que rapportée par l'API OAuth d'Anthropic.
+/// Account identity as reported by Anthropic's OAuth API.
 struct OAuthProfile {
     let name: String
     let email: String
@@ -19,185 +8,272 @@ struct OAuthProfile {
     let organization: String
 }
 
-/// Client des points d'accès OAuth internes d'Anthropic — les mêmes que claude.ai ▸ Utilisation.
+/// Client for Anthropic's OAuth endpoints — the same ones behind claude.ai ▸ Usage and `/usage`.
 ///
-/// **Invariant.** Les pourcentages des jauges viennent *uniquement* d'ici. Les transcripts
-/// locaux ne servent qu'au détail en tokens (répartitions, sparkline) — jamais fusionnés
-/// avec l'API en un seul chiffre.
-///
-/// Fiabilité, dans l'ordre :
-/// 1. **Refresh autonome** : à moins de 2 min de l'expiration, le grant `refresh_token` est
-///    rejoué avec le client public de Claude Code, et le magasin (trousseau ou fichier) est
-///    réécrit — Claude Code récupère le jeton frais. Le refresh n'est **jamais** tenté si le
-///    magasin n'est pas réinscriptible : une rotation orpheline invaliderait la session de
-///    Claude Code lui-même. L'actor sérialise les refresh, et le magasin est relu après
-///    acquisition pour ne pas rafraîchir deux fois.
-/// 2. **Retry unique sur 401** : refresh forcé puis une seule nouvelle tentative — pas de boucle.
-/// 3. **Dernière valeur connue + backoff** : un échec (typiquement 429) ne remet rien à zéro,
-///    la dernière valeur est resservie et les tentatives s'espacent (60 s + 60 s × échecs,
-///    plafonné à 300 s). Premier succès : retour au rythme normal.
-/// 4. **Fail-soft intégral** : tout parsing douteux rend `nil`, jamais de crash si la forme
-///    de la réponse change.
-/// 5. **Journal** : chaque échec est horodaté dans `~/Library/Application Support/Claudy/api.log`
-///    (code HTTP, refresh), pour distinguer un rate-limit d'un jeton mort.
-///
-/// Point de fragilité assumé : ces points d'accès ne sont pas documentés et peuvent changer
-/// côté Anthropic sans préavis — d'où le repli sur la référence personnelle dans l'agrégateur.
+/// Percentages come from here alone; local transcripts only ever supply the token detail, never
+/// merged with a quota into one figure. Tokens are tried in order of dependability: Claude Code's,
+/// borrowed read-only, which it renews itself and Claudy therefore never has to refresh; then
+/// Claudy's own, for machines where that one cannot be read. A failure resets nothing — the last
+/// known reading is served again, marked stale, and attempts space out.
 actor ClaudeAccountClient {
 
     struct Payload {
-        let limits: [QuotaLimit]?
+        let reading: QuotaReading?
         let profile: OAuthProfile?
-        /// Vrai quand `limits`/`profile` datent d'un passage précédent (échecs en cours).
-        let isStale: Bool
-        /// Vrai quand un jeton est disponible (connexion OAuth faite ou `.credentials.json` lisible).
+        /// True when a token is available, borrowed or Claudy's own.
         let isSignedIn: Bool
     }
 
-    /// Instance partagée : la source de données et les actions de connexion/déconnexion
-    /// du ViewModel doivent parler au même état.
+    /// Shared instance: the data source and the view model's sign-in/sign-out actions must talk
+    /// to the same state.
     static let shared = ClaudeAccountClient()
 
-    /// Client OAuth public de Claude Code — celui au nom duquel le jeton a été émis.
+    /// Claude Code's public OAuth client — the one the token was issued to.
     static let clientID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+
+    /// Scopes Claude Code 2.1 carries through a refresh. `user:profile` is essential: without it
+    /// the API returns no quota at all ("missing profile scope").
+    static let scopes = [
+        "user:profile", "user:inference", "user:sessions:claude_code",
+        "user:mcp_servers", "user:file_upload",
+    ]
+
+    /// Scopes requested at authorisation: Claude Code adds `org:create_api_key`. Asking for the
+    /// exact same set keeps Anthropic from treating Claudy's request differently.
+    static let authorizeScopes = ["org:create_api_key"] + scopes
+
+    /// Claude Code 2.1's canonical entry point. It currently redirects (307) to
+    /// `claude.ai/oauth/authorize`; going through it follows the redirect Anthropic maintains
+    /// rather than hardcoding today's destination.
+    static let authorizeURL = URL(string: "https://claude.com/cai/oauth/authorize")!
+
+    /// Claude Code 2.1's production token host. `console.anthropic.com`, used until now, no
+    /// longer serves tokens — which is why every refresh failed.
+    static let tokenURL = URL(string: "https://platform.claude.com/v1/oauth/token")!
+    static let manualRedirectURL = "https://platform.claude.com/oauth/code/callback"
+
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let profileURL = URL(string: "https://api.anthropic.com/api/oauth/profile")!
-    private static let tokenURL = URL(string: "https://console.anthropic.com/v1/oauth/token")!
+
+    /// claude.ai updates by the minute, so polling faster gains nothing and invites 429s.
+    private static let cacheTTL: TimeInterval = 60
+    /// Rate limit or refused token: patience is the only useful answer.
+    private static let backoffSteps: [TimeInterval] = [300, 900, 1800, 3600]
+    /// Network or server fault: retry soon, since it can clear at any second.
+    private static let transientSteps: [TimeInterval] = [30, 60, 120, 300]
+    /// The profile (name, plan) only moves when a subscription changes. Re-reading it every cycle
+    /// would double the request count for nothing — and that is what fed the 429s.
+    private static let profileTTL: TimeInterval = 6 * 3600
 
     private var credentials: OAuthCredentials?
-    private var lastLimits: [QuotaLimit]?
+    private var lastReading: QuotaReading?
     private var lastProfile: OAuthProfile?
+    private var profileFetchedAt: Date?
     private var lastSuccess: Date?
     private var failureCount = 0
     private var nextAttempt = Date.distantPast
+    /// Claudy's own token declared dead (`invalid_grant`): it is no longer attempted, and the
+    /// borrowed token takes over until an explicit new sign-in.
+    private var ownTokenIsDead = false
 
-    // MARK: - Point d'entrée
-
+    /// Current reading, from cache, from the network, or from the last known state.
     func fetch() async -> Payload {
         let now = Date()
 
-        // claude.ai se met à jour à la minute : inutile d'interroger plus souvent.
-        if let lastSuccess, now.timeIntervalSince(lastSuccess) < 30 {
-            return Payload(limits: lastLimits, profile: lastProfile, isStale: false, isSignedIn: true)
+        if let lastSuccess, now.timeIntervalSince(lastSuccess) < Self.cacheTTL, lastReading != nil {
+            return Payload(reading: lastReading, profile: lastProfile, isSignedIn: true)
         }
-        // Backoff en cours : resservir la dernière valeur connue sans toucher au réseau.
-        guard now >= nextAttempt else {
-            return Payload(limits: lastLimits, profile: lastProfile, isStale: true,
-                           isSignedIn: credentials != nil)
+        guard now >= nextAttempt else { return stalePayload() }
+
+        await resolveCredentials()
+
+        // An unreadable token must not wipe a valid reading; onboarding returns only if we
+        // never had one.
+        guard let credentials, !credentials.accessToken.isEmpty else { return stalePayload() }
+
+        var (data, status, retryAfter) = await get(Self.usageURL, token: credentials.accessToken)
+        if status == 401, await recoverFromUnauthorized(), let token = self.credentials?.accessToken {
+            (data, status, retryAfter) = await get(Self.usageURL, token: token)
+        }
+        guard status == 200, let data, let reading = Self.parseUsage(data) else {
+            return recordFailure("usage HTTP \(status)", status: status, retryAfter: retryAfter)
         }
 
-        await ensureFreshCredentials()
-        guard let token = credentials?.accessToken else {
-            // Pas de jeton = pas connecté : état normal avant la première connexion,
-            // pas une panne — pas de backoff ni de journal.
-            return Payload(limits: nil, profile: nil, isStale: false, isSignedIn: false)
-        }
-
-        var (data, status) = await get(Self.usageURL, token: token)
-        if status == 401 {
-            DiagnosticLog.append("usage HTTP 401 — refresh forcé")
-            if await refreshCredentials(force: true), let fresh = credentials?.accessToken {
-                (data, status) = await get(Self.usageURL, token: fresh)
-            }
-        }
-        guard status == 200, let data, let limits = Self.parseLimits(data) else {
-            return recordFailure("usage HTTP \(status)")
-        }
-
-        // Le profil est secondaire : son échec ne condamne pas les jauges.
-        if let token = credentials?.accessToken {
-            let (profileData, profileStatus) = await get(Self.profileURL, token: token)
+        let profileIsStale = profileFetchedAt.map { now.timeIntervalSince($0) > Self.profileTTL } ?? true
+        if profileIsStale, let token = self.credentials?.accessToken {
+            let (profileData, profileStatus, _) = await get(Self.profileURL, token: token)
             if profileStatus == 200, let profileData, let profile = Self.parseProfile(profileData) {
                 lastProfile = profile
+                profileFetchedAt = now
             }
         }
 
-        lastLimits = limits
+        lastReading = reading
         lastSuccess = now
         failureCount = 0
         nextAttempt = .distantPast
-        return Payload(limits: limits, profile: lastProfile, isStale: false, isSignedIn: true)
+        return Payload(reading: reading, profile: lastProfile, isSignedIn: true)
     }
 
-    private func recordFailure(_ reason: String) -> Payload {
+    /// Last known reading, stripped of whatever stopped being true: a window past its reset time
+    /// reopened at zero since, so its old percentage would be wrong rather than merely old.
+    private func stalePayload() -> Payload {
+        guard let lastReading, let lastSuccess else {
+            return Payload(reading: nil, profile: lastProfile, isSignedIn: credentials != nil)
+        }
+
+        let now = Date()
+        let stillValid: (QuotaWindow?) -> QuotaWindow? = { window in
+            guard let window, let resetsAt = window.resetsAt else { return nil }
+            return resetsAt > now ? window : nil
+        }
+        var stale = QuotaReading(
+            session: stillValid(lastReading.session),
+            weekly: stillValid(lastReading.weekly),
+            scoped: stillValid(lastReading.scoped),
+            source: .stale(lastSuccess)
+        )
+        if stale.isEmpty { stale.source = .unavailable }
+
+        return Payload(reading: stale.isEmpty ? nil : stale,
+                       profile: lastProfile,
+                       isSignedIn: credentials != nil || lastProfile != nil)
+    }
+
+    /// Spaces attempts by the *nature* of the fault rather than by their count alone. A rate limit
+    /// calls for patience; a dropped connection does not — punishing a blinking Wi-Fi with five
+    /// frozen minutes would stall the counter long after the network came back.
+    private func recordFailure(_ reason: String, status: Int, retryAfter: TimeInterval?) -> Payload {
         failureCount += 1
-        let delay = min(60.0 + 60.0 * Double(failureCount - 1), 300.0)
+        let steps = Self.isTransient(status) ? Self.transientSteps : Self.backoffSteps
+        let step = steps[min(failureCount - 1, steps.count - 1)]
+        let delay = max(retryAfter ?? 0, step)
         nextAttempt = Date().addingTimeInterval(delay)
-        DiagnosticLog.append("\(reason) — échec n°\(failureCount), prochaine tentative dans \(Int(delay)) s")
-        return Payload(limits: lastLimits, profile: lastProfile, isStale: lastLimits != nil,
-                       isSignedIn: credentials != nil)
+        DiagnosticLog.append("\(reason) — failure #\(failureCount), next attempt in \(Int(delay))s")
+        return stalePayload()
     }
 
-    // MARK: - Connexion / déconnexion
+    /// Passing fault: unreachable network (`0`) or server incident (`5xx`). Nothing of our doing,
+    /// and nothing that gains from a long wait.
+    private static func isTransient(_ status: Int) -> Bool {
+        status == 0 || (500...599).contains(status)
+    }
 
-    /// Injecte les jetons obtenus par le flux OAuth et les persiste dans l'item de Claudy.
+    /// Immediate retry requested by the user: a click on "refresh" must attempt something, even
+    /// in the middle of an hour-long backoff.
+    func resetBackoff() {
+        failureCount = 0
+        nextAttempt = .distantPast
+        lastSuccess = nil
+    }
+
+    /// Stores the tokens obtained through Claudy's own OAuth flow in its own keychain item.
     func signIn(_ newCredentials: OAuthCredentials) {
         credentials = newCredentials
         ClaudeCredentialsStore.persist(newCredentials)
-        lastSuccess = nil
-        failureCount = 0
-        nextAttempt = .distantPast
+        ownTokenIsDead = false
+        resetSchedule()
     }
 
-    /// Oublie tout : jetons, dernières valeurs, backoff. Ne touche pas aux magasins de Claude Code.
+    /// Forgets Claudy's own token. Claude Code's stores are never touched, so the borrowed token
+    /// simply takes over at the next reading.
     func signOut() {
         ClaudeCredentialsStore.erase()
         credentials = nil
-        lastLimits = nil
+        lastReading = nil
         lastProfile = nil
+        profileFetchedAt = nil
+        ownTokenIsDead = false
+        resetSchedule()
+        DiagnosticLog.append("signed out — Claudy token removed")
+    }
+
+    private func resetSchedule() {
         lastSuccess = nil
         failureCount = 0
         nextAttempt = .distantPast
-        DiagnosticLog.append("déconnexion — jeton Claudy supprimé")
     }
 
-    // MARK: - Requêtes
-
-    private func get(_ url: URL, token: String) async -> (Data?, Int) {
+    /// Authenticated GET. Without `anthropic-beta: oauth-2025-04-20` the API refuses OAuth tokens.
+    private func get(_ url: URL, token: String) async -> (Data?, Int, TimeInterval?) {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        // Sans `anthropic-beta: oauth-2025-04-20`, l'API refuse les jetons OAuth.
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 10
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
-              let status = (response as? HTTPURLResponse)?.statusCode else { return (nil, 0) }
-        return (data, status)
+              let http = response as? HTTPURLResponse else { return (nil, 0, nil) }
+        let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+        return (data, http.statusCode, retryAfter)
     }
 
-    // MARK: - Jeton
+    /// Picks the token to use, borrowed first. A still-valid borrowed token is kept as is, since
+    /// re-reading the keychain every three minutes would spawn a `security` process for nothing.
+    /// Expired, it is still tried last: only the server decides, and better that than announcing
+    /// "signed out" on the strength of a local date.
+    private func resolveCredentials() async {
+        if let current = credentials, current.isBorrowed, !Self.isExpired(current) { return }
 
-    private func ensureFreshCredentials() async {
-        if credentials == nil {
-            credentials = await ClaudeCredentialsStore.load()
+        let borrowed = ClaudeCodeCredentials.load()
+        if let borrowed, !Self.isExpired(borrowed) {
+            credentials = borrowed
+            return
         }
-        guard let credentials else { return }
-        if let expiresAt = credentials.expiresAt, expiresAt < Date().addingTimeInterval(120) {
-            _ = await refreshCredentials(force: false)
+
+        if !ownTokenIsDead, let own = await ClaudeCredentialsStore.load() {
+            credentials = own
+            if !Self.isExpired(own) { return }
+            if await refreshOwnToken(force: false) { return }
         }
+
+        if let borrowed { credentials = borrowed }
     }
 
-    /// Rafraîchit le jeton. Relit d'abord le magasin : Claude Code (ou un passage précédent)
-    /// a pu le faire entre-temps, auquel cas consommer notre refresh token serait inutile
-    /// et destructeur (rotation).
-    private func refreshCredentials(force: Bool) async -> Bool {
+    /// Two-minute margin: a token expiring mid-request would produce an avoidable 401.
+    private static func isExpired(_ credentials: OAuthCredentials) -> Bool {
+        guard let expiresAt = credentials.expiresAt else { return false }
+        return expiresAt < Date().addingTimeInterval(120)
+    }
+
+    /// Response to a 401. On a borrowed token there is nothing to refresh: Claude Code may have
+    /// written a new one meanwhile, so a re-read is enough — and it is all Claudy allows itself.
+    private func recoverFromUnauthorized() async -> Bool {
+        guard let current = credentials else { return false }
+
+        if current.isBorrowed {
+            guard let fresh = ClaudeCodeCredentials.load(),
+                  fresh.accessToken != current.accessToken else {
+                DiagnosticLog.append("usage HTTP 401 on borrowed token — Claude Code must sign in again")
+                return false
+            }
+            credentials = fresh
+            return true
+        }
+
+        DiagnosticLog.append("usage HTTP 401 — forcing refresh")
+        return await refreshOwnToken(force: true)
+    }
+
+    /// Refreshes **Claudy's own** token. The store is re-read first: a previous pass may have done
+    /// it already, in which case spending our refresh token would be both useless and destructive
+    /// (rotation).
+    private func refreshOwnToken(force: Bool) async -> Bool {
         if let fresh = await ClaudeCredentialsStore.load() {
             let tokenChanged = fresh.accessToken != credentials?.accessToken
             credentials = fresh
             if tokenChanged { return true }
-            if !force, let expiresAt = fresh.expiresAt, expiresAt > Date().addingTimeInterval(120) {
-                return true
-            }
+            if !force, !Self.isExpired(fresh) { return true }
         }
 
-        guard let current = credentials,
+        guard let current = credentials, !current.isBorrowed,
               let refreshToken = current.refreshToken, !refreshToken.isEmpty else {
-            DiagnosticLog.append("refresh impossible : pas de refresh token")
+            DiagnosticLog.append("refresh impossible: no refresh token")
             return false
         }
         guard ClaudeCredentialsStore.canPersist(current) else {
-            DiagnosticLog.append("refresh refusé : magasin non réinscriptible")
+            DiagnosticLog.append("refresh refused: store is not writable")
             return false
         }
 
@@ -208,18 +284,24 @@ actor ClaudeAccountClient {
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
             "client_id": Self.clientID,
+            "scope": (current.scopes ?? Self.scopes).joined(separator: " "),
         ])
         request.timeoutInterval = 15
 
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let status = (response as? HTTPURLResponse)?.statusCode else {
-            DiagnosticLog.append("refresh : réseau indisponible")
+            DiagnosticLog.append("refresh: network unavailable")
             return false
         }
         guard status == 200,
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let newToken = root["access_token"] as? String, !newToken.isEmpty else {
-            DiagnosticLog.append("refresh HTTP \(status)")
+            if Self.isInvalidGrant(status: status, data: data) {
+                ownTokenIsDead = true
+                DiagnosticLog.append("refresh invalid_grant — Claudy token dropped, borrowing from Claude Code")
+            } else {
+                DiagnosticLog.append("refresh HTTP \(status)")
+            }
             return false
         }
 
@@ -238,34 +320,73 @@ actor ClaudeAccountClient {
         updated.root["claudeAiOauth"] = oauth
 
         let persisted = ClaudeCredentialsStore.persist(updated)
-        DiagnosticLog.append(persisted ? "refresh OK, magasin réécrit"
-                                       : "refresh OK mais persistance ÉCHOUÉE — vérifier le trousseau")
+        DiagnosticLog.append(persisted ? "refresh OK, store rewritten"
+                                       : "refresh OK but persistence FAILED — check the keychain")
         credentials = updated
         return true
     }
 
-    // MARK: - Parsing (fail-soft : toute forme inattendue rend nil)
-
-    private static func parseLimits(_ data: Data) -> [QuotaLimit]? {
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let rawLimits = root["limits"] as? [[String: Any]] else { return nil }
-
-        let limits: [QuotaLimit] = rawLimits.compactMap { raw in
-            guard let kind = raw["kind"] as? String,
-                  let percent = raw["percent"] as? NSNumber,
-                  let stamp = raw["resets_at"] as? String,
-                  let resetsAt = date(from: stamp) else { return nil }
-
-            let scope = raw["scope"] as? [String: Any]
-            let model = scope?["model"] as? [String: Any]
-            return QuotaLimit(
-                kind: kind,
-                percent: percent.doubleValue / 100,
-                resetsAt: resetsAt,
-                scopeName: model?["display_name"] as? String
-            )
+    /// `invalid_grant` means the refresh token was revoked or already rotated: it will not come
+    /// back, so it is declared dead once and for all rather than retried in a loop.
+    private static func isInvalidGrant(status: Int, data: Data) -> Bool {
+        guard status == 400 || status == 401,
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        if let error = root["error"] as? String { return error == "invalid_grant" }
+        if let error = root["error"] as? [String: Any], let type = error["type"] as? String {
+            return type == "invalid_grant"
         }
-        return limits.isEmpty ? nil : limits
+        return false
+    }
+
+    /// Reads `/api/oauth/usage`. Two representations coexist in one payload: the top-level fields
+    /// (`utilization`, 0-100) that `/usage` reads, and `limits[]`, the only place naming the model
+    /// of the per-model window. The former leads, the latter completes.
+    static func parseUsage(_ data: Data) -> QuotaReading? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+
+        var reading = QuotaReading(session: nil, weekly: nil, scoped: nil, source: .api)
+        reading.session = window(root["five_hour"])
+        reading.weekly = window(root["seven_day"])
+
+        let scoped = [
+            ("seven_day_opus", "Opus"),
+            ("seven_day_sonnet", "Sonnet"),
+            ("seven_day_oauth_apps", "OAuth apps"),
+        ]
+        for (key, name) in scoped {
+            guard let candidate = window(root[key], label: name) else { continue }
+            if candidate.percent > (reading.scoped?.percent ?? -1) { reading.scoped = candidate }
+        }
+
+        if let limits = root["limits"] as? [[String: Any]] {
+            for raw in limits {
+                guard let kind = raw["kind"] as? String,
+                      let percent = raw["percent"] as? NSNumber else { continue }
+                let resetsAt = (raw["resets_at"] as? String).flatMap(date(from:))
+                let scope = raw["scope"] as? [String: Any]
+                let model = scope?["model"] as? [String: Any]
+                let candidate = QuotaWindow(percent: percent.doubleValue / 100,
+                                            resetsAt: resetsAt,
+                                            label: model?["display_name"] as? String)
+                switch kind {
+                case "session": reading.session = reading.session ?? candidate
+                case "weekly_all": reading.weekly = reading.weekly ?? candidate
+                case "weekly_scoped":
+                    if candidate.label != nil || reading.scoped == nil { reading.scoped = candidate }
+                default: break
+                }
+            }
+        }
+
+        return reading.isEmpty ? nil : reading
+    }
+
+    /// One top-level block: `{ "utilization": 59.0, "resets_at": "…" }`, `null` when inapplicable.
+    private static func window(_ raw: Any?, label: String? = nil) -> QuotaWindow? {
+        guard let object = raw as? [String: Any],
+              let utilization = object["utilization"] as? NSNumber else { return nil }
+        let resetsAt = (object["resets_at"] as? String).flatMap(date(from:))
+        return QuotaWindow(percent: utilization.doubleValue / 100, resetsAt: resetsAt, label: label)
     }
 
     private static func parseProfile(_ data: Data) -> OAuthProfile? {
@@ -290,18 +411,16 @@ actor ClaudeAccountClient {
         )
     }
 
-    /// `resets_at` porte des fractions de seconde à 6 chiffres, que `ISO8601DateFormatter`
-    /// refuse : la fraction est retirée avant parsing, la précision à la seconde suffit.
-    private static func date(from raw: String) -> Date? {
+    /// `resets_at` carries six-digit fractional seconds, which `ISO8601DateFormatter` rejects;
+    /// the fraction is stripped before parsing, second precision being ample.
+    static func date(from raw: String) -> Date? {
         let cleaned = raw.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
         return ISO8601DateFormatter().date(from: cleaned)
     }
 }
 
-// MARK: - Journal de diagnostic
-
-/// Journal horodaté des échecs API : `~/Library/Application Support/Claudy/api.log`.
-/// Permet de distinguer un rate-limit (429 répétés) d'un jeton mort (401 + refresh échoué).
+/// Timestamped log of API failures at `~/Library/Application Support/Claudy/api.log`. It is what
+/// separates a rate limit (repeated 429s) from a dead token (401 plus failed refresh).
 enum DiagnosticLog {
 
     private static let file: URL? = {
@@ -318,11 +437,11 @@ enum DiagnosticLog {
         return formatter
     }()
 
+    /// Appends one line. The log is bounded: past 512 KB it restarts rather than growing forever.
     static func append(_ message: String) {
         NSLog("[Claudy] %@", message)
         guard let file else { return }
 
-        // Journal borné : au-delà de 512 Ko, on repart de zéro plutôt que de grossir sans fin.
         if let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 512_000 {
             try? FileManager.default.removeItem(at: file)
         }

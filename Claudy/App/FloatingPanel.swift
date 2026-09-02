@@ -1,12 +1,15 @@
 import AppKit
 
-/// La fenêtre du widget : sans bordure, transparente, flottante, déplaçable à la souris.
+/// The widget window: borderless, transparent, floating, draggable by its background.
+///
+/// `.nonactivatingPanel` keeps a click on the widget from stealing focus from the front app,
+/// and the system shadow stays off because it tracks rounded corners poorly on a transparent
+/// window and flickers while resizing — SwiftUI draws the shadow instead.
 final class FloatingPanel: NSPanel {
 
     init(contentRect: NSRect) {
         super.init(
             contentRect: contentRect,
-            // `.nonactivatingPanel` : cliquer le widget ne vole pas le focus de l'app en cours.
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -18,8 +21,6 @@ final class FloatingPanel: NSPanel {
 
         isOpaque = false
         backgroundColor = .clear
-        // L'ombre est dessinée côté SwiftUI : l'ombre système d'une fenêtre transparente
-        // suit mal les coins arrondis et clignote au redimensionnement.
         hasShadow = false
 
         isMovableByWindowBackground = true
@@ -29,7 +30,7 @@ final class FloatingPanel: NSPanel {
         titlebarAppearsTransparent = true
     }
 
-    /// Sans cet override, un panneau `.borderless` ne devient jamais key :
-    /// ni clavier, ni menu contextuel fiable.
+    /// Without this override a `.borderless` panel never becomes key: no keyboard, and no
+    /// reliable context menu.
     override var canBecomeKey: Bool { true }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Mode détaillé, de haut en bas : en-tête, session 5h, colonnes hebdo/Sonnet,
-/// totaux, sparkline, accordéon « Détails », pied de carte.
+/// Full mode, top to bottom: header, 5h session, weekly and per-model columns, totals,
+/// sparkline, "Details" accordion, footer.
 struct FullView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
 
@@ -11,15 +11,13 @@ struct FullView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
-            // Clic sur l'en-tête ou le bloc session : retour au mode minimal — symétrique
-            // du clic sur la bande. Les boutons (avatar) gardent la priorité sur le tap.
             header
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.toggleMode() }
             sessionBlock
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.toggleMode() }
-                .help("Clic : mode minimal")
+                .help("Click for minimal mode")
 
             HStack(spacing: 9) {
                 StatColumn(window: snapshot.weekly)
@@ -37,7 +35,7 @@ struct FullView: View {
                 sessionCount: snapshot.sessionCount,
                 updatedAt: snapshot.updatedAt,
                 isRefreshing: viewModel.isRefreshing,
-                onRefresh: { Task { await viewModel.refresh() } }
+                onRefresh: { Task { await viewModel.refresh(userInitiated: true) } }
             )
         }
         .padding(.horizontal, Theme.Metric.padding)
@@ -45,7 +43,6 @@ struct FullView: View {
         .frame(width: Theme.Metric.fullWidth)
     }
 
-    // MARK: - En-tête
 
     private var header: some View {
         HStack(spacing: 8) {
@@ -62,21 +59,14 @@ struct FullView: View {
                 pill(snapshot.activeModel, tint: nil)
             }
 
-            if snapshot.isDemo {
-                // Claude Code absent de la machine : on l'annonce plutôt que de faire passer
-                // des valeurs de démonstration pour un relevé.
-                pill("démo", tint: Theme.Accent.amber.color)
-                    .help("Claude Code n'a pas été trouvé sur cette machine — données d'exemple.")
+            if let badge = snapshot.quotaSource.badge {
+                pill(badge, tint: Theme.Accent.amber.color)
+                    .help(Self.sourceExplanation(snapshot.quotaSource))
             }
 
             if let message = viewModel.errorMessage {
-                pill("erreur", tint: Theme.danger)
+                pill("error", tint: Theme.danger)
                     .help(message)
-            }
-
-            if snapshot.quotaStale {
-                pill("⟳", tint: Theme.Accent.amber.color)
-                    .help("Quotas momentanément injoignables — dernière valeur connue affichée.")
             }
 
             Spacer(minLength: 0)
@@ -86,6 +76,25 @@ struct FullView: View {
                 isActive: viewModel.isProfileVisible,
                 action: viewModel.toggleProfile
             )
+        }
+    }
+
+    /// What each origin badge means, in one sentence. On hover the user must be able to tell
+    /// whether the number they are reading comes from their account or from somewhere else.
+    /// For a stale reading the age matters more than the clock time: "reading from 14:32" does
+    /// not say whether it is ten minutes or three days old.
+    private static func sourceExplanation(_ source: QuotaSource) -> String {
+        switch source {
+        case .api:
+            "Account quotas, identical to claude.ai ▸ Usage."
+        case .bridge:
+            "Counters relayed by Claude Code's status line — same values, no request."
+        case .stale(let date):
+            "Account momentarily unreachable — reading from \(UsageViewModel.age(since: date)) ago."
+        case .unavailable:
+            "Quotas unavailable: no figure is shown rather than an estimate."
+        case .demo:
+            "Claude Code was not found on this machine — sample data."
         }
     }
 
@@ -99,7 +108,6 @@ struct FullView: View {
             .overlay(Capsule().strokeBorder(.white.opacity(0.09), lineWidth: 1))
     }
 
-    // MARK: - Bloc principal
 
     private var sessionBlock: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -109,31 +117,36 @@ struct FullView: View {
                         .microLabel(0.55)
 
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text("\(Int(session.percent * 100))")
+                        Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")
                             .font(Theme.Font.hero(40))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: [.primary, .primary.opacity(0.72)],
+                                    colors: session.isMeasured
+                                        ? [.primary, .primary.opacity(0.72)]
+                                        : [.primary.opacity(0.4), .primary.opacity(0.28)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                        Text("%")
-                            .font(Theme.Font.label(17, .medium))
-                            .foregroundStyle(.primary.opacity(0.38))
+                        if session.isMeasured {
+                            Text("%")
+                                .font(Theme.Font.label(17, .medium))
+                                .foregroundStyle(.primary.opacity(0.38))
+                        }
                     }
                 }
 
                 Spacer(minLength: 0)
 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(session.isActive ? "reset" : "session")
+                    Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
                         .microLabel(0.35)
-                    Text(session.isActive ? UsageViewModel.clock(session.resetDate) : "inactive")
+                    Text(session.isActive ? UsageViewModel.clock(session.resetDate)
+                                          : (session.isMeasured ? "idle" : "unavailable"))
                         .font(Theme.Font.value(14, .semibold))
                         .foregroundStyle(.primary.opacity(0.8))
                     if session.isActive {
-                        Text("dans \(UsageViewModel.countdown(to: session.resetDate))")
+                        Text("in \(UsageViewModel.countdown(to: session.resetDate))")
                             .font(Theme.Font.label(9.5, .medium))
                             .foregroundStyle(.primary.opacity(0.35))
                     }
@@ -145,7 +158,7 @@ struct FullView: View {
                      pace: session.isActive ? session.elapsed : nil)
 
             HStack(spacing: 6) {
-                Text("\(UsageViewModel.tokens(session.tokensUsed)) sur \(UsageViewModel.tokens(session.tokensLimit)) tokens")
+                Text("\(UsageViewModel.tokens(session.tokensUsed)) tokens on this machine")
                     .font(Theme.Font.value(9.5, .medium))
                     .foregroundStyle(.primary.opacity(0.35))
 
@@ -165,15 +178,14 @@ struct FullView: View {
         }
     }
 
-    // MARK: - Totaux
 
     private var totals: some View {
         HStack(spacing: 0) {
-            total("Aujourd'hui", snapshot.todayTokens, tint: Theme.Accent.coral.color)
+            total("Today", snapshot.todayTokens, tint: Theme.Accent.coral.color)
             Rectangle()
                 .fill(.primary.opacity(0.08))
                 .frame(width: 1, height: 26)
-            total("7 jours", snapshot.weekTokens, tint: Theme.Accent.sky.color)
+            total("7 days", snapshot.weekTokens, tint: Theme.Accent.sky.color)
         }
     }
 
@@ -188,11 +200,10 @@ struct FullView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Graphique
 
     private var chart: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("Usage · 7 jours")
+            Text("Usage · 7 days")
                 .microLabel(0.55)
             SparklineChart(samples: snapshot.history, tint: Theme.Accent.coral.color)
         }

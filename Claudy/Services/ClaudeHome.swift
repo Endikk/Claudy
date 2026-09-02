@@ -1,14 +1,14 @@
 import Foundation
 
-/// Emplacement des données Claude Code sur la machine courante.
-/// Rien n'est codé en dur : tout se déduit de l'environnement de l'utilisateur qui lance l'app.
+/// Where Claude Code keeps its data on the current machine. Nothing is hardcoded: everything is
+/// derived from the environment of the user running the app.
 enum ClaudeHome {
 
-    /// Répertoire personnalisé, s'il est défini. Le réglage `claudy.configDir`
-    /// (`defaults write com.claudy.Claudy claudy.configDir <chemin>`) prime : une app lancée
-    /// depuis le Finder ou le Dock n'hérite pas des variables du shell, `CLAUDE_CONFIG_DIR`
-    /// ne sert donc qu'aux lancements depuis un terminal.
-    private static var customDirectory: URL? {
+    /// Custom directory, when one is set. The `claudy.configDir` preference
+    /// (`defaults write com.claudy.Claudy claudy.configDir <path>`) wins, because an app launched
+    /// from Finder or the Dock inherits no shell variables — `CLAUDE_CONFIG_DIR` therefore only
+    /// applies to terminal launches.
+    static var customConfigDirectory: URL? {
         let candidates = [
             UserDefaults.standard.string(forKey: "claudy.configDir"),
             ProcessInfo.processInfo.environment["CLAUDE_CONFIG_DIR"],
@@ -17,27 +17,27 @@ enum ClaudeHome {
         return URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)
     }
 
-    /// Répertoire de configuration. `CLAUDE_CONFIG_DIR` prime, sinon `~/.claude`.
+    /// Configuration directory: the custom one when set, otherwise `~/.claude`.
     static var configDirectory: URL {
-        customDirectory
+        customConfigDirectory
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude", isDirectory: true)
     }
 
-    /// Un dossier par projet, nommé d'après son chemin de travail.
+    /// One folder per project, named after its working directory.
     static var projectsDirectory: URL {
         configDirectory.appendingPathComponent("projects", isDirectory: true)
     }
 
-    /// `.claude.json` vit dans le répertoire de configuration quand celui-ci est personnalisé,
-    /// et à la racine du dossier personnel sinon. Pas de repli de l'un vers l'autre : rediriger
-    /// `CLAUDE_CONFIG_DIR` doit isoler complètement, sinon on lirait le compte d'une autre config.
+    /// `.claude.json` lives in the configuration directory when that directory is custom, and at
+    /// the home root otherwise. Neither falls back to the other: redirecting `CLAUDE_CONFIG_DIR`
+    /// must isolate completely, or the app would read another configuration's account.
     static var configFile: URL? {
-        let candidate = customDirectory?.appendingPathComponent(".claude.json")
+        let candidate = customConfigDirectory?.appendingPathComponent(".claude.json")
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude.json")
         return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
     }
 
-    /// Vrai dès qu'une trace de Claude Code existe : sans ça, l'app bascule en démonstration.
+    /// True as soon as any trace of Claude Code exists; without one the app switches to demo mode.
     static var isInstalled: Bool {
         configFile != nil || FileManager.default.fileExists(atPath: projectsDirectory.path)
     }

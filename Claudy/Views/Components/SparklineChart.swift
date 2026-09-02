@@ -1,8 +1,8 @@
 import SwiftUI
 import Charts
 
-/// Mini-graphique d'usage sur 7 jours. Ni axes ni grille : la forme et le dernier point suffisent,
-/// le détail chiffré vit dans la section « Détails ».
+/// Seven-day usage sparkline. No axes and no grid: the shape and the last point are enough, and
+/// the numbers live in the "Details" section.
 struct SparklineChart: View {
     let samples: [TokenSample]
     let tint: Color
@@ -17,7 +17,7 @@ struct SparklineChart: View {
             Chart {
                 ForEach(samples) { sample in
                     AreaMark(
-                        x: .value("Jour", sample.date, unit: .day),
+                        x: .value("Day", sample.date, unit: .day),
                         y: .value("Tokens", sample.tokens)
                     )
                     .interpolationMethod(.catmullRom)
@@ -30,7 +30,7 @@ struct SparklineChart: View {
                     )
 
                     LineMark(
-                        x: .value("Jour", sample.date, unit: .day),
+                        x: .value("Day", sample.date, unit: .day),
                         y: .value("Tokens", sample.tokens)
                     )
                     .interpolationMethod(.catmullRom)
@@ -40,7 +40,7 @@ struct SparklineChart: View {
 
                 if let last = samples.last {
                     PointMark(
-                        x: .value("Jour", last.date, unit: .day),
+                        x: .value("Day", last.date, unit: .day),
                         y: .value("Tokens", last.tokens)
                     )
                     .symbolSize(38)

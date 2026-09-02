@@ -1,38 +1,43 @@
 import Foundation
 
-/// Une fenêtre de quota (session 5h, hebdomadaire, quota Sonnet…).
+/// One quota window as the card renders it: session 5h, weekly, per-model.
 struct UsageWindow {
-    /// Titre affiché : « Session », « Hebdo », « Sonnet ».
+    /// Displayed title: "Session", "Weekly", or the model name.
     let title: String
-    /// Qualificatif de fenêtre : « 5h », « 7j ».
+    /// Window qualifier: "5h", "7d".
     let window: String
-    /// 0…1
+    /// 0…1 as the account reports it. With no measurement this is 0 and `isMeasured` is false,
+    /// so the UI shows "—" rather than that zero.
     var percent: Double
+    /// Tokens recorded on this machine during the window. A local count, unrelated to the
+    /// percentage — Anthropic's quota is not a token tally.
     var tokensUsed: Int
-    var tokensLimit: Int
-    /// Début de la fenêtre : c'est lui qui donne le rythme attendu.
+    /// Start of the window, which is what sets the expected pace.
     var windowStart: Date
     var resetDate: Date
 
     var accent: Theme.Accent
 
-    /// Faux quand aucune fenêtre n'est en cours (aucune session ouverte) : il n'y a alors
-    /// rien à décompter, et afficher une heure de reset passée serait faux.
-    var isActive: Bool { resetDate > Date() }
+    /// True when `percent` comes from a real account quota; false when no measurement exists.
+    var isMeasured: Bool = true
 
-    /// Part de la fenêtre déjà écoulée, 0…1. C'est la position du repère de rythme :
-    /// à la moitié d'une fenêtre, une consommation régulière serait à 50 %.
+    /// False when no window is running: there is nothing to count down, and showing a reset
+    /// time already in the past would be a lie.
+    var isActive: Bool { isMeasured && resetDate > Date() }
+
+    /// Share of the window already elapsed, 0…1. This is where the pace marker sits: halfway
+    /// through a window, steady consumption would read 50 %.
     var elapsed: Double {
         let duration = resetDate.timeIntervalSince(windowStart)
         guard duration > 0 else { return 0 }
         return min(max(Date().timeIntervalSince(windowStart) / duration, 0), 1)
     }
 
-    /// Écart au rythme, en points de pourcentage. Positif = consommation en avance sur l'horloge.
+    /// Distance from the expected pace, in percentage points. Positive means ahead of the clock.
     var paceDelta: Double { percent - elapsed }
 }
 
-/// Un point de l'historique quotidien alimentant la sparkline.
+/// One point of the daily history feeding the sparkline.
 struct TokenSample: Identifiable, Equatable {
     let id: Date
     let date: Date
@@ -45,26 +50,26 @@ struct TokenSample: Identifiable, Equatable {
     }
 }
 
-/// Répartition par modèle sur 7 jours.
+/// Seven-day split by model.
 struct ModelUsage: Identifiable {
     let id: String
     let name: String
     var tokens: Int
-    /// Part du total, 0…1
+    /// Share of the total, 0…1
     var share: Double
     let accent: Theme.Accent
 }
 
-/// Répartition par projet sur 7 jours.
+/// Seven-day split by project.
 struct ProjectUsage: Identifiable {
     let id: String
     let name: String
     var tokens: Int
-    /// Part du total, 0…1
+    /// Share of the total, 0…1
     var share: Double
 }
 
-/// Compte connecté.
+/// Signed-in account.
 struct Account {
     let name: String
     let email: String
@@ -78,14 +83,14 @@ struct Account {
     }
 }
 
-/// État complet rendu par la vue à un instant donné.
-/// Une seule structure : le ViewModel n'expose qu'elle, donc pas d'état partiel incohérent à l'écran.
+/// Everything the view renders at one instant. A single structure, so the view model can never
+/// expose a half-updated state.
 struct UsageSnapshot {
     var session: UsageWindow
     var weekly: UsageWindow
     var sonnet: UsageWindow
 
-    /// 7 points, du plus ancien au plus récent (le dernier étant le jour en cours, partiel).
+    /// Seven points, oldest first; the last one is today and therefore partial.
     var history: [TokenSample]
     var models: [ModelUsage]
     var projects: [ProjectUsage]
@@ -97,37 +102,41 @@ struct UsageSnapshot {
     var sessionCount: Int
     var updatedAt: Date
 
-    /// Vrai quand Claude Code est absent de la machine : l'interface l'annonce au lieu de faire
-    /// passer des valeurs inventées pour un relevé réel.
-    var isDemo: Bool
+    /// Where the displayed percentages come from. The UI announces it: this is what separates
+    /// an account reading from a last known state, and both from an absence of measurement.
+    var quotaSource: QuotaSource
 
-    /// Vrai quand les quotas affichés datent d'un passage précédent (API injoignable) :
-    /// l'interface le signale discrètement au lieu de remettre les jauges à zéro.
-    var quotaStale: Bool = false
+    /// True when Claude Code is missing from the machine, which the UI states rather than
+    /// passing sample values off as a real reading.
+    var isDemo: Bool { quotaSource == .demo }
 
-    /// Vrai quand un jeton Claude est disponible : les jauges affichent les quotas réels.
-    /// Faux = la carte affiche l'onboarding — jamais de quotas estimés.
+    /// True when a Claude token is available, so the gauges show real quotas. False sends the
+    /// card to onboarding — never to estimated quotas.
     var isSignedIn: Bool = false
 
-    /// Surcharge : 0 en dessous de 95 % sur toutes les jauges, 1 à 100 %. Au-delà de 0,
-    /// le liseré de la carte rougit — un signal qu'on voit sans lire un chiffre.
+    /// Strain: 0 below 95 % on every gauge, 1 at 100 %. Above 0 the card's hairline reddens —
+    /// a signal you catch without reading a number. An unmeasured gauge never triggers it:
+    /// nothing raises an alarm about a figure we do not have.
     var strain: Double {
-        let peak = max(session.percent, weekly.percent, sonnet.percent)
+        let peak = [session, weekly, sonnet].filter(\.isMeasured).map(\.percent).max() ?? 0
         return min(max((peak - 0.95) / 0.05, 0), 1)
     }
 
-    /// État affiché avant le premier `fetch()` — jamais visible plus de quelques millisecondes,
-    /// mais évite un optionnel dans toutes les vues.
+    /// State shown before the first `fetch()` — never visible for more than a few milliseconds,
+    /// but it spares every view an optional.
     static let placeholder = UsageSnapshot(
         session: UsageWindow(title: "Session", window: "5h",
-                             percent: 0, tokensUsed: 0, tokensLimit: 1,
-                             windowStart: .now, resetDate: .now, accent: .coral),
-        weekly: UsageWindow(title: "Hebdo", window: "7j",
-                            percent: 0, tokensUsed: 0, tokensLimit: 1,
-                            windowStart: .now, resetDate: .now, accent: .amber),
-        sonnet: UsageWindow(title: "Sonnet", window: "7j",
-                            percent: 0, tokensUsed: 0, tokensLimit: 1,
-                            windowStart: .now, resetDate: .now, accent: .violet),
+                             percent: 0, tokensUsed: 0,
+                             windowStart: .now, resetDate: .now, accent: .coral,
+                             isMeasured: false),
+        weekly: UsageWindow(title: "Weekly", window: "7d",
+                            percent: 0, tokensUsed: 0,
+                            windowStart: .now, resetDate: .now, accent: .amber,
+                            isMeasured: false),
+        sonnet: UsageWindow(title: "Per model", window: "7d",
+                            percent: 0, tokensUsed: 0,
+                            windowStart: .now, resetDate: .now, accent: .violet,
+                            isMeasured: false),
         history: [],
         models: [],
         projects: [],
@@ -137,6 +146,6 @@ struct UsageSnapshot {
         weekTokens: 0,
         sessionCount: 0,
         updatedAt: .now,
-        isDemo: false
+        quotaSource: .unavailable
     )
 }

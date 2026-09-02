@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// La marque Claude, dessinée en vectoriel : rayons effilés à pointes arrondies,
-/// longueurs volontairement irrégulières. Aucun asset image, donc aucun catalogue à gérer.
+/// The Claude mark, drawn as a vector: tapered rays with rounded tips and deliberately uneven
+/// lengths. No image asset, so there is no catalog to maintain.
 struct ClaudeMark: Shape {
 
-    /// (angle en degrés, longueur relative, demi-largeur relative)
+    /// (angle in degrees, relative length, relative half-width)
     private static let rays: [(angle: Double, length: Double, width: Double)] = [
         (0, 1.00, 0.150), (33, 0.76, 0.120), (72, 0.94, 0.140),
         (104, 0.68, 0.112), (145, 1.00, 0.150), (180, 0.80, 0.128),
@@ -37,7 +37,6 @@ struct ClaudeMark: Shape {
 
             path.move(to: point(innerRadius, baseHalf))
             path.addLine(to: point(outerRadius - tipHalf, tipHalf))
-            // Pointe arrondie.
             path.addQuadCurve(
                 to: point(outerRadius - tipHalf, -tipHalf),
                 control: point(outerRadius + tipHalf * 0.6, 0)

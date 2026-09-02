@@ -1,39 +1,39 @@
 import Foundation
 
-/// Une réponse du modèle relevée dans un transcript.
+/// One model response recorded in a transcript.
 struct TranscriptEntry {
     let date: Date
     let model: String
     let tokens: Int
     let project: String
     let sessionID: String
-    /// Réponse d'un sous-agent. Ses tokens comptent, mais ce n'est pas une session utilisateur.
+    /// A subagent response. Its tokens count, but it is not a user session.
     let isSidechain: Bool
-    /// `message.id:requestId` — Claude Code réécrit la même réponse sur plusieurs lignes
-    /// (une par bloc de contenu) avec un bloc `usage` identique ; sans cette clé, chaque
-    /// réponse serait comptée plusieurs fois. `nil` = pas d'identifiants, toujours comptée.
+    /// `message.id:requestId`. Claude Code rewrites the same response across several lines, one
+    /// per content block, with an identical `usage` block; without this key every response would
+    /// be counted several times. `nil` means no identifiers, so it is always counted.
     let dedupKey: String?
 }
 
-/// Lecture des transcripts `<config>/projects/**/*.jsonl`.
+/// Reads the `<config>/projects/**/*.jsonl` transcripts.
 ///
-/// Les transcripts ne font que grossir : le scanner mémorise donc un curseur par fichier et ne
-/// relit que la queue ajoutée depuis le passage précédent. Sans ça, un rafraîchissement toutes
-/// les 60 s relirait des centaines de mégaoctets à chaque fois.
+/// Transcripts only ever grow, so the scanner keeps a cursor per file and re-reads only the tail
+/// appended since the previous pass. Without that, refreshing every few minutes would re-read
+/// hundreds of megabytes each time.
 ///
-/// Les lectures sont synchrones et bloquent un thread du pool coopératif : ~2 s au premier
-/// passage sur un gros historique, quelques millisecondes ensuite. Compromis assumé.
+/// Reads are synchronous and block a cooperative-pool thread: roughly two seconds on the first
+/// pass over a large history, a few milliseconds afterwards. A deliberate trade-off.
 actor TranscriptScanner {
 
-    /// Fenêtre conservée en mémoire. La vue la plus large est « 7 jours » ; la marge absorbe
-    /// les décalages de fuseau et les semaines calendaires à cheval.
+    /// Window kept in memory. The widest view is seven days; the margin absorbs time-zone
+    /// offsets and weeks that straddle a boundary.
     private let retention: TimeInterval = 9 * 86_400
 
-    /// État de lecture d'un fichier. Les entrées sont rattachées à leur fichier pour pouvoir
-    /// être purgées si celui-ci est tronqué ou remplacé.
+    /// Read state for one file. Entries are attached to their file so they can be purged if it
+    /// is truncated or replaced.
     private struct FileState {
         var offset: UInt64
-        /// Identifiant du fichier (inode) : détecte un remplacement à taille égale ou supérieure.
+        /// File identifier (inode): detects a replacement of equal or greater size.
         var fileID: NSObject?
         var entries: [TranscriptEntry]
         var lastSeen: Date
@@ -41,8 +41,8 @@ actor TranscriptScanner {
 
     private var files: [URL: FileState] = [:]
 
-    /// Clés déjà comptées, globales à tous les fichiers : une session reprise (`--resume`)
-    /// réécrit les mêmes réponses dans un autre transcript.
+    /// Keys already counted, global across files: a resumed session (`--resume`) rewrites the
+    /// same responses into a different transcript.
     private var seenKeys: [String: (url: URL, date: Date)] = [:]
 
     private var skippedLines = 0
@@ -60,7 +60,7 @@ actor TranscriptScanner {
         return formatter
     }()
 
-    /// Toutes les réponses relevées sur la fenêtre de rétention, du plus ancien au plus récent.
+    /// Every response recorded over the retention window, oldest first.
     func scan() throws -> [TranscriptEntry] {
         let now = Date()
         let cutoff = now.addingTimeInterval(-retention)
@@ -71,7 +71,6 @@ actor TranscriptScanner {
             ingest(url, cutoff: cutoff, now: now)
         }
 
-        // Purges : fichiers disparus depuis la rétention, clés et entrées expirées.
         let discoveredSet = Set(discovered)
         for (url, state) in files where !discoveredSet.contains(url) && state.lastSeen < cutoff {
             files.removeValue(forKey: url)
@@ -84,15 +83,11 @@ actor TranscriptScanner {
         var all = files.values.flatMap(\.entries)
         all.sort { $0.date < $1.date }
 
-        // Canari de format : un compteur qui grimpe signale que les transcripts ont changé
-        // de forme et que le parsing laisse passer des réponses.
         if skippedLines > 0 {
-            NSLog("[Claudy] %d ligne(s) de transcript illisible(s) ignorée(s).", skippedLines)
+            NSLog("[Claudy] Skipped %d unreadable transcript line(s).", skippedLines)
         }
         return all
     }
-
-    // MARK: - Découverte
 
     private func transcriptURLs(modifiedSince cutoff: Date) throws -> [URL] {
         let manager = FileManager.default
@@ -105,8 +100,6 @@ actor TranscriptScanner {
                 options: [.skipsHiddenFiles]
             )
         } catch {
-            // Dossier absent : rien à lire, ce n'est pas une panne. Présent mais illisible
-            // (droits, disque) : à signaler — sinon l'interface afficherait « aucune activité ».
             if manager.fileExists(atPath: root.path) { throw UsageDataError.projectsUnreadable }
             return []
         }
@@ -120,7 +113,6 @@ actor TranscriptScanner {
             ) else { continue }
 
             for file in files where file.pathExtension == "jsonl" {
-                // Un fichier non touché depuis la fenêtre ne peut rien apporter de neuf.
                 let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?
                     .contentModificationDate
                 if let modified, modified < cutoff { continue }
@@ -129,8 +121,6 @@ actor TranscriptScanner {
         }
         return found
     }
-
-    // MARK: - Lecture incrémentale
 
     private func ingest(_ url: URL, cutoff: Date, now: Date) {
         let currentID = (try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]))?
@@ -145,9 +135,6 @@ actor TranscriptScanner {
 
         let size = (try? handle.seekToEnd()) ?? 0
 
-        // Fichier tronqué ou remplacé (inode différent) : on repart de zéro et on oublie tout
-        // ce qui en avait été lu — y compris ses clés de dédup, sans quoi la ré-ingestion
-        // serait intégralement dédupliquée et les entrées perdues.
         let replaced = state.fileID != nil && currentID != nil && !state.fileID!.isEqual(currentID)
         if replaced || size < state.offset {
             state.offset = 0
@@ -161,10 +148,8 @@ actor TranscriptScanner {
               (try? handle.seek(toOffset: state.offset)) != nil,
               let data = try? handle.readToEnd(), !data.isEmpty else { return }
 
-        // La dernière ligne peut être incomplète (Claude Code écrit pendant qu'on lit) :
-        // on ne consomme que jusqu'au dernier saut de ligne. Sans aucun saut de ligne, la
-        // queue est soit une écriture en cours (retentée au prochain passage), soit une
-        // ligne finale sans \n : consommée seulement si son JSON est complet.
+        // Only consume up to the last newline: a tail without one is either a write in
+        // progress (retried next pass) or a final line lacking \n, taken only if its JSON parses.
         let complete: Data
         if let lastBreak = data.lastIndex(of: 0x0A) {
             complete = Data(data[data.startIndex...lastBreak])
@@ -176,15 +161,14 @@ actor TranscriptScanner {
         state.offset += UInt64(complete.count)
 
         for line in complete.split(separator: 0x0A) where !line.isEmpty {
-            // Filtre bon marché avant le coût du parsing JSON : la grande majorité des lignes
-            // d'un transcript (attachements, snapshots, prompts) ne portent pas d'usage.
+            // Cheap filter before paying for JSON parsing: most transcript lines
+            // (attachments, snapshots, prompts) carry no usage block at all.
             guard line.range(of: Self.usageMarker) != nil else { continue }
 
             switch parse(Data(line)) {
             case .entry(let entry):
                 guard entry.date >= cutoff else { continue }
                 if let key = entry.dedupKey {
-                    // Réécriture de la même réponse : la première occurrence fait foi.
                     if seenKeys[key] != nil { continue }
                     seenKeys[key] = (url, entry.date)
                 }
@@ -204,9 +188,9 @@ actor TranscriptScanner {
 
     private enum ParseOutcome {
         case entry(TranscriptEntry)
-        /// Ligne valide mais hors sujet (pas une réponse assistant comptable).
+        /// Valid line, but not relevant — not a countable assistant response.
         case irrelevant
-        /// Ligne qui devrait être une réponse assistant mais ne se lit pas : canari de format.
+        /// A line that should be an assistant response but will not parse: a format canary.
         case malformed
     }
 
@@ -216,7 +200,6 @@ actor TranscriptScanner {
         }
         guard root["type"] as? String == "assistant" else { return .irrelevant }
         guard let message = root["message"] as? [String: Any] else { return .malformed }
-        // « usage » du pré-filtre peut venir du contenu du message : absence = ligne hors sujet.
         guard let usage = message["usage"] as? [String: Any] else { return .irrelevant }
         guard let model = message["model"] as? String else { return .malformed }
         guard ModelName.isReal(model) else { return .irrelevant }
@@ -233,8 +216,6 @@ actor TranscriptScanner {
             + count("cache_read_input_tokens")
         guard tokens > 0 else { return .irrelevant }
 
-        // Le nom de dossier de projet est une translittération du chemin (accents et séparateurs
-        // perdus) : le `cwd` de la ligne est la seule source fidèle.
         let project = (root["cwd"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "—"
 
         let messageID = message["id"] as? String
@@ -256,9 +237,9 @@ actor TranscriptScanner {
         ))
     }
 
-    /// Journalise (une fois par clé) tout nouveau compteur numérique apparu dans `usage`.
-    /// `server_tool_use` et consorts sont connus et volontairement ignorés : ce sont des
-    /// compteurs de requêtes (recherche web…), pas des tokens.
+    /// Logs, once per key, any new numeric counter appearing in `usage`. `server_tool_use` and
+    /// friends are known and deliberately ignored: they count requests (web search and the like),
+    /// not tokens.
     private static let knownUsageKeys: Set<String> = [
         "input_tokens", "output_tokens",
         "cache_creation_input_tokens", "cache_read_input_tokens",
@@ -269,7 +250,7 @@ actor TranscriptScanner {
     private func warnAboutUnknownCounters(in usage: [String: Any]) {
         for (key, value) in usage where value is NSNumber && !Self.knownUsageKeys.contains(key) {
             guard warnedUsageKeys.insert(key).inserted else { continue }
-            NSLog("[Claudy] Clé d'usage inconnue dans les transcripts : %@ (ignorée).", key)
+            NSLog("[Claudy] Unknown usage key in transcripts: %@ (ignored).", key)
         }
     }
 }

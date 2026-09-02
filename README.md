@@ -1,28 +1,29 @@
 # ✳︎ Claudy
 
-**Tes quotas Claude, en vrai, sur ton bureau.**
+**Your real Claude quotas, on your desktop.**
 
-[![Téléchargements](https://img.shields.io/github/downloads/Endikk/Claudy/total?label=t%C3%A9l%C3%A9chargements&color=D97757)](https://github.com/Endikk/Claudy/releases)
+[![Downloads](https://img.shields.io/github/downloads/Endikk/Claudy/total?label=downloads&color=D97757)](https://github.com/Endikk/Claudy/releases)
 [![Stars](https://img.shields.io/github/stars/Endikk/Claudy?color=D97757)](https://github.com/Endikk/Claudy/stargazers)
-[![Licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![macOS](https://img.shields.io/badge/macOS-13%2B-blue)
 
+🇫🇷 [Lire ce README en français](README.fr.md)
+
 <p align="center">
-  <img src="docs/video-readme.gif" width="620" alt="Le widget Claudy en action : session 5 h, quotas hebdo, totaux du jour, sparkline 7 jours">
+  <img src="docs/video-readme.gif" width="620" alt="The Claudy widget in action: 5h session, weekly quotas, daily totals, 7-day sparkline">
 </p>
 
-Widget de bureau macOS affichant ta consommation Claude : carte flottante sans bordure,
-toujours au premier plan, déplaçable à la souris, en mode compact ou détaillé. Les jauges
-affichent les **quotas réels de ton compte** — les mêmes chiffres que claude.ai ▸ Utilisation —
-et le détail en tokens vient des transcripts locaux de Claude Code.
+A macOS desktop widget showing your Claude usage: a borderless floating card, always on top,
+draggable, in compact or full mode. The gauges show your account's **real quotas** — the same
+figures as claude.ai ▸ Usage and `/usage` — while the token detail comes from Claude Code's local
+transcripts.
 
-**Tes données restent chez toi.** Pas de télémétrie, pas de serveur tiers, aucune conversation
-lue ni envoyée. Les seules requêtes réseau vont à l'API d'Anthropic, avec un jeton obtenu par
-*ta* connexion. Le code est court et auditable.
+**Your data stays with you.** No telemetry, no third-party server, no conversation read or sent.
+The only network requests go to Anthropic's API. The code is short and auditable.
 
-## Installer
+## Install
 
-**Homebrew :**
+**Homebrew:**
 
 ```bash
 brew tap Endikk/claudy
@@ -30,23 +31,22 @@ brew trust Endikk/claudy
 brew install --cask claudy
 ```
 
-Depuis Homebrew 6, `brew trust` est obligatoire pour tout tap tiers : Homebrew refuse de
-charger du code d'un dépôt qui n'est pas le sien tant que tu ne l'as pas approuvé
-explicitement. C'est une bonne chose — tu déclares faire confiance à ce dépôt précis.
+Since Homebrew 6, `brew trust` is required for any third-party tap: Homebrew refuses to load code
+from a repository that is not its own until you approve it explicitly. That is a good thing — you
+are declaring trust in this specific repository.
 
-**Ou en une commande (release précompilée) :**
+**Or in one command (prebuilt release):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Endikk/Claudy/main/Scripts/install.sh | bash
 ```
 
-L'app arrive dans `/Applications` (trouvable via Spotlight). Claudy n'est **pas notarisé** :
-c'est une distribution gratuite, sans compte Apple Developer. La commande retire donc la
-quarantaine posée au téléchargement — sans quoi Gatekeeper refuserait de lancer l'app. Si tu
-préfères ne rien dé-quarantiner, compile toi-même (voie 2) : le code est court, auditable, et
-ne fait aucune requête réseau.
+The app lands in `/Applications` (findable through Spotlight). Claudy is **not notarised**: it is
+a free distribution with no Apple Developer account. The command therefore removes the quarantine
+flag set at download time, without which Gatekeeper would refuse to launch the app. If you would
+rather not un-quarantine anything, build it yourself (route 2): the code is short and auditable.
 
-**Voie 2 — depuis les sources (nécessite Xcode) :**
+**Route 2 — from source (requires Xcode):**
 
 ```bash
 git clone https://github.com/Endikk/Claudy.git
@@ -54,266 +54,260 @@ cd Claudy
 ./Scripts/build-app.sh --install
 ```
 
-## Lancer (développement)
+## Run (development)
 
 ```bash
 open Claudy.xcodeproj
 ```
 
-puis ⌘R.
+then ⌘R.
 
-Cible : **macOS 13 Ventura** ou plus récent. Xcode 16 ou plus récent (groupes de fichiers
-synchronisés : ajouter un `.swift` dans `Claudy/` suffit, rien à déclarer).
+Target: **macOS 13 Ventura** or newer. Xcode 16 or newer (synchronised file groups: dropping a
+`.swift` into `Claudy/` is enough, nothing to declare).
 
-> Si `xcodebuild` refuse de démarrer avec
-> `xcodebuild failed to load a required plug-in` / `IDESimulatorFoundation`, le contenu système
-> de Xcode est plus ancien que Xcode lui-même. Corriger une fois avec :
+> If `xcodebuild` refuses to start with `xcodebuild failed to load a required plug-in` /
+> `IDESimulatorFoundation`, Xcode's system content is older than Xcode itself. Fix it once with:
 > ```bash
 > sudo xcodebuild -runFirstLaunch
 > ```
-> (ouvrir Xcode.app une fois et accepter l'installation des composants fait la même chose).
+> (opening Xcode.app once and accepting the component installation does the same thing).
 
-## Produire le .app
+## Build the .app
 
 ```bash
 ./Scripts/build-app.sh            # → build/Claudy.app
-./Scripts/build-app.sh --install  # → /Applications/Claudy.app, puis le lance
-./Scripts/build-app.sh --zip      # → dist/Claudy-<version>.zip (artefact de release)
+./Scripts/build-app.sh --install  # → /Applications/Claudy.app, then launches it
+./Scripts/build-app.sh --zip      # → dist/Claudy-<version>.zip (release artefact)
 ```
 
-Le script compile en Release via `xcodebuild` et vérifie le résultat (binaire universel
-arm64 + x86_64 via `lipo`, signature via `codesign --verify`, plist via `plutil -lint`).
-La version vient de `MARKETING_VERSION` dans le projet Xcode — unique source de vérité.
-Le binaire est signé ad hoc — suffisant pour tourner, mais pas pour « Lancer au démarrage »
-(voir plus bas).
+The script builds Release through `xcodebuild` and verifies the result (universal arm64 + x86_64
+binary via `lipo`, signature via `codesign --verify`, plist via `plutil -lint`). The version comes
+from `MARKETING_VERSION` in the Xcode project — the single source of truth. The binary is ad-hoc
+signed: enough to run, but not enough for "Launch at login" (see below).
 
-Depuis Xcode : *Product ▸ Archive*, puis *Distribute App ▸ Copy App*.
+From Xcode: *Product ▸ Archive*, then *Distribute App ▸ Copy App*.
 
-L'app est un agent (`LSUIElement`) : pas d'icône dans le Dock, pas de barre de menus.
-Tout passe par le **clic droit sur la carte** — et ⌘R / ⌘Q restent actifs quand elle a le focus.
+The app is an agent (`LSUIElement`): no Dock icon, no menu bar. Everything goes through a
+**right-click on the card** — and ⌘R / ⌘Q stay active while it has focus.
 
-## Utiliser
+## Use
 
-| Geste | Effet |
+| Gesture | Effect |
 |---|---|
-| Glisser n'importe où sur la carte | Déplacer le widget (le temps de la session — il revient en bas à droite au lancement) |
-| Clic sur la bande minimale | Passer en mode complet |
-| Clic droit | Rafraîchir · Mode minimal/complet · Connexion · Toujours au premier plan · Lancer au démarrage · Quitter |
-| Clic sur l'avatar | Fiche compte (nom, e-mail, plan, organisation) |
-| Clic sur « Détails » | Accordéon : répartition par modèle et top projets |
+| Drag anywhere on the card | Move the widget (for the session — it returns to the bottom right on launch) |
+| Click the minimal strip | Switch to full mode |
+| Right-click | Refresh · Minimal/full mode · Sign in · Always on top · Launch at login · Quit |
+| Click the avatar | Account card (name, email, plan, organisation) |
+| Click "Details" | Accordion: split by model and top projects |
 
-Rafraîchissement automatique toutes les 60 s.
+Automatic refresh every 3 minutes, plus an immediate reading when the machine wakes.
 
-## D'où viennent les données
+## Where the data comes from
 
-Anthropic n'expose **aucune API publique** donnant la consommation ou le quota restant d'un
-compte. La seule source disponible est locale, et c'est celle que Claudy lit :
-
-| Donnée | Source |
+| Data | Source |
 |---|---|
-| Tokens, modèles, projets, sessions | `<config>/projects/**/*.jsonl` — un objet `message.usage` par réponse |
-| % de quota et heures de reset des jauges | `api.anthropic.com/api/oauth/usage`, avec le jeton de *ta* connexion Claudy |
-| Compte, plan, organisation | `api.anthropic.com/api/oauth/profile`, repli `.claude.json` (bloc `oauthAccount`) |
-| Rôle (badge Admin) | `.claude.json`, bloc `oauthAccount` |
-| Nom affiché sans compte Claude | `NSFullUserName()` de la session macOS |
+| Gauge percentages and reset times | `api.anthropic.com/api/oauth/usage` |
+| Tokens, models, projects, sessions | `<config>/projects/**/*.jsonl` — one `message.usage` object per response |
+| Account, plan, organisation | `api.anthropic.com/api/oauth/profile`, falling back to `.claude.json` (`oauthAccount` block) |
+| Role (Admin badge) | `.claude.json`, `oauthAccount` block |
+| Display name with no Claude account | `NSFullUserName()` from the macOS session |
 
-Invariant : les **pourcentages** des jauges viennent uniquement de l'API ; les transcripts ne
-servent qu'au **détail en tokens** (totaux, répartitions, sparkline). Les deux ne sont jamais
-fusionnés en un seul chiffre — sauf la ligne « X sur Y tokens », où Y est une simple échelle
-d'affichage extrapolée du pourcentage.
+**Invariant: the gauge percentages come from the API alone.** Transcripts only ever supply the
+**token detail** (totals, splits, sparkline). The two are never merged into a single figure.
 
-`<config>` vaut, par ordre de priorité : le réglage `claudy.configDir`, puis `$CLAUDE_CONFIG_DIR`,
-sinon `~/.claude`. La variable d'environnement ne sert qu'aux lancements depuis un terminal —
-une app ouverte depuis le Finder ou le Dock n'hérite pas du shell. Pour rediriger la
-configuration de façon persistante :
+`<config>` resolves, in order: the `claudy.configDir` preference, then `$CLAUDE_CONFIG_DIR`,
+otherwise `~/.claude`. The environment variable only applies to terminal launches — an app opened
+from Finder or the Dock inherits no shell. To redirect the configuration persistently:
 
 ```bash
-defaults write com.claudy.Claudy claudy.configDir ~/mon-dossier-claude
+defaults write com.claudy.Claudy claudy.configDir ~/my-claude-folder
 ```
 
-Quand un répertoire personnalisé est défini, aucun repli vers le dossier personnel n'a lieu :
-rediriger la configuration isole complètement.
+When a custom directory is set there is no fallback to the home folder: redirecting the
+configuration isolates completely.
 
-Les tokens comptés sont la somme des quatre compteurs (`input`, `output`, `cache_creation`,
-`cache_read`). Les lectures de cache dominent : une semaine chargée dépasse couramment le
-milliard de tokens, d'où l'unité « Md » dans l'interface.
+Counted tokens are the sum of the four counters (`input`, `output`, `cache_creation`,
+`cache_read`). Cache reads dominate: a busy week routinely passes a billion tokens, hence the "B"
+unit in the interface.
 
-Claude Code réécrit la même réponse sur plusieurs lignes du transcript (une par bloc de
-contenu), avec un bloc `usage` identique. Claudy **déduplique** sur `(message.id, requestId)` —
-la même clé que `ccusage` — sans quoi les totaux seraient gonflés d'un facteur ~2.
+Claude Code rewrites the same response across several transcript lines, one per content block,
+with an identical `usage` block. Claudy **deduplicates** on `(message.id, requestId)` — the same
+key `ccusage` uses — without which totals would be inflated roughly twofold.
 
-Le nom d'un projet vient du champ `cwd` de la ligne, jamais du nom de dossier de transcript —
-celui-ci est une translittération qui perd accents et séparateurs
-(`~/Documents/Développement/Ma-App` y devient `-Users-…-D-veloppement-Ma-App`).
+A project's name comes from the line's `cwd` field, never from the transcript folder name, which
+is a transliteration that loses accents and separators (`~/Documents/Développement/My-App` becomes
+`-Users-…-D-veloppement-My-App`).
 
-### D'où viennent les pourcentages
+### How the percentages stay true
 
-**Quotas réels d'abord.** À la première ouverture, Claudy propose « Se connecter à Claude » :
-une connexion OAuth standard dans ton navigateur (même mécanisme que `claude login`). Claudy
-obtient ainsi **son propre jeton**, rangé dans son propre item de trousseau — il ne touche
-jamais aux secrets de Claude Code, donc **aucun dialogue macOS « informations
-confidentielles »**, jamais. Une fois connecté, il interroge `api.anthropic.com/api/oauth/usage`
-et `/api/oauth/profile` — les mêmes points d'accès que claude.ai ▸ Réglages ▸ Utilisation. Les
-trois jauges affichent alors les **pourcentages et heures de remise à zéro réels du compte**
-(session 5 h, hebdo tous modèles, limite hebdo du modèle suivi — « Fable », « Opus »… selon le
-compte), et la fiche compte l'identité officielle. Déconnexion à tout moment via la fiche
-compte ou le clic droit.
+**One figure, the account's.** The three gauges show the percentages and reset times reported by
+`api.anthropic.com/api/oauth/usage` — the endpoint behind claude.ai ▸ Settings ▸ Usage and Claude
+Code's `/usage`. Session 5h, weekly across all models, weekly for the scoped model ("Fable",
+"Opus"… depending on the account). Nothing is recomputed, nothing is estimated.
 
-Ce qui rend la liaison fiable :
+**The token is borrowed from Claude Code, read-only.** That is what makes the link durable: Claude
+Code renews its token on every launch and before every expiry, so it is always fresh and Claudy
+has nothing to refresh. No `refresh_token` is read or spent — a rotation triggered by Claudy would
+invalidate Claude Code's own session. The read goes through `/usr/bin/security`, the binary that
+created the keychain item and which its ACL already trusts, so **no macOS "confidential
+information" dialog ever appears**.
 
-- **Refresh autonome** : à moins de 2 min de l'expiration, Claudy rejoue lui-même le grant
-  `refresh_token` et réécrit son item de trousseau. Session indépendante de celle de Claude
-  Code : aucune rotation de jeton partagée.
-- **Retry unique sur 401**, jamais de boucle.
-- **Dernière valeur connue + backoff** : un échec (429, hors-ligne) ne remet rien à zéro — la
-  dernière valeur reste affichée avec une pastille « ⟳ », et les tentatives s'espacent
-  (60 s + 60 s × échecs, plafond 300 s).
-- **Journal** : chaque échec est horodaté dans `~/Library/Application Support/Claudy/api.log`
-  (code HTTP, refresh), pour distinguer un rate-limit d'un jeton mort.
+Claudy's own OAuth sign-in ("Sign in to Claude") remains available for machines where Claude
+Code's token cannot be read. It is the second choice: refreshed autonomously, and abandoned as
+soon as Anthropic answers `invalid_grant` — a dead token yields to the borrowed one instead of
+looping forever.
 
-Ces points d'accès ne sont pas documentés et peuvent changer sans préavis — fragilité assumée,
-d'où le repli ci-dessous.
+What makes the link dependable:
 
-Le nombre de tokens du quota n'étant pas exposé, la ligne « X sur Y tokens » extrapole Y depuis
-le pourcentage (Y ≈ tokens locaux ÷ %). Si d'autres appareils consomment sur le même compte,
-Y est sous-estimé — le pourcentage, lui, reste exact.
+- **Two sources, never an invention.** The API first; failing that, the counters Claude Code
+  already received in its `anthropic-ratelimit-unified-*` headers, which a status-line command can
+  drop for Claudy (see below) — same values, zero requests, immune to rate limiting.
+- **A single retry on 401**: on a borrowed token it is re-read (Claude Code may have just written
+  a new one); on Claudy's own it is refreshed. Never a loop.
+- **Last known value plus backoff**: a failure resets nothing. The last reading stays on screen
+  behind a dated "⟳" badge, and attempts space out — `Retry-After` honoured, otherwise 5 → 15 →
+  30 → 60 min for a rate limit, and only 30 s → 5 min for a transient network or server fault.
+- **Log**: every failure is timestamped in `~/Library/Application Support/Claudy/api.log` (HTTP
+  code, refresh), which is what separates a rate limit from a dead token.
 
-**Référence personnelle en repli.** Sans connexion (bouton « Plus tard », hors-ligne), les
-jauges portent une pastille « estimé » et retombent sur la consommation rapportée à une
-référence calculée sur la machine :
+These endpoints are undocumented and may change without notice. That is precisely why the app
+never fills their silence.
 
-- **Session · 5h** — 90ᵉ centile des fenêtres de 5 h déjà écoulées.
-- **Hebdo · sem.** — 90ᵉ centile des journées terminées, multiplié par 7 (une semaine où chaque
-  jour serait chargé). On ne compare pas des semaines entre elles : la fenêtre de rétention n'en
-  contient jamais assez pour que ce soit stable.
-- **Troisième jauge** — la fenêtre Sonnet, qui a son propre quota chez Anthropic. Si la machine
-  n'utilise pas Sonnet, la jauge bascule sur la famille la plus consommée et prend son nom
-  (« Opus · sem. »), plutôt que d'afficher une colonne morte à 0 %.
+**With no measurement, there is no figure.** The gauges show "—" and an "offline" badge. An earlier
+version estimated the missing percentage from local transcripts (90th percentile of elapsed
+windows). That was wrong by construction: Anthropic's response carries `limit_dollars: null` and
+`used_dollars: null`, so the quota is not a token tally and no local count can reproduce it.
+Better to show nothing than a number that means nothing.
 
-**En repli, 100 % signifie « au niveau de tes plus grosses fenêtres », pas « quota épuisé ».**
+Tokens counted in the transcripts are still displayed, but for what they are: **this machine's**
+consumption ("12.4 M tokens on this machine"), the 7-day history and the per-model and per-project
+splits. They never mix with the account percentage.
 
-Sans historique, la consommation courante sert de référence : la jauge affiche 100 % et se
-recalibre dès la première fenêtre écoulée. Les préférences `claudy.limit.*` (ci-dessous) ne
-s'appliquent qu'à ce mode repli.
+### Status-line bridge (optional)
 
-### Le repère de rythme
-
-Chaque jauge porte un trait vertical : la part de sa fenêtre **déjà écoulée**. À mi-parcours
-d'une session de 5 h, une consommation régulière serait pile sur le trait.
-
-- Remplissage **à droite** du repère → consommation en avance sur l'horloge.
-- Remplissage **à gauche** → sous le rythme.
-
-Le bloc principal traduit l'écart en toutes lettres (« 15 pts au-dessus du rythme »), les
-colonnes le résument à un signe (`+15` / `−14`). Sous 4 points d'écart, l'app affiche
-« dans le rythme » plutôt que de qualifier d'avance le bruit d'une requête isolée. Au-delà de
-20 points d'avance, le libellé passe au rouge.
-
-Le repère disparaît quand aucune fenêtre n'est en cours — il n'y a alors pas de rythme à tenir.
-
-Au-delà de **95 %** sur n'importe quelle jauge, la carte se **fissure** : un impact et ses
-fêlures se propagent sur le verre, et le liseré vire au rouge. L'intensité monte jusqu'à 100 %.
-Un signal qu'on voit du coin de l'œil, sans avoir à lire un chiffre.
-
-Avec les quotas réels, les fenêtres hebdomadaires sont **celles d'Anthropic** : 7 jours ancrés
-sur la vraie heure de remise à zéro du compte (par ex. lundi 17:00). En repli sans jeton, c'est
-la **semaine calendaire** qui sert de fenêtre — elle seule donne alors un instant de remise à
-zéro et donc un rythme attendu ; le premier jour suit la locale du système. L'historique, la
-sparkline et les répartitions restent, eux, sur 7 jours glissants : une courbe qui repart d'un
-point chaque lundi n'apprendrait rien.
-
-Les barres de la section « Détails » n'ont volontairement pas de repère : elles expriment une
-part du total, pas une durée.
-
-Pour imposer des valeurs, trois préférences (entiers, en tokens) :
+On every API response Claude Code reads its quota headers and passes them to the status line. One
+line is enough to drop them where Claudy knows to read them — useful when the API is momentarily
+unreachable:
 
 ```bash
-defaults write com.claudy.Claudy claudy.limit.session -int 2400000
-defaults write com.claudy.Claudy claudy.limit.weekly  -int 18000000
-defaults write com.claudy.Claudy claudy.limit.model   -int 9000000
+tee "$HOME/Library/Application Support/Claudy/usage-bridge.json" > /dev/null
 ```
 
-### Mode démonstration
+Add it to the `statusLine` command in `~/.claude/settings.json` (at the end of the chain, so it
+does not disturb the existing display). Claudy ignores a reading older than 30 minutes, and only
+falls back to it when the API has produced nothing fresh.
 
-Sans `.claude.json` ni dossier `projects`, l'app bascule sur `DemoUsageDataSource` et **l'annonce**
-par une pastille « démo » dans l'en-tête. Le jeu de démonstration ne contient rien d'identifiant :
-le nom vient de la session macOS, les projets portent des noms neutres. La bascule est réévaluée
-à chaque rafraîchissement — installer Claude Code après coup suffit.
+### The pace marker
 
-Si Claude Code est présent mais sans activité sur 7 jours, l'app affiche le vrai compte avec des
-compteurs à zéro : elle ne substitue pas des chiffres de démonstration à une absence d'usage.
+Each gauge carries a vertical line: the share of its window **already elapsed**. Halfway through a
+5-hour session, steady consumption would sit right on the line.
 
-Toute autre panne (dossier `projects` illisible, droits manquants) n'entraîne **pas** de bascule
-en démonstration : le dernier relevé valide reste affiché et une pastille « erreur » (point rouge
-en mode minimal) apparaît, avec le détail au survol.
+- Fill **to the right** of the marker → ahead of the clock.
+- Fill **to the left** → behind the pace.
+
+The main block spells the gap out ("15 pts ahead of pace"), the columns reduce it to a sign
+(`+15` / `−14`). Below a 4-point gap the app says "on pace" rather than calling the noise of a
+single request an advance. Past 20 points ahead, the label turns red.
+
+The marker disappears when no window is running — there is no pace to hold.
+
+Past **95 %** on any **measured** gauge, the card's hairline turns red, at an intensity rising to
+100 %. A signal you catch out of the corner of your eye, without reading a number. An unmeasured
+gauge never triggers it: nothing raises an alarm about a figure we do not have.
+
+The weekly windows are **Anthropic's**: 7 days anchored on the account's real reset time (Monday
+17:00, say), never a calendar week invented locally. The history, sparkline and splits stay on 7
+rolling days: a curve restarting from a single point every Monday would teach nothing.
+
+The bars in the "Details" section deliberately carry no marker: they express a share of the total,
+not a duration.
+
+### Demo mode
+
+With no `.claude.json` and no `projects` folder, the app switches to `DemoUsageDataSource` and
+**says so** through a "demo" badge in the header. The sample set contains nothing identifying: the
+name comes from the macOS session and the projects carry neutral names. The switch is re-evaluated
+on every refresh, so installing Claude Code afterwards is enough.
+
+If Claude Code is present but has seen no activity in 7 days, the app shows the real account with
+counters at zero: it does not substitute demo figures for an absence of usage.
+
+Any other failure (unreadable `projects` folder, missing permissions) does **not** trigger demo
+mode: the last valid reading stays on screen and an "error" badge appears (a red dot in minimal
+mode), with the detail on hover.
 
 ## Structure
 
 ```
 Claudy/
-├── App/          main.swift (entrée AppKit) · AppDelegate (fenêtre, position, menu ⌘) · FloatingPanel
-├── Models/       UsageSnapshot et ses composants
-├── Services/     ClaudeHome (chemins) · TranscriptScanner (lecture incrémentale) ·
-│                 UsageAggregator (fenêtres, références) · AccountLoader · ModelName ·
-│                 UsageDataSource (protocole, source locale, bascule) · DemoUsageDataSource ·
-│                 LaunchAtLogin
-├── ViewModels/   UsageViewModel : état + préférences + formatage
-├── Theme/        Jetons de design · pont NSVisualEffectView
-└── Views/        RootView (fond, modes, menu contextuel) · MinimalView · FullView · Components/
+├── App/          main.swift (AppKit entry) · AppDelegate (window, position, ⌘ menu) · FloatingPanel
+├── Models/       UsageSnapshot and its parts · QuotaModels (account readings and their source)
+├── Services/     ClaudeHome (paths) · TranscriptScanner (incremental read) ·
+│                 UsageAggregator (windows, gauges) · ClaudeAccountClient (OAuth API) ·
+│                 ClaudeCodeCredentials (read-only borrowed token) · ClaudeCredentials (own store) ·
+│                 ClaudeOAuth (PKCE fallback) · UsageBridge (status-line relay) ·
+│                 UsageDataSource (protocol, local source, switch) · DemoUsageDataSource ·
+│                 AccountLoader · ModelName · LaunchAtLogin
+├── ViewModels/   UsageViewModel: state, preferences, formatting
+├── Theme/        Design tokens · NSVisualEffectView bridge
+└── Views/        RootView (background, modes, context menu) · MinimalView · FullView · Components/
 ```
 
 ### Performance
 
-Les transcripts ne font que grossir et pèsent vite plusieurs dizaines de mégaoctets.
-`TranscriptScanner` mémorise donc un décalage par fichier et ne relit que la queue ajoutée,
-après avoir écarté les fichiers non modifiés dans la fenêtre et les lignes ne contenant pas
-`"usage"`. Mesuré sur une machine avec 13 projets et 33 Mo de transcripts pour le seul plus gros
-fichier : **2,1 s au premier scan, ~110 ms ensuite**.
+Transcripts only grow and quickly reach tens of megabytes. `TranscriptScanner` therefore keeps an
+offset per file and re-reads only the appended tail, after discarding files untouched within the
+window and lines that contain no `"usage"`. Measured on a machine with 13 projects and 33 MB in
+the single largest file: **2.1 s on the first scan, ~110 ms afterwards**.
 
-### Fenêtre
+The API is polled every 3 minutes with a 60-second cache, and the profile is re-read only every
+6 hours. Polling every 60 seconds, as an earlier version did, produced cascades of HTTP 429.
 
-Quatre points techniques valent d'être connus avant de la modifier :
+### Window
 
-- **Le point d'entrée est AppKit** (`main.swift`), pas `@main struct ClaudyApp: App`. Avec un
-  cycle de vie SwiftUI, la scène résiduelle nécessaire au protocole `App` (`Settings`) entre en
-  conflit avec le panneau flottant et déclenche une récursion de layout AppKit ↔ SwiftUI :
-  l'app meurt en `SIGSEGV` (débordement de pile) après ~3 s. Ne pas réintroduire de scène SwiftUI.
-- `FloatingPanel` **doit** surcharger `canBecomeKey` : sans ça, un panneau `.borderless`
-  ne reçoit ni clavier ni menu contextuel fiable.
-- La taille de la fenêtre suit la taille intrinsèque SwiftUI
-  (`NSHostingController.sizingOptions = [.preferredContentSize]`). Ne pas coder de hauteur en dur.
-- La carte est **ancrée par son coin bas-droit** : `setContentSize` fige le coin haut-gauche
-  (croissance vers le bas), donc `AppDelegate.windowDidResize` re-suspend la carte à son ancre —
-  elle grandit vers le haut et reste entièrement visible. L'ancre est réinitialisée en bas à
-  droite de l'écran à chaque lancement ; un déplacement à la souris la met à jour pour la session.
+Four technical points are worth knowing before changing it:
 
-## Lancement au démarrage
+- **The entry point is AppKit** (`main.swift`), not `@main struct ClaudyApp: App`. Under a SwiftUI
+  life cycle the residual scene required by the `App` protocol (`Settings`) fights the floating
+  panel and triggers an AppKit ↔ SwiftUI layout recursion: the app dies with `SIGSEGV` (stack
+  overflow) after about 3 s. Do not reintroduce a SwiftUI scene.
+- `FloatingPanel` **must** override `canBecomeKey`: without it a `.borderless` panel receives
+  neither keyboard input nor a reliable context menu.
+- The window size follows SwiftUI's intrinsic size
+  (`NSHostingController.sizingOptions = [.preferredContentSize]`). Do not hardcode a height.
+- The card is **anchored by its bottom-right corner**: `setContentSize` pins the top-left corner
+  (growth downward), so `AppDelegate.windowDidResize` re-hangs the card on its anchor — it grows
+  upward and stays fully visible. The anchor resets to the screen's bottom right on every launch;
+  a mouse drag updates it for the session.
 
-`SMAppService.mainApp.register()` exige une app signée avec une identité stable. Le projet est
-configuré en signature ad-hoc (`CODE_SIGN_IDENTITY = "-"`) pour compiler sans compte développeur :
-dans cet état, l'app détecte sa propre signature et le menu contextuel affiche l'option grisée
-« indisponible — app non signée » plutôt qu'une case qui se décocherait toute seule.
+## Launch at login
 
-**Alternative sans signature** : Réglages Système ▸ Général ▸ Ouverture et extensions ▸
-Ouvrir à l'ouverture de session ▸ « + » ▸ Claudy.
+`SMAppService.mainApp.register()` requires an app signed with a stable identity. The project is
+configured for ad-hoc signing (`CODE_SIGN_IDENTITY = "-"`) so it builds without a developer
+account: in that state the app detects its own signature and the context menu shows the option
+greyed out as "unavailable — app is unsigned", rather than a checkbox that would untick itself.
 
-Pour l'activer réellement dans l'app : sélectionner sa Team dans *Signing & Capabilities* et
-repasser `CODE_SIGN_STYLE` en `Automatic`.
+**Alternative without signing**: System Settings ▸ General ▸ Login Items & Extensions ▸ Open at
+Login ▸ "+" ▸ Claudy.
 
-## Vie privée
+To enable it properly in the app: select your Team in *Signing & Capabilities* and set
+`CODE_SIGN_STYLE` back to `Automatic`.
 
-Le réseau ne sert qu'à parler à Anthropic : la connexion OAuth initiale (dans ton navigateur,
-sur claude.ai), puis `usage` (quotas), `profile` (identité du compte) et le renouvellement
-standard du jeton. Rien d'autre n'est envoyé : pas de télémétrie, pas de contenu de
-conversation, pas de serveur tiers. Le jeton vit dans un item de trousseau **propre à Claudy**
-(« Claudy-credentials ») — les secrets de Claude Code ne sont jamais lus ni écrits, c'est
-pourquoi macOS n'affiche aucun avertissement. La déconnexion supprime l'item. Sans connexion
-ou hors-ligne, l'app fonctionne entièrement en local. Le sandbox est désactivé uniquement pour
-permettre la lecture de `~/.claude`.
+## Privacy
 
-## Contribuer
+The network is used only to talk to Anthropic: `usage` (quotas), `profile` (account identity), and
+— when you use Claudy's own sign-in — the OAuth flow in your browser plus the standard token
+renewal. Nothing else is sent: no telemetry, no conversation content, no third-party server.
 
-Un bug, une idée, un chiffre qui ne colle pas avec claude.ai ? Ouvre une
-[issue GitHub](https://github.com/Endikk/Claudy/issues) — capture d'écran et contenu de
-`~/Library/Application Support/Claudy/api.log` bienvenus. Les PR sont ouvertes ; le projet est
-sous licence MIT, maintenu par [@Endikk](https://github.com/Endikk).
+By default Claudy borrows Claude Code's token **read-only**, through `/usr/bin/security`, and
+never writes it back; its `refresh_token` is not even kept in memory. If you sign in through
+Claudy itself, that token lives in a keychain item **of its own** ("Claudy-credentials"), and
+signing out deletes it. Offline, the app keeps working locally and states that its quotas are
+unavailable. The sandbox is disabled solely to allow reading `~/.claude`.
+
+## Contributing
+
+A bug, an idea, a figure that does not match claude.ai? Open a
+[GitHub issue](https://github.com/Endikk/Claudy/issues) — a screenshot and the contents of
+`~/Library/Application Support/Claudy/api.log` are welcome. PRs are open; the project is MIT
+licensed, maintained by [@Endikk](https://github.com/Endikk).

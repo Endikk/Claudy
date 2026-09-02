@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Racine du widget : le fond glass, la bascule des deux modes, la fiche compte et le menu contextuel.
+/// The widget root: the glass background, the two-mode switch, the account card and the
+/// context menu.
 struct RootView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @Environment(\.colorScheme) private var scheme
 
-    /// Ce que la carte affiche. Aucune jauge sans session Claude : à la place,
-    /// l'onboarding — pas de chiffres estimés.
+    /// What the card shows. No gauges without a Claude session: onboarding takes their place,
+    /// never estimated figures.
     private enum Display {
         case loading, onboarding, minimal, full
     }
@@ -28,8 +29,6 @@ struct RootView: View {
 
     var body: some View {
         card
-            // Marge transparente : c'est l'espace où l'ombre portée peut s'étaler,
-            // la fenêtre étant elle-même sans ombre système.
             .padding(Theme.Metric.shadowInset)
             .contextMenu { menu }
     }
@@ -49,7 +48,6 @@ struct RootView: View {
             RoundedRectangle(cornerRadius: corner, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
-                        // En clair, un liseré blanc serait invisible : on passe en noir translucide.
                         colors: isDark
                             ? [.white.opacity(0.24), .white.opacity(0.05)]
                             : [.black.opacity(0.10), .black.opacity(0.04)],
@@ -74,7 +72,6 @@ struct RootView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-            // Halo corail discret : ancre la marque Claude dans le coin haut-gauche.
             RadialGradient(
                 colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
                 center: .topLeading,
@@ -108,10 +105,8 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Surcharge
-
-    /// Au-delà de 95 %, le liseré de la carte vire au rouge. C'est le seul signal de
-    /// surcharge : discret, il tient dans le bord et ne recouvre jamais le contenu.
+    /// Past 95 % the card's hairline turns red. It is the only overload signal: discreet, kept
+    /// to the edge, and never covering the content.
     @ViewBuilder
     private var strainBorder: some View {
         if isStrained {
@@ -123,24 +118,22 @@ struct RootView: View {
         }
     }
 
-    /// Surcharge visible : au-delà de 95 %, et seulement sur les modes qui portent des jauges.
+    /// Visible strain: past 95 %, and only in the modes that carry gauges.
     private var isStrained: Bool {
         viewModel.snapshot.strain > 0 && (display == .full || display == .minimal)
     }
-
-    // MARK: - Menu contextuel
 
     @ViewBuilder
     private var menu: some View {
         Button {
             Task { await viewModel.refresh() }
         } label: {
-            Label("Rafraîchir", systemImage: "arrow.clockwise")
+            Label("Refresh", systemImage: "arrow.clockwise")
         }
 
         Button(action: viewModel.toggleMode) {
             Label(
-                viewModel.isMinimal ? "Mode complet" : "Mode minimal",
+                viewModel.isMinimal ? "Full mode" : "Minimal mode",
                 systemImage: viewModel.isMinimal ? "rectangle.expand.vertical" : "rectangle.compress.vertical"
             )
         }
@@ -148,27 +141,25 @@ struct RootView: View {
         Divider()
 
         if viewModel.isSignedIn {
-            Button("Se déconnecter de Claude") { viewModel.signOut() }
+            Button("Sign out of Claude") { viewModel.signOut() }
         } else {
             Button {
                 viewModel.startSignIn()
             } label: {
-                Label("Se connecter à Claude…", systemImage: "person.crop.circle.badge.checkmark")
+                Label("Sign in to Claude…", systemImage: "person.crop.circle.badge.checkmark")
             }
         }
 
         Divider()
 
-        Toggle("Toujours au premier plan", isOn: $viewModel.isAlwaysOnTop)
+        Toggle("Always on top", isOn: $viewModel.isAlwaysOnTop)
 
         if LaunchAtLogin.isAdHocSigned {
-            // `SMAppService.register()` refuse les binaires ad hoc : annoncer l'option
-            // indisponible vaut mieux qu'une case qui se décoche toute seule.
-            Button("Lancer au démarrage (indisponible — app non signée)") {}
+            Button("Launch at login (unavailable — app is unsigned)") {}
                 .disabled(true)
         } else {
             Toggle(
-                "Lancer au démarrage",
+                "Launch at login",
                 isOn: Binding(
                     get: { viewModel.launchAtLogin },
                     set: { viewModel.setLaunchAtLogin($0) }
@@ -178,7 +169,7 @@ struct RootView: View {
 
         Divider()
 
-        Button("Quitter Claudy") {
+        Button("Quit Claudy") {
             NSApp.terminate(nil)
         }
     }

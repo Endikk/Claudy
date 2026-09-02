@@ -1,16 +1,19 @@
 import SwiftUI
 
-/// Barre de progression : rail creusé, remplissage dégradé, halo de la teinte,
-/// et repère de rythme optionnel.
+/// Progress bar: recessed rail, gradient fill, tinted halo, and an optional pace marker.
+///
+/// The fill has a visibility floor so a tiny value stays readable instead of disappearing, but
+/// the floor never applies at exactly zero — on an empty or unmeasured gauge a coloured dot would
+/// read as consumption that does not exist.
 struct UsageBar: View {
     let percent: Double
     let tint: Color
     let height: CGFloat
     var showsGlow: Bool = true
 
-    /// Position 0…1 du repère : la part de la fenêtre déjà écoulée. Le remplissage à gauche du
-    /// repère signifie « en avance sur l'horloge », à droite « sous le rythme ».
-    /// `nil` sur les barres qui expriment une part et non une durée (répartitions).
+    /// Marker position, 0…1: the share of the window already elapsed. Fill to the left of the
+    /// marker means ahead of the clock, to the right means behind it. `nil` on bars that express
+    /// a share rather than a duration.
     var pace: Double?
 
     private var clamped: Double { min(max(percent, 0), 1) }
@@ -29,8 +32,7 @@ struct UsageBar: View {
                             endPoint: .trailing
                         )
                     )
-                    // Plancher à `height` : une valeur infime reste lisible au lieu de disparaître.
-                    .frame(width: max(height, geometry.size.width * clamped))
+                    .frame(width: clamped <= 0 ? 0 : max(height, geometry.size.width * clamped))
                     .shadow(color: showsGlow ? tint.opacity(0.45) : .clear, radius: 5, y: 1)
 
                 if let pace {
@@ -42,10 +44,10 @@ struct UsageBar: View {
         .animation(Theme.Motion.gauge, value: clamped)
     }
 
+    /// The marker sits either on the fill or on the empty rail; without this switch it vanishes
+    /// against one of the two backgrounds, in light mode as in dark.
     private func marker(in size: CGSize, at pace: Double) -> some View {
         let width = max(1.5, height * 0.28)
-        // Le repère tombe soit sur le remplissage, soit sur le rail vide : sans ce basculement,
-        // il disparaît sur l'un des deux fonds — en clair comme en sombre.
         let onFill = pace <= clamped
 
         return RoundedRectangle(cornerRadius: width / 2, style: .continuous)

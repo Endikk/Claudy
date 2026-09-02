@@ -1,13 +1,12 @@
 import AppKit
 
-// Point d'entrée AppKit, volontairement : pas de `@main struct ClaudyApp: App`.
-//
-// Claudy n'a aucune fenêtre standard. Avec un cycle de vie SwiftUI, la scène résiduelle
-// (`Settings`) entre en conflit avec le panneau flottant piloté par l'AppDelegate et provoque
-// une récursion de layout AppKit ↔ SwiftUI qui finit en SIGSEGV (débordement de pile) après
-// quelques secondes. Ici, l'AppDelegate est seul maître de la fenêtre.
+/// Deliberately an AppKit entry point rather than `@main struct ClaudyApp: App`.
+///
+/// Claudy owns no standard window. Under a SwiftUI life cycle the residual `Settings` scene
+/// fights the AppDelegate-driven floating panel, producing an AppKit ↔ SwiftUI layout recursion
+/// that ends in SIGSEGV (stack overflow) within seconds. Here the AppDelegate owns the window alone.
 
-/// Global, et pas une variable locale : `NSApplication.delegate` est une référence faible.
+/// Global rather than a local: `NSApplication.delegate` is a weak reference.
 let claudyDelegate = MainActor.assumeIsolated { AppDelegate() }
 
 MainActor.assumeIsolated {

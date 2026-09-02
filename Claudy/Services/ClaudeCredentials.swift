@@ -1,30 +1,46 @@
 import Foundation
 import Security
 
-/// Jeton OAuth, avec son magasin d'origine — pour pouvoir le réécrire exactement au même endroit.
+/// An OAuth token together with the store it came from, so it can be written back to exactly
+/// the same place.
 struct OAuthCredentials {
     var accessToken: String
     var refreshToken: String?
     var expiresAt: Date?
-    /// Document complet du magasin : réécrit tel quel, seuls les champs du jeton
-    /// `claudeAiOauth` sont modifiés.
+    /// The store's full document, rewritten as is; only the `claudeAiOauth` token fields change.
     var root: [String: Any]
     var source: Source
 
     enum Source: Equatable {
-        /// Item trousseau créé par Claudy (« Claudy-credentials ») : possédé par l'app,
-        /// donc **aucun dialogue macOS**, ni à la lecture ni à l'écriture.
+        /// Keychain item created by Claudy ("Claudy-credentials"): owned by the app, so **no
+        /// macOS dialog**, on read or on write.
         case ownKeychain
         case file(URL)
+        /// Claude Code's token, read but never written back — Claude Code renews it. No
+        /// `refresh_token` is retained for this source.
+        case claudeCode
+    }
+
+    /// True when the token belongs to Claude Code: Claudy must neither refresh, persist, nor
+    /// delete it.
+    var isBorrowed: Bool { source == .claudeCode }
+
+    /// Scopes actually attached to the token. They must be sent back unchanged on refresh: a
+    /// renewed token without `user:profile` stops granting access to the quotas.
+    var scopes: [String]? {
+        let oauth = root["claudeAiOauth"] as? [String: Any]
+        guard let scopes = oauth?["scopes"] as? [String], !scopes.isEmpty else { return nil }
+        return scopes
     }
 }
 
-/// Magasin de jetons de Claudy.
+/// Claudy's own token store.
 ///
-/// Ordre de lecture : item trousseau **de Claudy** d'abord (créé par la connexion OAuth),
-/// puis `<config>/.credentials.json` (installs sans trousseau — lecture de fichier, sans
-/// dialogue). L'item trousseau de *Claude Code* n'est volontairement **jamais** lu : c'est
-/// lui qui déclenchait « Claudy veut utiliser vos informations confidentielles ».
+/// Read order: **Claudy's** keychain item first (created by its OAuth sign-in), then
+/// `<config>/.credentials.json` for installs without a keychain — a plain file read, no dialog.
+/// Claude Code's keychain item is never read through `SecItemCopyMatching`; that is what used to
+/// raise "Claudy wants to use your confidential information". Borrowing it is
+/// `ClaudeCodeCredentials`' job, through `/usr/bin/security`.
 enum ClaudeCredentialsStore {
 
     private static let ownService = "Claudy-credentials"
@@ -33,14 +49,12 @@ enum ClaudeCredentialsStore {
         ClaudeHome.configDirectory.appendingPathComponent(".credentials.json")
     }
 
-    // MARK: - Lecture
-
+    /// Claude Code may be writing the file at that very moment, so a few spaced attempts avoid
+    /// wrongly concluding "token missing or corrupt".
     static func load() async -> OAuthCredentials? {
         if let data = keychainData() {
             return parse(data, source: .ownKeychain)
         }
-        // Claude Code peut être en train d'écrire le fichier au même instant : quelques
-        // tentatives espacées évitent de conclure à tort « jeton absent ou corrompu ».
         let file = credentialsFile
         for attempt in 0..<5 {
             if attempt > 0 { try? await Task.sleep(nanoseconds: 40_000_000) }
@@ -69,12 +83,12 @@ enum ClaudeCredentialsStore {
         )
     }
 
-    // MARK: - Écriture
-
-    /// Vrai si `persist` a une chance d'aboutir. À vérifier **avant** de rafraîchir un jeton :
-    /// une rotation de refresh token qu'on ne peut pas réécrire invaliderait la session.
+    /// True when `persist` stands a chance. To be checked **before** refreshing a token: rotating
+    /// a refresh token we cannot write back would invalidate the session.
     static func canPersist(_ credentials: OAuthCredentials) -> Bool {
         switch credentials.source {
+        case .claudeCode:
+            return false
         case .ownKeychain:
             return true
         case .file(let url):
@@ -82,16 +96,19 @@ enum ClaudeCredentialsStore {
         }
     }
 
+    /// Writes the token back to its own store. Rewriting Claude Code's store would steal its
+    /// session, so it is refused outright; the file path writes atomically, through a temporary
+    /// file, so Claude Code never reads half-written JSON.
     @discardableResult
     static func persist(_ credentials: OAuthCredentials) -> Bool {
         guard let data = try? JSONSerialization.data(withJSONObject: credentials.root) else { return false }
 
         switch credentials.source {
+        case .claudeCode:
+            return false
         case .ownKeychain:
             return keychainWrite(data)
         case .file(let url):
-            // Écriture atomique : fichier temporaire puis remplacement, pour que Claude Code
-            // ne lise jamais un JSON à moitié écrit.
             let tmp = url.deletingLastPathComponent()
                 .appendingPathComponent(".credentials.json.tmp-\(ProcessInfo.processInfo.processIdentifier)")
             do {
@@ -105,7 +122,7 @@ enum ClaudeCredentialsStore {
         }
     }
 
-    /// Déconnexion : supprime l'item de Claudy. Ne touche jamais aux magasins de Claude Code.
+    /// Sign-out: removes Claudy's item. Claude Code's stores are never touched.
     static func erase() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -113,8 +130,6 @@ enum ClaudeCredentialsStore {
         ]
         SecItemDelete(query as CFDictionary)
     }
-
-    // MARK: - Trousseau (item de Claudy uniquement)
 
     private static func keychainData() -> Data? {
         let query: [String: Any] = [
@@ -139,7 +154,7 @@ enum ClaudeCredentialsStore {
         if status == errSecItemNotFound {
             var attributes = query
             attributes[kSecValueData as String] = data
-            attributes[kSecAttrLabel as String] = "Claudy — jeton Claude"
+            attributes[kSecAttrLabel as String] = "Claudy — Claude token"
             return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
         }
         return status == errSecSuccess
