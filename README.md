@@ -93,6 +93,15 @@ Refreshes every 3 minutes, and immediately when the machine wakes.
   </picture>
 </a>
 
+## Branches
+
+| Branch | Role |
+|---|---|
+| `main` | Stable. What is released and what Homebrew installs. |
+| `develop` | The moving one. Every feature lands here first and lives here until it has been used for real; `main` only ever receives what has held up. |
+
+Open pull requests against `develop`.
+
 ## Contributing
 
 A bug, an idea, a figure that does not match claude.ai? Open an

@@ -94,6 +94,15 @@ Rafraîchissement toutes les 3 minutes, et immédiat au réveil de la machine.
   </picture>
 </a>
 
+## Branches
+
+| Branche | Rôle |
+|---|---|
+| `main` | Stable. Ce qui est publié et ce que Homebrew installe. |
+| `develop` | La branche vivante. Toute nouveauté y arrive d'abord et y reste tant qu'elle n'a pas servi pour de vrai ; `main` ne reçoit que ce qui a tenu. |
+
+Les pull requests visent `develop`.
+
 ## Contribuer
 
 Un bug, une idée, un chiffre qui ne correspond pas à claude.ai ? Ouvre une
