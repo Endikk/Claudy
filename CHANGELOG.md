@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## Unreleased
+
+### Added
+
+- **Ports tab.** Lists the TCP ports Claude Code left listening, orphaned ones included, and
+  kills them one click at a time. A process is attributed to Claude only by the markers it
+  inherited in its environment (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_PROJECT_DIR`),
+  which survive the session that set them — so a server orphaned days ago is still recognised,
+  and a `npm run dev` you started yourself is never listed. Container runtimes are never
+  attributed: their listener is the runtime, not the container. Nothing is killed without a
+  click, and killing re-checks the process identity first, so a reused PID is refused.
+
 ## 1.3.0 — 2 September 2026
 
 The counter now shows the account's own figures, or nothing at all.

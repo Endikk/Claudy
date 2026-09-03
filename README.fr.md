@@ -23,6 +23,14 @@ détail en tokens vient des transcripts locaux de Claude Code.
 **Tes données restent chez toi.** Pas de télémétrie, pas de serveur tiers, aucune conversation lue
 ni envoyée. Les seules requêtes réseau vont à l'API d'Anthropic. Le code est court et auditable.
 
+## Ports
+
+Un second onglet liste les ports TCP laissés en écoute par Claude Code — y compris ceux
+dont la session est déjà terminée — et les ferme d'un clic. L'attribution lit les marqueurs
+Claude hérités dans l'environnement du process : rien d'autre sur la machine n'est listé, et
+rien n'est tué sans ton clic. L'environnement lui-même n'est jamais lu au-delà de ces
+marqueurs, jamais stocké, jamais journalisé.
+
 ## Installer
 
 **Homebrew :**

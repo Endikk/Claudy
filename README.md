@@ -21,6 +21,14 @@ transcripts.
 **Your data stays with you.** No telemetry, no third-party server, no conversation read or sent.
 The only network requests go to Anthropic's API. The code is short and auditable.
 
+## Ports
+
+A second tab lists the TCP ports Claude Code left listening — including the ones whose
+session has already exited — and closes them on a click. Attribution reads the Claude
+markers a process inherits in its environment, so nothing else on your machine is ever
+listed, and nothing is killed without your click. The environment itself is never read
+beyond those markers, never stored and never logged.
+
 ## Install
 
 **Homebrew:**
