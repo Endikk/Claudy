@@ -56,6 +56,9 @@ enum Theme {
         /// Gap between the visible card and the screen edge, in its anchor corner.
         static let screenMargin: CGFloat = 8
         static let padding: CGFloat = 16
+        /// Height of the usage/ports switch, and the corner of its selected segment.
+        static let tabHeight: CGFloat = 22
+        static let tabCorner: CGFloat = 7
     }
 
     enum Motion {

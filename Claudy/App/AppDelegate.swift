@@ -6,6 +6,7 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     let viewModel = UsageViewModel()
+    let portsViewModel = PortsViewModel()
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
@@ -22,7 +23,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
         installMainMenu()
 
-        let controller = NSHostingController(rootView: RootView().environmentObject(viewModel))
+        let controller = NSHostingController(rootView: RootView()
+            .environmentObject(viewModel)
+            .environmentObject(portsViewModel))
         controller.sizingOptions = [.preferredContentSize]
 
         let panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 220))
@@ -34,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         anchor = homeAnchor(on: NSScreen.main)
         applyAnchor()
         panel.orderFrontRegardless()
+        portsViewModel.start()
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
