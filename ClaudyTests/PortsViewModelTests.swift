@@ -17,14 +17,14 @@ final class PortsViewModelTests: XCTestCase {
     }
 
     func testPublishesScannedPorts() async {
-        let model = PortsViewModel(scanner: StubScanner(result: .ready([port(500, .orphan)])))
+        let model = PortsViewModel(scanner: StubScanner(result: .ready([port(500, .orphan)], isDegraded: false)))
         await model.refresh()
-        XCTAssertEqual(model.state, .ready([port(500, .orphan)]))
+        XCTAssertEqual(model.state, .ready([port(500, .orphan)], isDegraded: false))
     }
 
     func testCountsOnlyOrphans() async {
         let model = PortsViewModel(
-            scanner: StubScanner(result: .ready([port(500, .orphan), port(501, .live)]))
+            scanner: StubScanner(result: .ready([port(500, .orphan), port(501, .live)], isDegraded: false))
         )
         await model.refresh()
         XCTAssertEqual(model.orphanCount, 1)

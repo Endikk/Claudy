@@ -28,7 +28,9 @@ struct ListeningPort: Identifiable, Equatable {
 
 enum PortScanState: Equatable {
     case scanning
-    case ready([ListeningPort])
+    /// `isDegraded` marks a scan that could not read process environments and fell back to
+    /// the process tree: live sessions still show, orphans cannot.
+    case ready([ListeningPort], isDegraded: Bool)
     /// The scan could not run at all; the string is shown to the user as the reason.
     case unavailable(String)
 }

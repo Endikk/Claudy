@@ -27,7 +27,7 @@ final class PortsViewModel: ObservableObject {
     }
 
     var ports: [ListeningPort] {
-        if case .ready(let ports) = state { return ports }
+        if case .ready(let ports, _) = state { return ports }
         return []
     }
 

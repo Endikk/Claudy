@@ -31,12 +31,12 @@ struct PortScanner {
         guard let table = ProcessTable.load() else {
             return .unavailable("ps did not respond")
         }
-        let ports = Self.attribute(
+        let result = Self.attribute(
             listeners: Self.parseListeners(output),
             table: table,
             markers: { ProcessEnvironment.markers(pid: $0) }
         )
-        return .ready(ports.sorted { $0.port < $1.port })
+        return .ready(result.ports.sorted { $0.port < $1.port }, isDegraded: result.isDegraded)
     }
 
     /// lsof's field output: one field per line, prefixed by its letter. `p` opens a process
@@ -81,29 +81,47 @@ struct PortScanner {
     }
 
     /// `markers` is injected so attribution can be tested without any live process.
+    ///
+    /// When an environment cannot be read at all, the scan degrades to what the process tree
+    /// alone can prove — a live session — and says so, because that fallback is blind to the
+    /// orphans this tab exists for.
     static func attribute(
         listeners: [Listener],
         table: ProcessTable,
         markers: (pid_t) -> ProcessEnvironment.Markers?
-    ) -> [ListeningPort] {
-        listeners.compactMap { listener in
+    ) -> (ports: [ListeningPort], isDegraded: Bool) {
+        var isDegraded = false
+
+        let ports = listeners.compactMap { listener -> ListeningPort? in
             guard !isDenied(command: listener.command),
-                  let marker = markers(listener.pid), marker.isClaude,
                   let process = table.processes[listener.pid]
             else { return nil }
 
             let root = table.claudeSessionRoot(of: listener.pid)
+
+            guard let marker = markers(listener.pid) else {
+                isDegraded = true
+                guard let root else { return nil }
+                return ListeningPort(
+                    id: "\(listener.pid)-\(listener.port)",
+                    pid: listener.pid, port: listener.port, command: listener.command,
+                    projectName: nil, startedAt: process.startedAt,
+                    attribution: .live, sessionRootPID: root.pid
+                )
+            }
+            guard marker.isClaude else { return nil }
+
             return ListeningPort(
                 id: "\(listener.pid)-\(listener.port)",
-                pid: listener.pid,
-                port: listener.port,
-                command: listener.command,
+                pid: listener.pid, port: listener.port, command: listener.command,
                 projectName: marker.projectDirectory.map { ($0 as NSString).lastPathComponent },
                 startedAt: process.startedAt,
                 attribution: root == nil ? .orphan : .live,
                 sessionRootPID: root?.pid
             )
         }
+
+        return (ports, isDegraded)
     }
 }
 

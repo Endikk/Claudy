@@ -72,7 +72,7 @@ final class PortScannerTests: XCTestCase {
     private let epoch = Date(timeIntervalSince1970: 1_788_000_000)
 
     func testAttributesLivePortWhenClaudeAncestorIsAlive() {
-        let ports = PortScanner.attribute(
+        let result = PortScanner.attribute(
             listeners: [Listener(pid: 46694, command: "Python", port: 4000, address: "127.0.0.1")],
             table: table([
                 RunningProcess(pid: 46694, parent: 8859, startedAt: epoch, arguments: "python3 -m http.server"),
@@ -80,48 +80,76 @@ final class PortScannerTests: XCTestCase {
             ]),
             markers: { _ in ProcessEnvironment.Markers(isClaude: true, projectDirectory: "/Users/x/Dev/Surikat") }
         )
-        XCTAssertEqual(ports.count, 1)
-        XCTAssertEqual(ports[0].attribution, .live)
-        XCTAssertEqual(ports[0].sessionRootPID, 8859)
-        XCTAssertEqual(ports[0].projectName, "Surikat")
+        XCTAssertEqual(result.ports.count, 1)
+        XCTAssertEqual(result.ports[0].attribution, .live)
+        XCTAssertEqual(result.ports[0].sessionRootPID, 8859)
+        XCTAssertEqual(result.ports[0].projectName, "Surikat")
     }
 
     func testAttributesOrphanWhenClaudeAncestorIsGone() {
-        let ports = PortScanner.attribute(
+        let result = PortScanner.attribute(
             listeners: [Listener(pid: 95778, command: "bun", port: 37701, address: "127.0.0.1")],
             table: table([RunningProcess(pid: 95778, parent: 1, startedAt: epoch, arguments: "bun worker")]),
             markers: { _ in ProcessEnvironment.Markers(isClaude: true, projectDirectory: nil) }
         )
-        XCTAssertEqual(ports[0].attribution, .orphan)
-        XCTAssertNil(ports[0].sessionRootPID)
+        XCTAssertEqual(result.ports[0].attribution, .orphan)
+        XCTAssertNil(result.ports[0].sessionRootPID)
     }
 
     func testDropsPortsWithoutMarkers() {
-        let ports = PortScanner.attribute(
+        let result = PortScanner.attribute(
             listeners: [Listener(pid: 5771, command: "node", port: 3000, address: "*")],
             table: table([RunningProcess(pid: 5771, parent: 1, startedAt: epoch, arguments: "next-server")]),
             markers: { _ in ProcessEnvironment.Markers(isClaude: false, projectDirectory: nil) }
         )
-        XCTAssertTrue(ports.isEmpty)
+        XCTAssertTrue(result.ports.isEmpty)
     }
 
     /// A container runtime publishes ports on behalf of everything it hosts: killing it would
     /// take the whole runtime down, so it is never attributed whatever its environment says.
     func testDropsDeniedCommandsEvenWithMarkers() {
-        let ports = PortScanner.attribute(
+        let result = PortScanner.attribute(
             listeners: [Listener(pid: 40964, command: "OrbStack", port: 3001, address: "*")],
             table: table([RunningProcess(pid: 40964, parent: 1, startedAt: epoch, arguments: "OrbStack")]),
             markers: { _ in ProcessEnvironment.Markers(isClaude: true, projectDirectory: nil) }
         )
-        XCTAssertTrue(ports.isEmpty)
+        XCTAssertTrue(result.ports.isEmpty)
     }
 
     func testIdentityCombinesPidAndPort() {
-        let ports = PortScanner.attribute(
+        let result = PortScanner.attribute(
             listeners: [Listener(pid: 46694, command: "Python", port: 4000, address: "127.0.0.1")],
             table: table([RunningProcess(pid: 46694, parent: 1, startedAt: epoch, arguments: "python3")]),
             markers: { _ in ProcessEnvironment.Markers(isClaude: true, projectDirectory: nil) }
         )
-        XCTAssertEqual(ports[0].id, "46694-4000")
+        XCTAssertEqual(result.ports[0].id, "46694-4000")
+    }
+
+    /// When the kernel refuses to hand over an environment, attribution falls back to the
+    /// process tree: a live session is still recognisable, so the tab keeps working for the
+    /// common case instead of showing an empty list.
+    func testFallsBackToAncestryWhenEnvironmentIsUnreadable() {
+        let result = PortScanner.attribute(
+            listeners: [Listener(pid: 46694, command: "Python", port: 4000, address: "127.0.0.1")],
+            table: table([
+                RunningProcess(pid: 46694, parent: 8859, startedAt: epoch, arguments: "python3 -m http.server"),
+                RunningProcess(pid: 8859, parent: 1, startedAt: epoch, arguments: "/Users/x/.claude/local/claude"),
+            ]),
+            markers: { _ in nil }
+        )
+        XCTAssertEqual(result.ports.count, 1)
+        XCTAssertEqual(result.ports[0].attribution, .live)
+        XCTAssertTrue(result.isDegraded)
+    }
+
+    /// The fallback cannot see orphans — that is exactly what the degraded flag warns about.
+    func testFallbackDropsOrphans() {
+        let result = PortScanner.attribute(
+            listeners: [Listener(pid: 95778, command: "bun", port: 37701, address: "127.0.0.1")],
+            table: table([RunningProcess(pid: 95778, parent: 1, startedAt: epoch, arguments: "bun worker")]),
+            markers: { _ in nil }
+        )
+        XCTAssertTrue(result.ports.isEmpty)
+        XCTAssertTrue(result.isDegraded)
     }
 }
