@@ -21,6 +21,9 @@ final class UsageViewModel: ObservableObject {
 
     @Published var isProfileVisible = false
 
+    /// Which face of the card is showing. Usage is the product; ports is an annex.
+    @Published var tab: CardTab = .usage
+
     /// False until the first reading: while we work out whether a Claude session exists the card
     /// shows a loading state — no ghost onboarding, no placeholder gauges.
     @Published private(set) var hasLoaded = false

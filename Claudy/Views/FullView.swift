@@ -4,6 +4,7 @@ import SwiftUI
 /// sparkline, "Details" accordion, footer.
 struct FullView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    @EnvironmentObject private var portsViewModel: PortsViewModel
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
     private var session: UsageWindow { snapshot.session }
@@ -14,6 +15,26 @@ struct FullView: View {
             header
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.toggleMode() }
+
+            TabSwitcher(selection: $viewModel.tab, badge: portsViewModel.orphanCount)
+
+            switch viewModel.tab {
+            case .usage: usageTab
+            case .ports: PortsView()
+            }
+        }
+        .padding(.horizontal, Theme.Metric.padding)
+        .padding(.vertical, 14)
+        .frame(width: Theme.Metric.fullWidth)
+        .onChange(of: viewModel.tab) { tab in
+            portsViewModel.setVisible(tab == .ports)
+        }
+    }
+
+    /// The card's original content, unchanged: the tab switch only chooses between this and
+    /// the ports annex.
+    private var usageTab: some View {
+        VStack(alignment: .leading, spacing: 11) {
             sessionBlock
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.toggleMode() }
@@ -38,11 +59,7 @@ struct FullView: View {
                 onRefresh: { Task { await viewModel.refresh(userInitiated: true) } }
             )
         }
-        .padding(.horizontal, Theme.Metric.padding)
-        .padding(.vertical, 14)
-        .frame(width: Theme.Metric.fullWidth)
     }
-
 
     private var header: some View {
         HStack(spacing: 8) {
