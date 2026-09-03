@@ -6,7 +6,14 @@ import Foundation
 /// string built here can be reinterpreted as a command. The timeout matters as much as the
 /// result — a scan that hangs would freeze the widget's refresh.
 enum Subprocess {
-    static func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> String? {
+    /// `acceptedStatuses` exists for tools that report "nothing matched" as a non-zero exit —
+    /// lsof returns 1 on an empty result, which is an answer, not a failure.
+    static func run(
+        _ executable: String,
+        _ arguments: [String],
+        timeout: TimeInterval,
+        acceptedStatuses: Set<Int32> = [0]
+    ) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
@@ -35,7 +42,7 @@ enum Subprocess {
         }
         process.waitUntilExit()
 
-        guard process.terminationStatus == 0 else {
+        guard acceptedStatuses.contains(process.terminationStatus) else {
             DiagnosticLog.append("subprocess: \(executable) exited \(process.terminationStatus)")
             return nil
         }
