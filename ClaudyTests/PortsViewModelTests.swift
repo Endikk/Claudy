@@ -43,4 +43,24 @@ final class PortsViewModelTests: XCTestCase {
         XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-5 * 3600), now: now), "5 h")
         XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-2 * 86400), now: now), "2 d")
     }
+
+    /// The bulk action never touches a live session's ports — only what Claude left behind.
+    func testBulkTargetsOrphansOnly() async {
+        let model = PortsViewModel(
+            scanner: StubScanner(result: .ready([port(500, .orphan), port(501, .live), port(502, .orphan)],
+                                                isDegraded: false))
+        )
+        await model.refresh()
+        XCTAssertEqual(model.orphans.map(\.pid), [500, 502])
+    }
+
+    func testBulkConfirmationIsRequiredBeforeAnyKill() async {
+        let model = PortsViewModel(
+            scanner: StubScanner(result: .ready([port(500, .orphan)], isDegraded: false))
+        )
+        await model.refresh()
+        XCTAssertFalse(model.isConfirmingBulkKill)
+        model.requestBulkKill()
+        XCTAssertTrue(model.isConfirmingBulkKill)
+    }
 }

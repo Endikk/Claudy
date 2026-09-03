@@ -12,6 +12,9 @@ final class PortsViewModel: ObservableObject {
     @Published private(set) var state: PortScanState = .scanning
     /// Kill failures, keyed by port id, shown inline on the row that failed.
     @Published private(set) var failures: [String: String] = [:]
+    /// Raised while the confirmation is on screen. A bulk kill is the one action here that can
+    /// take several processes down at once, so it never fires straight off a click.
+    @Published var isConfirmingBulkKill = false
 
     private let scanner: PortScanning
     private let reaper: PortReaper
@@ -31,8 +34,22 @@ final class PortsViewModel: ObservableObject {
         return []
     }
 
-    var orphanCount: Int {
-        ports.filter { $0.attribution == .orphan }.count
+    var orphans: [ListeningPort] {
+        ports.filter { $0.attribution == .orphan }
+    }
+
+    var orphanCount: Int { orphans.count }
+
+    func requestBulkKill() {
+        guard !orphans.isEmpty else { return }
+        isConfirmingBulkKill = true
+    }
+
+    func killAllOrphans() async {
+        isConfirmingBulkKill = false
+        for port in orphans {
+            await kill(port)
+        }
     }
 
     func start() {

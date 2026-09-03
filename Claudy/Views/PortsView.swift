@@ -28,6 +28,16 @@ struct PortsView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(Theme.Motion.accordion, value: viewModel.ports.count)
+        .confirmationDialog(
+            "Kill \(viewModel.orphanCount) processes?",
+            isPresented: $viewModel.isConfirmingBulkKill,
+            titleVisibility: .visible
+        ) {
+            Button("Kill \(viewModel.orphans.map { String($0.port) }.joined(separator: ", "))", role: .destructive) {
+                Task { await viewModel.killAllOrphans() }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
     }
 
     private func list(_ ports: [ListeningPort]) -> some View {
@@ -45,6 +55,18 @@ struct PortsView: View {
                 PortRow(port: port, failure: viewModel.failures[port.id]) {
                     Task { await viewModel.kill(port) }
                 }
+            }
+
+            if viewModel.orphanCount > 1 {
+                Button {
+                    viewModel.requestBulkKill()
+                } label: {
+                    Text("Kill \(viewModel.orphanCount) orphans")
+                        .font(Theme.Font.label(9.5, .semibold))
+                        .foregroundStyle(Theme.danger.opacity(0.9))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
             }
         }
     }
