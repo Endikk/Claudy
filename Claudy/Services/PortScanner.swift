@@ -106,3 +106,10 @@ struct PortScanner {
         }
     }
 }
+
+/// Injected into the view model so its state machine can be tested without touching the machine.
+protocol PortScanning {
+    func scan() -> PortScanState
+}
+
+extension PortScanner: PortScanning {}
