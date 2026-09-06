@@ -2,7 +2,9 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
-## Unreleased
+## 1.4.0 — 6 September 2026
+
+Claude Code leaves servers running. This release lists them and closes them.
 
 ### Added
 
@@ -13,6 +15,15 @@ All notable changes to this project are documented here. Dates are release dates
   and a `npm run dev` you started yourself is never listed. Container runtimes are never
   attributed: their listener is the runtime, not the container. Nothing is killed without a
   click, and killing re-checks the process identity first, so a reused PID is refused.
+
+### Fixed
+
+- **A five-digit port number wrapped across three lines.** Its column was pinned at 44 points,
+  narrow enough that `37701` broke mid-number. The number no longer wraps and the column widens
+  to fit it.
+- **The header read "claudy" in lowercase.** It is the product's name and takes a capital.
+- **The session state read "idle".** It now reads "inactive", which says the same thing without
+  the jargon.
 
 ## 1.3.0 — 2 September 2026
 

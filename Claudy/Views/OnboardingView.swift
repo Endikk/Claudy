@@ -14,7 +14,7 @@ struct OnboardingView: View {
                 .padding(.top, 28)
                 .padding(.bottom, 14)
 
-            Text("claudy")
+            Text("Claudy")
                 .font(Theme.Font.label(20, .semibold))
                 .foregroundStyle(.primary.opacity(0.92))
 

@@ -39,7 +39,7 @@ struct MinimalView: View {
                     Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
                         .microLabel(0.35)
                     Text(session.isActive ? UsageViewModel.clock(session.resetDate)
-                                          : (session.isMeasured ? "idle" : "unavailable"))
+                                          : (session.isMeasured ? "inactive" : "unavailable"))
                         .font(Theme.Font.value(12, .medium))
                         .foregroundStyle(.primary.opacity(0.65))
                 }

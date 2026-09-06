@@ -15,7 +15,9 @@ struct PortRow: View {
             Text("\(port.port)")
                 .font(Theme.Font.value(13, .semibold))
                 .foregroundStyle(Theme.Accent.coral.color.opacity(0.95))
-                .frame(width: 44, alignment: .leading)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: 46, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(port.command)

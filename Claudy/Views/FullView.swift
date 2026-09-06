@@ -68,7 +68,7 @@ struct FullView: View {
                 .frame(width: 17, height: 17)
                 .shadow(color: Theme.Accent.coral.color.opacity(0.5), radius: 6)
 
-            Text("claudy")
+            Text("Claudy")
                 .font(Theme.Font.label(14, .semibold))
                 .foregroundStyle(.primary.opacity(0.9))
 
@@ -159,7 +159,7 @@ struct FullView: View {
                     Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
                         .microLabel(0.35)
                     Text(session.isActive ? UsageViewModel.clock(session.resetDate)
-                                          : (session.isMeasured ? "idle" : "unavailable"))
+                                          : (session.isMeasured ? "inactive" : "unavailable"))
                         .font(Theme.Font.value(14, .semibold))
                         .foregroundStyle(.primary.opacity(0.8))
                     if session.isActive {
