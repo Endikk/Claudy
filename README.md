@@ -12,6 +12,8 @@
 
 🇫🇷 [Lire ce README en français](README.fr.md)
 
+<img src="docs/claudy-typing.gif" width="132" alt="Claudy, the pixel mascot, typing at its laptop">
+
 <img src="docs/video-readme.gif" width="620" alt="The Claudy widget: 5h session, weekly quotas, daily totals, 7-day sparkline">
 
 </div>
