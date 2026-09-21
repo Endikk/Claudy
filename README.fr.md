@@ -12,9 +12,9 @@
 
 🇬🇧 [Read this README in English](README.md)
 
-<img src="docs/claudy-typing.gif" width="132" alt="Claudy, la mascotte en pixel art, qui tape sur son ordinateur">
+<p align="center"><img src="docs/claudy-typing.gif" width="132" alt="Claudy, la mascotte en pixel art, qui tape sur son ordinateur"></p>
 
-<img src="docs/video-readme.gif" width="620" alt="Le widget Claudy : session 5 h, quotas hebdomadaires, totaux du jour, sparkline 7 jours">
+<p align="center"><img src="docs/video-readme.gif" width="620" alt="Le widget Claudy : session 5 h, quotas hebdomadaires, totaux du jour, sparkline 7 jours"></p>
 
 </div>
 
