@@ -124,6 +124,10 @@ struct SparklineChart: View {
     /// The day closest to the pointer, so the whole width is live and not only the points.
     private func nearestSample(atX x: CGFloat, proxy: ChartProxy) -> TokenSample? {
         guard let date: Date = proxy.value(atX: x) else { return nil }
+        // Marks with `unit: .day` span the whole day, so match the day, not the nearest midnight.
+        if let sameDay = samples.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            return sameDay
+        }
         return samples.min {
             abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
         }

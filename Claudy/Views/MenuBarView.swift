@@ -1,10 +1,13 @@
 import SwiftUI
+import Charts
 
-/// The popover under the menu bar item: a shorter card than full mode. The 5h session, the
-/// two weekly columns, and a footer to refresh or bring the floating widget back. Totals,
-/// sparkline, details and ports stay in the widget.
+/// The popover under the menu bar item, built around charts rather than the widget's gauges:
+/// the three quotas as rings with their pace, seven days as bars, and the weekly split by
+/// model. Details and ports stay in the widget.
 struct MenuBarView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    /// Model under the pointer, in the split bar or its legend.
+    @State private var hoveredModel: String?
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
     private var session: UsageWindow { snapshot.session }
@@ -14,10 +17,16 @@ struct MenuBarView: View {
         VStack(alignment: .leading, spacing: 12) {
             header
             if viewModel.isSignedIn || snapshot.isDemo {
-                sessionBlock
-                HStack(spacing: 9) {
-                    StatColumn(window: snapshot.weekly)
-                    StatColumn(window: snapshot.sonnet)
+                HStack(alignment: .top, spacing: 4) {
+                    QuotaRing(window: session)
+                    QuotaRing(window: snapshot.weekly, delay: 0.08)
+                    QuotaRing(window: snapshot.sonnet, delay: 0.16)
+                }
+                hairline
+                WeekBarsChart(samples: snapshot.history, tint: Theme.Accent.coral.color)
+                if !snapshot.models.isEmpty {
+                    hairline
+                    modelSplit
                 }
             } else {
                 signedOut
@@ -57,44 +66,93 @@ struct MenuBarView: View {
         }
     }
 
-    private var sessionBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .lastTextBaseline) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("\(session.title) · \(session.window)")
-                        .microLabel(0.55)
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")
-                            .font(Theme.Font.hero(32))
-                            .foregroundStyle(.primary.opacity(session.isMeasured ? 0.95 : 0.4))
-                        if session.isMeasured {
-                            Text("%")
-                                .font(Theme.Font.label(14, .medium))
-                                .foregroundStyle(.primary.opacity(0.38))
+    /// The week's tokens split by model: one stacked bar, then one legend row per model, so
+    /// names stay whole however many models the week used.
+    private var modelSplit: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("By model · 7d")
+                .microLabel(0.55)
+
+            Chart(snapshot.models) { model in
+                BarMark(x: .value("Share", model.share), y: .value("Week", "week"))
+                    .foregroundStyle(model.accent.color.opacity(modelOpacity(model.id)))
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartXScale(domain: 0...totalShare)
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    Rectangle()
+                        .fill(.clear)
+                        .contentShape(Rectangle())
+                        .onContinuousHover { phase in
+                            switch phase {
+                            case .active(let location):
+                                let plot = geometry[proxy.plotAreaFrame]
+                                let share: Double? = proxy.value(atX: location.x - plot.origin.x)
+                                hoveredModel = share.flatMap(model(atShare:))?.id
+                            case .ended:
+                                hoveredModel = nil
+                            }
                         }
-                    }
                 }
+            }
+            .frame(height: 8)
+            .clipShape(Capsule())
 
-                Spacer(minLength: 0)
-
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
-                        .microLabel(0.35)
-                    Text(session.isActive ? UsageViewModel.clock(session.resetDate)
-                                          : (session.isMeasured ? "inactive" : "unavailable"))
-                        .font(Theme.Font.value(13, .semibold))
-                        .foregroundStyle(.primary.opacity(0.8))
-                    if session.isActive {
-                        Text("in \(UsageViewModel.countdown(to: session.resetDate))")
-                            .font(Theme.Font.label(9.5, .medium))
-                            .foregroundStyle(.primary.opacity(0.35))
+            VStack(spacing: 4) {
+                ForEach(snapshot.models) { model in
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(model.accent.color)
+                            .frame(width: 6, height: 6)
+                        Text(model.name)
+                            .font(Theme.Font.label(10.5, .medium))
+                            .foregroundStyle(.primary.opacity(0.7))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 8)
+                        Text(UsageViewModel.tokens(model.tokens))
+                            .font(Theme.Font.value(10, .medium))
+                            .foregroundStyle(.primary.opacity(0.4))
+                        Text("\(Int((model.share * 100).rounded())) %")
+                            .font(Theme.Font.value(10.5, .semibold))
+                            .foregroundStyle(.primary.opacity(0.75))
+                            .frame(width: 34, alignment: .trailing)
+                    }
+                    .opacity(modelOpacity(model.id))
+                    .contentShape(Rectangle())
+                    .onHover { inside in
+                        if inside { hoveredModel = model.id } else if hoveredModel == model.id { hoveredModel = nil }
                     }
                 }
             }
-
-            UsageBar(percent: session.percent, tint: sessionTint, height: 6,
-                     pace: session.isActive ? session.elapsed : nil)
         }
+        .animation(.easeOut(duration: 0.15), value: hoveredModel)
+    }
+
+    private var totalShare: Double { max(snapshot.models.map(\.share).reduce(0, +), 0.0001) }
+
+    /// Everything stays lit until something is hovered; then only that model does.
+    private func modelOpacity(_ id: String) -> Double {
+        guard let hoveredModel else { return 1 }
+        return id == hoveredModel ? 1 : 0.3
+    }
+
+    /// The segment under a position along the stacked bar, in the bar's own share units.
+    private func model(atShare share: Double) -> ModelUsage? {
+        var start = 0.0
+        for model in snapshot.models {
+            if share < start + model.share { return model }
+            start += model.share
+        }
+        return snapshot.models.last
+    }
+
+    private var hairline: some View {
+        Rectangle()
+            .fill(.primary.opacity(0.07))
+            .frame(height: 1)
     }
 
     /// No gauges without a session, same rule as the widget: say so and offer the way in.
