@@ -5,7 +5,15 @@ struct TranscriptEntry {
     let date: Date
     let model: String
     let tokens: Int
-    let project: String
+    /// What the tokens weigh against the quota, in dollars at list price. Cache reads are
+    /// most of the volume but cost a tenth of an input token, and an Opus token five Haiku
+    /// ones: ranking by raw tokens put a background Haiku job above real work.
+    let weight: Double
+    /// Directory the model was working in.
+    let cwd: String
+    /// Project the response belongs to: a repository root path, or the directory itself when
+    /// no repository holds it. Resolved by `scan()` once the whole session is known.
+    var project: String
     let sessionID: String
     /// A subagent response. Its tokens count, but it is not a user session.
     let isSidechain: Bool
@@ -15,14 +23,16 @@ struct TranscriptEntry {
     let dedupKey: String?
 }
 
-/// Reads the `<config>/projects/**/*.jsonl` transcripts.
+/// Reads the `<config>/projects/**/*.jsonl` transcripts: the main sessions, and below them the
+/// subagent and workflow transcripts (`<session>/subagents/**/agent-*.jsonl`), which hold more
+/// than half of the tokens on an agent-heavy week.
 ///
 /// Transcripts only ever grow, so the scanner keeps a cursor per file and re-reads only the tail
 /// appended since the previous pass. Without that, refreshing every few minutes would re-read
 /// hundreds of megabytes each time.
 ///
-/// Reads are synchronous and block a cooperative-pool thread: roughly two seconds on the first
-/// pass over a large history, a few milliseconds afterwards. A deliberate trade-off.
+/// Reads are synchronous and block a cooperative-pool thread: a few seconds on the first pass
+/// over a large history, a few milliseconds afterwards. A deliberate trade-off.
 actor TranscriptScanner {
 
     /// Window kept in memory. The widest view is seven days; the margin absorbs time-zone
@@ -44,6 +54,13 @@ actor TranscriptScanner {
     /// Keys already counted, global across files: a resumed session (`--resume`) rewrites the
     /// same responses into a different transcript.
     private var seenKeys: [String: (url: URL, date: Date)] = [:]
+
+    private var resolver = ProjectResolver()
+    private let projectsDirectory: () -> URL
+
+    init(projectsDirectory: @escaping () -> URL = { ClaudeHome.projectsDirectory }) {
+        self.projectsDirectory = projectsDirectory
+    }
 
     private var skippedLines = 0
     private var warnedUsageKeys: Set<String> = []
@@ -80,7 +97,7 @@ actor TranscriptScanner {
             files[url]?.entries.removeAll { $0.date < cutoff }
         }
 
-        var all = files.values.flatMap(\.entries)
+        var all = assignProjects(files.values.flatMap(\.entries))
         all.sort { $0.date < $1.date }
 
         if skippedLines > 0 {
@@ -91,35 +108,44 @@ actor TranscriptScanner {
 
     private func transcriptURLs(modifiedSince cutoff: Date) throws -> [URL] {
         let manager = FileManager.default
-        let root = ClaudeHome.projectsDirectory
-        let projects: [URL]
-        do {
-            projects = try manager.contentsOfDirectory(
-                at: root,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-        } catch {
-            if manager.fileExists(atPath: root.path) { throw UsageDataError.projectsUnreadable }
-            return []
-        }
+        let root = projectsDirectory()
+        guard manager.fileExists(atPath: root.path) else { return [] }
+        guard manager.isReadableFile(atPath: root.path) else { throw UsageDataError.projectsUnreadable }
+
+        let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
+        guard let walker = manager.enumerator(at: root, includingPropertiesForKeys: keys,
+                                              options: [.skipsHiddenFiles, .skipsPackageDescendants])
+        else { throw UsageDataError.projectsUnreadable }
 
         var found: [URL] = []
-        for project in projects {
-            guard let files = try? manager.contentsOfDirectory(
-                at: project,
-                includingPropertiesForKeys: [.contentModificationDateKey],
-                options: [.skipsHiddenFiles]
-            ) else { continue }
-
-            for file in files where file.pathExtension == "jsonl" {
-                let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?
-                    .contentModificationDate
-                if let modified, modified < cutoff { continue }
-                found.append(file)
-            }
+        for case let file as URL in walker where file.pathExtension == "jsonl" {
+            let values = try? file.resourceValues(forKeys: Set(keys))
+            guard values?.isRegularFile == true else { continue }
+            if let modified = values?.contentModificationDate, modified < cutoff { continue }
+            found.append(file)
         }
         return found
+    }
+
+    /// Attributes each response to a repository. A directory outside any repository (the
+    /// scratchpad a session `cd`s into, a deleted temporary folder) takes the repository the
+    /// rest of its session worked in, and only failing that stands as a project of its own.
+    private func assignProjects(_ entries: [TranscriptEntry]) -> [TranscriptEntry] {
+        var roots: [String: String?] = [:]
+        for cwd in Set(entries.map(\.cwd)) { roots[cwd] = resolver.repositoryRoot(of: cwd) }
+
+        var sessionWeights: [String: [String: Double]] = [:]
+        for entry in entries {
+            guard let root = roots[entry.cwd] ?? nil else { continue }
+            sessionWeights[entry.sessionID, default: [:]][root, default: 0] += entry.weight
+        }
+        let sessionRoot = sessionWeights.compactMapValues { $0.max { $0.value < $1.value }?.key }
+
+        return entries.map { entry in
+            var resolved = entry
+            resolved.project = (roots[entry.cwd] ?? nil) ?? sessionRoot[entry.sessionID] ?? entry.cwd
+            return resolved
+        }
     }
 
     private func ingest(_ url: URL, cutoff: Date, now: Date) {
@@ -209,14 +235,27 @@ actor TranscriptScanner {
 
         warnAboutUnknownCounters(in: usage)
 
-        func count(_ key: String) -> Int { (usage[key] as? NSNumber)?.intValue ?? 0 }
-        let tokens = count("input_tokens")
-            + count("output_tokens")
-            + count("cache_creation_input_tokens")
-            + count("cache_read_input_tokens")
+        func count(_ key: String, in object: [String: Any] = usage) -> Int {
+            (object[key] as? NSNumber)?.intValue ?? 0
+        }
+        let input = count("input_tokens")
+        let output = count("output_tokens")
+        let cacheWrite = count("cache_creation_input_tokens")
+        let cacheRead = count("cache_read_input_tokens")
+        let tokens = input + output + cacheWrite + cacheRead
         guard tokens > 0 else { return .irrelevant }
 
-        let project = (root["cwd"] as? String).map { URL(fileURLWithPath: $0).lastPathComponent } ?? "—"
+        // A one-hour cache write costs twice the input price, a five-minute one 1.25 times. The
+        // split is absent from older lines, which are priced as five-minute writes.
+        let longWrites = (usage["cache_creation"] as? [String: Any])
+            .map { count("ephemeral_1h_input_tokens", in: $0) } ?? 0
+        let inputUnits = Double(input)
+            + 5 * Double(output)
+            + 1.25 * Double(max(cacheWrite - longWrites, 0)) + 2 * Double(longWrites)
+            + 0.1 * Double(cacheRead)
+        let weight = inputUnits * ModelName.inputPrice(model) / 1_000_000
+
+        let cwd = (root["cwd"] as? String) ?? ""
 
         let messageID = message["id"] as? String
         let requestID = root["requestId"] as? String
@@ -230,7 +269,9 @@ actor TranscriptScanner {
             date: date,
             model: model,
             tokens: tokens,
-            project: project.isEmpty ? "—" : project,
+            weight: weight,
+            cwd: cwd,
+            project: cwd,
             sessionID: (root["sessionId"] as? String) ?? "",
             isSidechain: (root["isSidechain"] as? Bool) ?? false,
             dedupKey: dedupKey

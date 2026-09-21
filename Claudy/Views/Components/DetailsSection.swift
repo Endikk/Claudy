@@ -30,6 +30,12 @@ struct DetailsSection: View {
                             .foregroundStyle(.primary.opacity(0.4))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
+                        // Shares follow what each token costs, not the raw count: cache reads
+                        // are most of the volume but weigh a tenth, and Opus weighs five Haiku.
+                        Text("Last 7 days · share weighted by model price")
+                            .font(Theme.Font.label(9, .regular))
+                            .foregroundStyle(.primary.opacity(0.35))
+
                         group("By model") {
                             ForEach(snapshot.models) { model in
                                 MiniBarRow(

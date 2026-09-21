@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.0 — 21 September 2026
+
+Claudy can now live in the menu bar, and the numbers it shows count every agent.
+
+### Added
+
+- **Menu bar mode.** Right click the widget, then "Show in menu bar": the card leaves the
+  desktop and Claudy sits next to the clock, with its mascot and the 5-hour percentage. Left
+  click opens a popover built on charts: the three quotas as rings with their pace, seven days
+  as bars, and the week split by model. Hovering a bar or a legend row highlights that model.
+  Details and ports stay in the widget.
+- **A mascot.** The Claude mark gives way to Claudy in pixel art, typing at a laptop while a
+  session is active and resting otherwise. It follows the session tint and stops moving when
+  "Reduce motion" is on.
+- **Hover on the 7-day chart.** Pointing at a day shows its name, its tokens and its share of
+  the week.
+
+### Fixed
+
+- **Subagent and workflow usage was never counted.** Only the top-level transcript of each
+  session was read, while Claude Code writes subagents to `<session>/subagents/**/agent-*.jsonl`.
+  On an agent-heavy week that was more than half of the tokens, missing from the history, the
+  splits and the gauges' local counts. Every transcript below `projects/` is now read.
+- **One project showed up as several.** A project was the last folder of the directory the
+  model was in, so a `cd` into `App` or `src` opened a new row and two unrelated `api` folders
+  merged. It is now the Git repository holding that directory, worktrees included; a folder
+  outside any repository (a scratchpad) goes to the repository its session worked in.
+- **Shares ranked raw tokens.** Cache reads are nine tokens in ten and cost a tenth of an input
+  token, and an Opus token costs five Haiku ones, so a background Haiku job outranked real work.
+  Model and project shares, and the active model, are now weighted by each model's list price.
+  Dated snapshots of one version (`claude-haiku-4-5-20251001`) merge into one row.
+
 ## 1.4.0 — 6 September 2026
 
 Claude Code leaves servers running. This release lists them and closes them.

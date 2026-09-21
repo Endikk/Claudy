@@ -44,9 +44,26 @@ enum Theme {
         }
     }
 
+    /// Fixed inks of the pixel mascot (ClaudyTyping). The body itself takes the caller's tint;
+    /// its light and dark faces lean warm and cool, as pixel artists shift hue with the light.
+    enum Pixel {
+        static let highlight = Color(hex: 0xFFE3B0).opacity(0.35)
+        static let shade = Color(hex: 0x3A1030).opacity(0.38)
+        static let outline = Color(hex: 0x1E0A12).opacity(0.78)
+        static let eye = Color(hex: 0x2A1418)
+        static let keys = Color(hex: 0x9A9CA6)
+        static let laptop = Color(hex: 0x464652)
+        static let lid = Color(hex: 0x70727E)
+        static let screenGlow = Color(hex: 0xC8E4FF)
+        static let deskTop = Color(hex: 0xB08462)
+        static let deskFront = Color(hex: 0x8C6248)
+        static let deskSide = Color(hex: 0x68463C)
+    }
+
     enum Metric {
         static let fullWidth: CGFloat = 340
         static let minimalWidth: CGFloat = 252
+        static let menuBarWidth: CGFloat = 290
         static let cardCorner: CGFloat = 20
         static let minimalCorner: CGFloat = 15
         /// Transparent margin around the card, where the drop shadow lives. The window is

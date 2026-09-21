@@ -63,10 +63,8 @@ struct FullView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            ClaudeMark()
-                .fill(Theme.Accent.coral.color)
-                .frame(width: 17, height: 17)
-                .shadow(color: Theme.Accent.coral.color.opacity(0.5), radius: 6)
+            ClaudyTyping(isTyping: snapshot.session.isActive)
+                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
             Text("Claudy")
                 .font(Theme.Font.label(14, .semibold))
@@ -219,11 +217,8 @@ struct FullView: View {
 
 
     private var chart: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Usage · 7 days")
-                .microLabel(0.55)
-            SparklineChart(samples: snapshot.history, tint: Theme.Accent.coral.color)
-        }
+        SparklineChart(title: "Usage · 7 days", samples: snapshot.history,
+                       tint: Theme.Accent.coral.color)
     }
 
     private var hairline: some View {

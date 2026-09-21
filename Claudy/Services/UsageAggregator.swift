@@ -39,8 +39,8 @@ enum UsageAggregator {
             weekly: weekly,
             sonnet: third,
             history: history(rolling, today: today, calendar: calendar),
-            models: models(rolling, total: rollingTokens),
-            projects: projects(rolling, total: rollingTokens),
+            models: models(rolling),
+            projects: projects(rolling),
             account: account,
             activeModel: dominantModel(entries, since: session.windowStart),
             todayTokens: entries.filter { $0.date >= today }.reduce(0) { $0 + $1.tokens },
@@ -139,13 +139,14 @@ enum UsageAggregator {
         return calendar.date(from: calendar.dateComponents([.year, .month, .day, .hour], from: date)) ?? date
     }
 
-    /// Model that consumed the most tokens since a given date. The *last* line's model is often a
-    /// hook or a subagent; the window's dominant model is what describes the real work.
+    /// Model that weighed the most since a given date. The *last* line's model is often a hook
+    /// or a subagent; the window's dominant model is what describes the real work.
     private static func dominantModel(_ entries: [TranscriptEntry], since: Date) -> String {
-        var totals: [String: Int] = [:]
-        for entry in entries where entry.date >= since { totals[entry.model, default: 0] += entry.tokens }
-        guard let top = totals.max(by: { $0.value < $1.value })?.key else { return "" }
-        return ModelName.display(top)
+        var totals: [String: Double] = [:]
+        for entry in entries where entry.date >= since {
+            totals[ModelName.display(entry.model), default: 0] += entry.weight
+        }
+        return totals.max { $0.value < $1.value }?.key ?? ""
     }
 
     /// Seven rolling days. Idle days must exist as points, or the curve skips its own troughs.
@@ -161,35 +162,76 @@ enum UsageAggregator {
         }
     }
 
-    /// Split by model. Below 1 % a row adds nothing but a "0 %" and an invisible bar.
-    private static func models(_ entries: [TranscriptEntry], total: Int) -> [ModelUsage] {
-        var totals: [String: Int] = [:]
-        for entry in entries { totals[entry.model, default: 0] += entry.tokens }
+    /// Rows shown per split.
+    private static let rowLimit = 4
 
-        let significant = totals.filter { total == 0 || Double($0.value) / Double(total) >= 0.01 }
-        return significant.sorted { $0.value > $1.value }.prefix(4).map { model, tokens in
+    /// Tokens and weight summed under one key.
+    private struct Tally {
+        var tokens = 0
+        var weight = 0.0
+    }
+
+    private static func tally(_ entries: [TranscriptEntry],
+                              by key: (TranscriptEntry) -> String) -> [(key: String, value: Tally)] {
+        var totals: [String: Tally] = [:]
+        for entry in entries {
+            totals[key(entry), default: Tally()].tokens += entry.tokens
+            totals[key(entry), default: Tally()].weight += entry.weight
+        }
+        return totals.sorted { $0.value.weight > $1.value.weight }
+    }
+
+    /// Split by model, ranked and shared by weight: raw tokens are mostly cache reads and would
+    /// crown whichever model re-reads the longest context, not the one using the quota. Dated
+    /// snapshots of one version (`claude-haiku-4-5` and `claude-haiku-4-5-20251001`) are one row.
+    /// Below 1 % a row adds nothing but a "0 %" and an invisible bar.
+    private static func models(_ entries: [TranscriptEntry]) -> [ModelUsage] {
+        let rows = tally(entries) { ModelName.display($0.model) }
+        let total = rows.reduce(0) { $0 + $1.value.weight }
+        guard total > 0 else { return [] }
+
+        return rows.filter { $0.value.weight / total >= 0.01 }.prefix(rowLimit).map { name, tally in
             ModelUsage(
-                id: model,
-                name: ModelName.display(model),
-                tokens: tokens,
-                share: total > 0 ? Double(tokens) / Double(total) : 0,
-                accent: ModelName.accent(model)
+                id: name,
+                name: name,
+                tokens: tally.tokens,
+                share: tally.weight / total,
+                accent: ModelName.accent(name)
             )
         }
     }
 
-    /// Split by project, top four.
-    private static func projects(_ entries: [TranscriptEntry], total: Int) -> [ProjectUsage] {
-        var totals: [String: Int] = [:]
-        for entry in entries { totals[entry.project, default: 0] += entry.tokens }
+    /// Split by project, ranked and shared by weight like the models.
+    private static func projects(_ entries: [TranscriptEntry]) -> [ProjectUsage] {
+        let rows = tally(entries, by: \.project)
+        let total = rows.reduce(0) { $0 + $1.value.weight }
+        guard total > 0 else { return [] }
 
-        return totals.sorted { $0.value > $1.value }.prefix(4).map { project, tokens in
+        let top = Array(rows.prefix(rowLimit))
+        let names = displayNames(for: top.map(\.key))
+        return top.map { path, tally in
             ProjectUsage(
-                id: project,
-                name: project,
-                tokens: tokens,
-                share: total > 0 ? Double(tokens) / Double(total) : 0
+                id: path,
+                name: names[path] ?? path,
+                tokens: tally.tokens,
+                share: tally.weight / total
             )
         }
+    }
+
+    /// Folder name, prefixed by its parent when two shown projects share one, so `work/api` and
+    /// `perso/api` stay distinguishable.
+    static func displayNames(for paths: [String]) -> [String: String] {
+        func name(_ path: String) -> String {
+            let last = (path as NSString).lastPathComponent
+            return last.isEmpty || last == "/" ? "—" : last
+        }
+        let counts = Dictionary(grouping: paths, by: name).mapValues(\.count)
+        return Dictionary(uniqueKeysWithValues: paths.map { path in
+            let short = name(path)
+            guard counts[short, default: 0] > 1 else { return (path, short) }
+            let parent = ((path as NSString).deletingLastPathComponent as NSString).lastPathComponent
+            return (path, parent.isEmpty || parent == "/" ? short : "\(parent)/\(short)")
+        })
     }
 }

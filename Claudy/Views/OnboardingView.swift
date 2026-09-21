@@ -56,10 +56,8 @@ struct OnboardingView: View {
                 )
                 .frame(width: 74, height: 74)
 
-            ClaudeMark()
-                .fill(Theme.Accent.coral.color)
-                .frame(width: 36, height: 36)
-                .shadow(color: Theme.Accent.coral.color.opacity(0.55), radius: 11)
+            ClaudyTyping()
+                .frame(width: 54 * ClaudyTyping.aspectRatio, height: 54)
         }
     }
 
@@ -168,10 +166,8 @@ struct OnboardingView: View {
 struct LoadingCard: View {
     var body: some View {
         HStack(spacing: 10) {
-            ClaudeMark()
-                .fill(Theme.Accent.coral.color)
-                .frame(width: 16, height: 16)
-                .shadow(color: Theme.Accent.coral.color.opacity(0.45), radius: 5)
+            ClaudyTyping()
+                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
             ProgressView()
                 .controlSize(.small)
         }

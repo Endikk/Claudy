@@ -15,6 +15,8 @@ final class UsageViewModel: ObservableObject {
     @Published var isMinimal: Bool { didSet { Defaults.isMinimal = isMinimal } }
     @Published var isAlwaysOnTop: Bool { didSet { Defaults.isAlwaysOnTop = isAlwaysOnTop } }
     @Published var isDetailsExpanded: Bool { didSet { Defaults.isDetailsExpanded = isDetailsExpanded } }
+    /// The widget lives in the menu bar instead of floating over the desktop.
+    @Published var isInMenuBar: Bool { didSet { Defaults.isInMenuBar = isInMenuBar } }
 
     /// Deliberately not persisted: the real state belongs to `SMAppService`, not to our prefs.
     @Published var launchAtLogin: Bool
@@ -43,6 +45,7 @@ final class UsageViewModel: ObservableObject {
         self.isMinimal = Defaults.isMinimal
         self.isAlwaysOnTop = Defaults.isAlwaysOnTop
         self.isDetailsExpanded = Defaults.isDetailsExpanded
+        self.isInMenuBar = Defaults.isInMenuBar
         self.launchAtLogin = LaunchAtLogin.isEnabled
         startAutoRefresh()
 
@@ -92,6 +95,11 @@ final class UsageViewModel: ObservableObject {
             isMinimal.toggle()
             if isMinimal { isProfileVisible = false }
         }
+    }
+
+    func toggleMenuBar() {
+        isProfileVisible = false
+        isInMenuBar.toggle()
     }
 
     func toggleDetails() {
@@ -247,6 +255,17 @@ final class UsageViewModel: ObservableObject {
         return initials[weekday - 1]
     }
 
+    /// "Tue 16": the hovered day in the sparkline header. Same explicit table as `dayInitial`,
+    /// for the same reason.
+    static func dayName(_ date: Date) -> String {
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: date)
+        let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        guard names.indices.contains(weekday - 1) else { return "" }
+        if calendar.isDateInToday(date) { return "Today" }
+        return "\(names[weekday - 1]) \(calendar.component(.day, from: date))"
+    }
+
     /// A reading's age in one short phrase: "4 min", "2 h", "3 d". On stale data the age is what
     /// lets the reader judge — a clock time alone never says it.
     static func age(since date: Date, now: Date = Date()) -> String {
@@ -299,6 +318,11 @@ private enum Defaults {
     static var isDetailsExpanded: Bool {
         get { store.bool(forKey: "claudy.detailsExpanded") }
         set { store.set(newValue, forKey: "claudy.detailsExpanded") }
+    }
+
+    static var isInMenuBar: Bool {
+        get { store.bool(forKey: "claudy.inMenuBar") }
+        set { store.set(newValue, forKey: "claudy.inMenuBar") }
     }
 
 }
