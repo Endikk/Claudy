@@ -2,7 +2,22 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
-## Unreleased
+## 1.5.0 — 21 September 2026
+
+Claudy can now live in the menu bar, and the numbers it shows count every agent.
+
+### Added
+
+- **Menu bar mode.** Right click the widget, then "Show in menu bar": the card leaves the
+  desktop and Claudy sits next to the clock, with its mascot and the 5-hour percentage. Left
+  click opens a popover built on charts: the three quotas as rings with their pace, seven days
+  as bars, and the week split by model. Hovering a bar or a legend row highlights that model.
+  Details and ports stay in the widget.
+- **A mascot.** The Claude mark gives way to Claudy in pixel art, typing at a laptop while a
+  session is active and resting otherwise. It follows the session tint and stops moving when
+  "Reduce motion" is on.
+- **Hover on the 7-day chart.** Pointing at a day shows its name, its tokens and its share of
+  the week.
 
 ### Fixed
 
