@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.1 — 21 September 2026
+
+### Fixed
+
+- **The card could no longer be dragged.** Moving the window was left to the view under the
+  pointer, and since the animated mascot arrived the card stayed put. The window now follows
+  the drag itself, from anywhere on the card. A press that moves less than three points is still
+  a click, and dropping the card does not switch its mode. Changing mode still sends it back to
+  the bottom-right corner.
+
 ## 1.5.0 — 21 September 2026
 
 Claudy can now live in the menu bar, and the numbers it shows count every agent.
