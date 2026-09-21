@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The Claude mascot in isometric pixel art, typing at a laptop on a small desk. Built on the
@@ -17,13 +18,12 @@ struct ClaudyTyping: View {
     /// Width over height of the sprite; callers size the frame with it.
     static let aspectRatio = CGFloat(Sprite.columns) / CGFloat(Sprite.rows)
 
-    private static let frameDuration: TimeInterval = 0.16
+    static let frameDuration: TimeInterval = 0.16
+
+    enum Pose { case resting, leftDown, rightDown }
 
     /// left, right, left, right, then a beat reading the screen.
-    private static let sequence: [[String]] = [
-        Sprite.leftDown, Sprite.rightDown, Sprite.leftDown, Sprite.rightDown,
-        Sprite.resting, Sprite.resting
-    ]
+    static let sequence: [Pose] = [.leftDown, .rightDown, .leftDown, .rightDown, .resting, .resting]
 
     var body: some View {
         if isTyping && !reduceMotion {
@@ -32,12 +32,13 @@ struct ClaudyTyping: View {
                 canvas(Self.sequence[tick % Self.sequence.count])
             }
         } else {
-            canvas(Sprite.resting)
+            canvas(.resting)
         }
     }
 
-    private func canvas(_ frame: [String]) -> some View {
-        let palette = palette
+    private func canvas(_ pose: Pose) -> some View {
+        let frame = Sprite.frame(pose)
+        let tint = tint
         return Canvas { context, size in
             let raw = min(size.width / CGFloat(Sprite.columns), size.height / CGFloat(Sprite.rows))
             // Snap the cell to whole device pixels so edges stay crisp.
@@ -56,7 +57,7 @@ struct ClaudyTyping: View {
                 }
             }
             for (ink, path) in paths {
-                for color in palette(ink) {
+                for color in Self.colors(for: ink, tint: tint) {
                     context.fill(path, with: .color(color))
                 }
             }
@@ -66,24 +67,43 @@ struct ClaudyTyping: View {
 
     /// Colours stacked on each ink, bottom first. Faces derived from the tint are the tint under
     /// an overlay, since Color.mix needs macOS 15.
-    private var palette: (Character) -> [Color] {
-        { [tint] ink in
-            switch ink {
-            case "C": return [tint]
-            case "T": return [tint, Theme.Pixel.highlight]
-            case "D": return [tint, Theme.Pixel.shade]
-            case "o": return [tint, Theme.Pixel.outline]
-            case "E": return [Theme.Pixel.eye]
-            case "O": return [tint]
-            case "k": return [Theme.Pixel.keys]
-            case "K": return [Theme.Pixel.laptop]
-            case "L": return [Theme.Pixel.lid]
-            case "G": return [Theme.Pixel.screenGlow]
-            case "w": return [Theme.Pixel.deskTop]
-            case "W": return [Theme.Pixel.deskFront]
-            case "V": return [Theme.Pixel.deskSide]
-            default:  return []
+    private static func colors(for ink: Character, tint: Color) -> [Color] {
+        switch ink {
+        case "C": return [tint]
+        case "T": return [tint, Theme.Pixel.highlight]
+        case "D": return [tint, Theme.Pixel.shade]
+        case "o": return [tint, Theme.Pixel.outline]
+        case "E": return [Theme.Pixel.eye]
+        case "O": return [tint]
+        case "k": return [Theme.Pixel.keys]
+        case "K": return [Theme.Pixel.laptop]
+        case "L": return [Theme.Pixel.lid]
+        case "G": return [Theme.Pixel.screenGlow]
+        case "w": return [Theme.Pixel.deskTop]
+        case "W": return [Theme.Pixel.deskFront]
+        case "V": return [Theme.Pixel.deskSide]
+        default:  return []
+        }
+    }
+
+    /// One frame as a bitmap, for places SwiftUI does not reach such as the menu bar.
+    /// `cell` is the side of one sprite pixel in points; half a point lands on whole pixels on
+    /// Retina screens.
+    static func image(_ pose: Pose, tint: Color, cell: CGFloat) -> NSImage {
+        let frame = Sprite.frame(pose)
+        let size = NSSize(width: CGFloat(Sprite.columns) * cell, height: CGFloat(Sprite.rows) * cell)
+        return NSImage(size: size, flipped: true) { _ in
+            for (row, line) in frame.enumerated() {
+                for (column, ink) in line.enumerated() where ink != "." {
+                    let rect = NSRect(x: CGFloat(column) * cell, y: CGFloat(row) * cell,
+                                      width: cell, height: cell)
+                    for color in colors(for: ink, tint: tint) {
+                        NSColor(color).setFill()
+                        rect.fill(using: .sourceOver)
+                    }
+                }
             }
+            return true
         }
     }
 }
@@ -187,4 +207,12 @@ private enum Sprite {
 
     static let rows = resting.count
     static let columns = resting[0].count
+
+    static func frame(_ pose: ClaudyTyping.Pose) -> [String] {
+        switch pose {
+        case .resting:   return resting
+        case .leftDown:  return leftDown
+        case .rightDown: return rightDown
+        }
+    }
 }

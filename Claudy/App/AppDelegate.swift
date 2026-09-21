@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     let viewModel = UsageViewModel()
     let portsViewModel = PortsViewModel()
+    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel)
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
@@ -36,7 +37,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         anchor = homeAnchor(on: NSScreen.main)
         applyAnchor()
-        panel.orderFrontRegardless()
         portsViewModel.start()
 
         screenObserver = NotificationCenter.default.addObserver(
@@ -70,6 +70,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self?.panel?.level = onTop ? .floating : .normal
             }
             .store(in: &cancellables)
+
+        // Fires once on subscription too, which places the widget on launch.
+        viewModel.$isInMenuBar
+            .receive(on: RunLoop.main)
+            .sink { [weak self] inMenuBar in self?.placeWidget(inMenuBar: inMenuBar) }
+            .store(in: &cancellables)
+    }
+
+    /// Either the floating card or the menu bar item, never both.
+    private func placeWidget(inMenuBar: Bool) {
+        if inMenuBar {
+            panel?.orderOut(nil)
+            menuBar.show()
+        } else {
+            menuBar.hide()
+            panel?.orderFrontRegardless()
+        }
     }
 
     /// The area the card settles into.

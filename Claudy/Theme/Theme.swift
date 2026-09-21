@@ -63,6 +63,7 @@ enum Theme {
     enum Metric {
         static let fullWidth: CGFloat = 340
         static let minimalWidth: CGFloat = 252
+        static let menuBarWidth: CGFloat = 290
         static let cardCorner: CGFloat = 20
         static let minimalCorner: CGFloat = 15
         /// Transparent margin around the card, where the drop shadow lives. The window is

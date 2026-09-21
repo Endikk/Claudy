@@ -138,6 +138,10 @@ struct RootView: View {
             )
         }
 
+        Button(action: viewModel.toggleMenuBar) {
+            Label("Show in menu bar", systemImage: "menubar.arrow.up.rectangle")
+        }
+
         Divider()
 
         if viewModel.isSignedIn {
