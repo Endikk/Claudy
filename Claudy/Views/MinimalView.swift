@@ -10,10 +10,8 @@ struct MinimalView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                ClaudeMark()
-                    .fill(tint)
-                    .frame(width: 16, height: 16)
-                    .shadow(color: tint.opacity(0.45), radius: 5)
+                ClaudyTyping(tint: tint, isTyping: session.isActive)
+                    .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")

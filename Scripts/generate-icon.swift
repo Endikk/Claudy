@@ -1,7 +1,7 @@
 #!/usr/bin/env swift
 //
-// Generates Claudy/Assets.xcassets/AppIcon.appiconset from the geometry
-// vectorielle de ClaudeMark (Claudy/Views/Components/ClaudeMark.swift).
+// Generates Claudy/Assets.xcassets/AppIcon.appiconset from the vector Claude
+// mark (the app icon; the widget itself shows the pixel mascot, ClaudyTyping).
 //
 //   swift Scripts/generate-icon.swift
 //
@@ -10,7 +10,7 @@
 
 import AppKit
 
-// Same table as ClaudeMark.rays: (angle in degrees, relative length, relative half-width).
+// Rays of the mark: (angle in degrees, relative length, relative half-width).
 let rays: [(angle: Double, length: Double, width: Double)] = [
     (0, 1.00, 0.150), (33, 0.76, 0.120), (72, 0.94, 0.140),
     (104, 0.68, 0.112), (145, 1.00, 0.150), (180, 0.80, 0.128),

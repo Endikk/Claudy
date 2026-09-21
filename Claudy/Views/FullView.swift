@@ -63,10 +63,8 @@ struct FullView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            ClaudeMark()
-                .fill(Theme.Accent.coral.color)
-                .frame(width: 17, height: 17)
-                .shadow(color: Theme.Accent.coral.color.opacity(0.5), radius: 6)
+            ClaudyTyping(isTyping: snapshot.session.isActive)
+                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
             Text("Claudy")
                 .font(Theme.Font.label(14, .semibold))
