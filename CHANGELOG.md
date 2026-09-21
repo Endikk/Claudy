@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## Unreleased
+
+### Fixed
+
+- **Subagent and workflow usage was never counted.** Only the top-level transcript of each
+  session was read, while Claude Code writes subagents to `<session>/subagents/**/agent-*.jsonl`.
+  On an agent-heavy week that was more than half of the tokens, missing from the history, the
+  splits and the gauges' local counts. Every transcript below `projects/` is now read.
+- **One project showed up as several.** A project was the last folder of the directory the
+  model was in, so a `cd` into `App` or `src` opened a new row and two unrelated `api` folders
+  merged. It is now the Git repository holding that directory, worktrees included; a folder
+  outside any repository (a scratchpad) goes to the repository its session worked in.
+- **Shares ranked raw tokens.** Cache reads are nine tokens in ten and cost a tenth of an input
+  token, and an Opus token costs five Haiku ones, so a background Haiku job outranked real work.
+  Model and project shares, and the active model, are now weighted by each model's list price.
+  Dated snapshots of one version (`claude-haiku-4-5-20251001`) merge into one row.
+
 ## 1.4.0 — 6 September 2026
 
 Claude Code leaves servers running. This release lists them and closes them.

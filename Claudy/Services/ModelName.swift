@@ -15,7 +15,7 @@ enum ModelName {
             .map(String.init)
 
         let family = parts.first { Int($0) == nil } ?? identifier
-        let version = parts.filter { Int($0) != nil && $0.count <= 2 }
+        let version = versionNumbers(identifier).map(String.init)
 
         let label = family.prefix(1).uppercased() + family.dropFirst()
         return version.isEmpty ? label : "\(label) \(version.joined(separator: "."))"
@@ -38,6 +38,34 @@ enum ModelName {
             .split(separator: "-")
             .first { Int($0) == nil }
             .map { $0.lowercased() } ?? identifier.lowercased()
+    }
+
+    /// Input price per million tokens, in dollars, from Anthropic's public list. Only the ratios
+    /// matter: they turn a token count into what it weighs against the quota, where one Opus
+    /// token costs five Haiku tokens. Unknown families take the mid-range price rather than zero,
+    /// so a new model is never silently left out of the ranking.
+    static func inputPrice(_ identifier: String) -> Double {
+        let version = versionNumbers(identifier)
+        let major = version.first ?? 0
+        let minor = version.count > 1 ? version[1] : 0
+        let atLeast = { (maj: Int, min: Int) in major > maj || (major == maj && minor >= min) }
+
+        switch family(identifier) {
+        case "fable", "mythos": return 10
+        case "opus": return atLeast(4, 5) ? 5 : 15
+        case "sonnet": return atLeast(5, 0) ? 2 : 3
+        case "haiku": return atLeast(4, 5) ? 1 : (atLeast(3, 5) ? 0.8 : 0.25)
+        default: return 3
+        }
+    }
+
+    /// `[4, 5]` for `claude-haiku-4-5-20251001` and for `claude-3-5-haiku`: dates are dropped.
+    private static func versionNumbers(_ identifier: String) -> [Int] {
+        identifier
+            .replacingOccurrences(of: "claude-", with: "")
+            .split(separator: "-")
+            .filter { $0.count <= 2 }
+            .compactMap { Int($0) }
     }
 
     /// False for `<synthetic>` entries, which Claude Code generates locally without calling a model.
