@@ -113,3 +113,5 @@ Un bug, une idée, un chiffre qui ne correspond pas à claude.ai ? Ouvre une
 `~/Library/Application Support/Claudy/api.log` sont les bienvenus. Les PR sont ouvertes.
 
 MIT, maintenu par [@Endikk](https://github.com/Endikk).
+
+<p align="center"><img src="docs/claudy-overload.gif" width="212" alt="Claudy à 100 % : l’ordinateur explose et la mascotte reste en cendres, les yeux en croix"></p>

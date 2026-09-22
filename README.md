@@ -112,3 +112,5 @@ A bug, an idea, a figure that does not match claude.ai? Open an
 `~/Library/Application Support/Claudy/api.log` are welcome. PRs are open.
 
 MIT, maintained by [@Endikk](https://github.com/Endikk).
+
+<p align="center"><img src="docs/claudy-overload.gif" width="212" alt="Claudy at 100 %: the laptop explodes and the mascot is left ashen, with crossed-out eyes"></p>
