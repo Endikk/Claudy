@@ -4,6 +4,7 @@ import SwiftUI
 /// sparkline, "Details" accordion, footer.
 struct FullView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    @EnvironmentObject private var updates: UpdateChecker
     @EnvironmentObject private var portsViewModel: PortsViewModel
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
@@ -52,6 +53,8 @@ struct FullView: View {
             DetailsSection()
             hairline
 
+            UpdateRow()
+
             FooterView(
                 sessionCount: snapshot.sessionCount,
                 updatedAt: snapshot.updatedAt,
@@ -63,12 +66,22 @@ struct FullView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            ClaudyTyping(isTyping: snapshot.session.isActive, isOverloaded: snapshot.isOverloaded)
-                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
+            Group {
+                if updates.isGreeting && !snapshot.isOverloaded {
+                    ClaudyWaving(tint: Theme.tint(snapshot.session.accent, at: snapshot.session.percent), cell: 1)
+                } else {
+                    ClaudyTyping(isTyping: snapshot.session.isActive, isOverloaded: snapshot.isOverloaded)
+                }
+            }
+            .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
             Text("Claudy")
                 .font(Theme.Font.label(14, .semibold))
                 .foregroundStyle(.primary.opacity(0.9))
+
+            if updates.available != nil {
+                UpdateDot()
+            }
 
             if !snapshot.activeModel.isEmpty {
                 pill(snapshot.activeModel, tint: nil)

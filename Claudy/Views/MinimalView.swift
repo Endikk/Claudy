@@ -3,6 +3,7 @@ import SwiftUI
 /// Compact mode: one horizontal strip — the mark, the 5h window percentage, the reset time.
 struct MinimalView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    @EnvironmentObject private var updates: UpdateChecker
 
     private var session: UsageWindow { viewModel.snapshot.session }
     private var tint: Color { Theme.tint(session.accent, at: session.percent) }
@@ -10,8 +11,14 @@ struct MinimalView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                ClaudyTyping(tint: tint, isTyping: session.isActive, isOverloaded: viewModel.snapshot.isOverloaded)
-                    .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
+                Group {
+                    if updates.isGreeting && !viewModel.snapshot.isOverloaded {
+                        ClaudyWaving(tint: tint, cell: 1)
+                    } else {
+                        ClaudyTyping(tint: tint, isTyping: session.isActive, isOverloaded: viewModel.snapshot.isOverloaded)
+                    }
+                }
+                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")
@@ -22,6 +29,10 @@ struct MinimalView: View {
                             .font(Theme.Font.label(13, .medium))
                             .foregroundStyle(.primary.opacity(0.4))
                     }
+                }
+
+                if updates.available != nil {
+                    UpdateDot(size: 5)
                 }
 
                 if let message = viewModel.errorMessage {

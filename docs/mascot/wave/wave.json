@@ -1,0 +1,93 @@
+{
+  "width": 25,
+  "height": 33,
+  "cellPixels": 12,
+  "marginPixels": 24,
+  "palette": {
+    "C": "#d97757",
+    "T": "#e9a07c",
+    "D": "#9b4e45",
+    "o": "#3a1a1e",
+    "E": "#2a1418",
+    "s": "#00000033"
+  },
+  "frames": [
+    "00-idle",
+    "01-raise",
+    "02-wave-up-hop",
+    "03-wave-left-hop",
+    "04-wave-up",
+    "05-wave-right",
+    "06-blink"
+  ],
+  "sequence": [
+    {
+      "frame": "00-idle",
+      "ms": 700
+    },
+    {
+      "frame": "01-raise",
+      "ms": 90
+    },
+    {
+      "frame": "02-wave-up-hop",
+      "ms": 110
+    },
+    {
+      "frame": "03-wave-left-hop",
+      "ms": 140
+    },
+    {
+      "frame": "04-wave-up",
+      "ms": 140
+    },
+    {
+      "frame": "05-wave-right",
+      "ms": 140
+    },
+    {
+      "frame": "04-wave-up",
+      "ms": 140
+    },
+    {
+      "frame": "03-wave-left-hop",
+      "ms": 140
+    },
+    {
+      "frame": "04-wave-up",
+      "ms": 140
+    },
+    {
+      "frame": "05-wave-right",
+      "ms": 140
+    },
+    {
+      "frame": "04-wave-up",
+      "ms": 140
+    },
+    {
+      "frame": "03-wave-left-hop",
+      "ms": 140
+    },
+    {
+      "frame": "02-wave-up-hop",
+      "ms": 110
+    },
+    {
+      "frame": "01-raise",
+      "ms": 90
+    },
+    {
+      "frame": "00-idle",
+      "ms": 400
+    },
+    {
+      "frame": "06-blink",
+      "ms": 110
+    },
+    {
+      "frame": "00-idle",
+      "ms": 500
+    }
+  ]
+}

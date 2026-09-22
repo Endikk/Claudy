@@ -8,8 +8,12 @@ import Combine
 final class MenuBarController: NSObject {
 
     private let viewModel: UsageViewModel
+    private let updates: UpdateChecker
     private var item: NSStatusItem?
     private let popover = NSPopover()
+    /// Drops from the item once per new version, and stays until the user answers it.
+    private lazy var bubble = UpdateBubblePanel(content: UpdateBubble { [weak self] in self?.closeBubble() }
+        .environmentObject(updates))
     private var cancellables = Set<AnyCancellable>()
 
     private var timer: Timer?
@@ -17,7 +21,9 @@ final class MenuBarController: NSObject {
     /// Frames rendered for the current tint; rebuilt only when the tint changes band.
     private var frames: [ClaudyTyping.Pose: NSImage] = [:]
     private var overloadFrames: [NSImage] = []
+    private var waveFrames: [NSImage] = []
     private var framesTint: Color?
+    private var framesBadged: Bool?
 
     /// What the icon is doing. The explosion plays only when the quota fills while the item is
     /// up; opening Claudy on a full quota shows the dead state directly, as the widget does.
@@ -25,6 +31,8 @@ final class MenuBarController: NSObject {
         case still, typing
         case exploding(since: Date)
         case dead
+        /// A new version is out and its bubble has not been answered yet.
+        case waving
     }
     private var animation: Animation = .still
     private var wasOverloaded: Bool?
@@ -33,15 +41,19 @@ final class MenuBarController: NSObject {
     /// device pixels on Retina screens.
     private static let cell: CGFloat = 0.5
 
-    init(viewModel: UsageViewModel) {
+    init(viewModel: UsageViewModel, updates: UpdateChecker) {
         self.viewModel = viewModel
+        self.updates = updates
         super.init()
 
-        let controller = NSHostingController(rootView: MenuBarView().environmentObject(viewModel))
+        let controller = NSHostingController(rootView: MenuBarView()
+            .environmentObject(viewModel)
+            .environmentObject(updates))
         controller.sizingOptions = [.preferredContentSize]
         popover.contentViewController = controller
         popover.behavior = .transient
         popover.animates = true
+
     }
 
     func show() {
@@ -60,10 +72,39 @@ final class MenuBarController: NSObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] snapshot in self?.update(with: snapshot) }
             .store(in: &cancellables)
+
+        updates.$available
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.update(with: self.viewModel.snapshot)
+            }
+            .store(in: &cancellables)
+
+        updates.$shouldAnnounce
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] announce in
+                if announce { self?.scheduleBubble(attempt: 0) }
+            }
+            .store(in: &cancellables)
+
+        // `update` reads the published value, which is only set once the sink returns: wait a turn.
+        updates.$isGreeting
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.update(with: self.viewModel.snapshot)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     func hide() {
         popover.performClose(nil)
+        bubble.dismiss()
         stopAnimating()
         animation = .still
         wasOverloaded = nil
@@ -81,14 +122,20 @@ final class MenuBarController: NSObject {
         let session = snapshot.session
         let tint = Theme.tint(session.accent, at: session.percent)
 
-        if framesTint != tint {
+        let badged = updates.available != nil
+        if framesTint != tint || framesBadged != badged {
+            let finish = { (image: NSImage) in badged ? Self.withUpdateDot(image) : image }
             frames = Dictionary(uniqueKeysWithValues: [ClaudyTyping.Pose.resting, .leftDown, .rightDown].map {
-                ($0, ClaudyTyping.image($0, tint: tint, cell: Self.cell))
+                ($0, finish(ClaudyTyping.image($0, tint: tint, cell: Self.cell)))
             })
             overloadFrames = ClaudyOverload.frames.indices.map {
-                ClaudyTyping.overloadImage($0, tint: tint, cell: Self.cell)
+                finish(ClaudyTyping.overloadImage($0, tint: tint, cell: Self.cell))
+            }
+            waveFrames = ClaudyWave.frames.indices.map {
+                finish(ClaudyTyping.waveImage($0, tint: tint, cell: Self.cell))
             }
             framesTint = tint
+            framesBadged = badged
         }
 
         let percent = session.isMeasured ? "\(Int(session.percent * 100))%" : "—"
@@ -96,7 +143,14 @@ final class MenuBarController: NSObject {
             string: " \(percent)",
             attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)]
         )
-        button.toolTip = session.isActive
+        // The title just changed width and the bar moved the icon: keep the bubble's arrow on it.
+        if bubble.isVisible {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.bubble.isVisible, let button = self.item?.button else { return }
+                self.bubble.show(below: button)
+            }
+        }
+                button.toolTip = session.isActive
             ? "Session \(percent) · reset \(UsageViewModel.clock(session.resetDate))"
             : "Claudy"
 
@@ -115,6 +169,9 @@ final class MenuBarController: NSObject {
             } else {
                 animation = .dead
             }
+        } else if updates.isGreeting && !reduceMotion {
+            // A full quota matters more than a new version: the dead state wins over the wave.
+            animation = .waving
         } else {
             animation = session.isActive && !reduceMotion ? .typing : .still
         }
@@ -130,6 +187,8 @@ final class MenuBarController: NSObject {
             startTimer(every: ClaudyTyping.frameDuration)
         case .exploding:
             startTimer(every: 0.035)
+        case .waving:
+            startTimer(every: 0.03)
         case .dead:
             if reduceMotion {
                 item?.button?.image = overloadFrame(elapsed: nil)
@@ -164,6 +223,9 @@ final class MenuBarController: NSObject {
                 animation = .dead
                 applyAnimation(reduceMotion: false)
             }
+        case .waving:
+            let index = ClaudyWave.frameIndex(elapsed: Date().timeIntervalSinceReferenceDate)
+            if waveFrames.indices.contains(index) { item?.button?.image = waveFrames[index] }
         case .dead:
             item?.button?.image = overloadFrame(
                 elapsed: ClaudyOverload.introDuration + Date().timeIntervalSinceReferenceDate
@@ -174,6 +236,17 @@ final class MenuBarController: NSObject {
     private func overloadFrame(elapsed: TimeInterval?) -> NSImage? {
         let index = ClaudyOverload.frameIndex(elapsed: elapsed)
         return overloadFrames.indices.contains(index) ? overloadFrames[index] : nil
+    }
+
+    /// The icon with the coral update dot in its top-right corner, where the sprite is empty.
+    private static func withUpdateDot(_ image: NSImage) -> NSImage {
+        let diameter: CGFloat = 4
+        return NSImage(size: image.size, flipped: true) { rect in
+            image.draw(in: rect)
+            NSColor(Theme.Accent.coral.color).setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.maxX - diameter, y: 0, width: diameter, height: diameter)).fill()
+            return true
+        }
     }
 
     private func stopAnimating() {
@@ -192,6 +265,8 @@ final class MenuBarController: NSObject {
     }
 
     private func togglePopover(from button: NSStatusBarButton) {
+        if bubble.isVisible { closeBubble() }
+        updates.acknowledgeGreeting()
         if popover.isShown {
             popover.performClose(nil)
         } else {
@@ -213,6 +288,35 @@ final class MenuBarController: NSObject {
         item?.menu = menu
         button.performClick(nil)
         item?.menu = nil
+    }
+
+    // MARK: - Update bubble
+
+    /// A status item just created is not placed in the menu bar yet, and a popover shown from
+    /// it opens nowhere. Wait for the bar to lay it out, then retry a few times if it still did
+    /// not open (menu bar hidden by a full-screen app, for instance).
+    private func scheduleBubble(attempt: Int) {
+        guard attempt < Self.bubbleAttempts else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0.8 : 2)) { [weak self] in
+            guard let self, self.updates.shouldAnnounce, !self.bubble.isVisible else { return }
+            self.showBubble()
+            if !self.bubble.isVisible { self.scheduleBubble(attempt: attempt + 1) }
+        }
+    }
+
+    private static let bubbleAttempts = 5
+
+    private func showBubble() {
+        guard let button = item?.button, let window = button.window, window.frame.width > 0,
+              !bubble.isVisible, !popover.isShown else { return }
+        bubble.show(below: button)
+        update(with: viewModel.snapshot)
+    }
+
+    private func closeBubble() {
+        bubble.dismiss()
+        updates.markAnnounced()
+        update(with: viewModel.snapshot)
     }
 
     @objc private func refresh() {

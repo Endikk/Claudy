@@ -7,7 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     let viewModel = UsageViewModel()
     let portsViewModel = PortsViewModel()
-    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel)
+    let updates = UpdateChecker()
+    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates)
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
@@ -26,7 +27,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let controller = NSHostingController(rootView: RootView()
             .environmentObject(viewModel)
-            .environmentObject(portsViewModel))
+            .environmentObject(portsViewModel)
+            .environmentObject(updates))
         controller.sizingOptions = [.preferredContentSize]
 
         let panel = FloatingPanel(contentRect: NSRect(x: 0, y: 0, width: 340, height: 220))
@@ -53,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         bind()
         Task { await viewModel.refresh() }
+        updates.start()
     }
 
     deinit {
@@ -75,6 +78,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         viewModel.$isInMenuBar
             .receive(on: RunLoop.main)
             .sink { [weak self] inMenuBar in self?.placeWidget(inMenuBar: inMenuBar) }
+            .store(in: &cancellables)
+
+        // Moving between the widget and the menu bar greets again while an update is pending.
+        viewModel.$isInMenuBar
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updates.greetAgain() }
             .store(in: &cancellables)
     }
 

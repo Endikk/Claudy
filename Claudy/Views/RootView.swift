@@ -4,6 +4,7 @@ import SwiftUI
 /// context menu.
 struct RootView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    @EnvironmentObject private var updates: UpdateChecker
     @Environment(\.colorScheme) private var scheme
 
     /// What the card shows. No gauges without a Claude session: onboarding takes their place,
@@ -30,6 +31,8 @@ struct RootView: View {
     var body: some View {
         card
             .padding(Theme.Metric.shadowInset)
+            // Any click on the card counts as opening Claudy: the wave has been seen.
+            .simultaneousGesture(TapGesture().onEnded { updates.acknowledgeGreeting() })
             .contextMenu { menu }
     }
 

@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.3 — 22 September 2026
+
+### Added
+
+- **Claudy tells you when a new version is out.** It checks the latest release at launch and
+  once a day. A coral dot marks the menu bar icon and the widget, and a line above the footer
+  offers the update. In the menu bar, a bubble drops from the icon once per version, and Claudy
+  waves hello until you open it. Switching between the widget and the menu bar waves again.
+- **Update in one click.** Installed with Homebrew, Update runs the upgrade in the background:
+  Claudy closes, and the new version opens a moment later. If brew cannot finish, the button
+  runs the same command in Terminal so you can see why. Without Homebrew, it opens the release
+  page.
+
 ## 1.5.2 — 22 September 2026
 
 ### Added

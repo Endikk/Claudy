@@ -31,6 +31,7 @@ struct MenuBarView: View {
             } else {
                 signedOut
             }
+            UpdateRow()
             footer
         }
         .padding(Theme.Metric.padding)
