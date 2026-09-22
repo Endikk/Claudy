@@ -58,6 +58,21 @@ enum Theme {
         static let deskTop = Color(hex: 0xB08462)
         static let deskFront = Color(hex: 0x8C6248)
         static let deskSide = Color(hex: 0x68463C)
+
+        // Overload: the explosion, its smoke, and Claude turned to ash.
+        static let flash = Color(hex: 0xFFF8D6)
+        static let fireYellow = Color(hex: 0xFFD24A)
+        static let fireOrange = Color(hex: 0xFF8A2A)
+        static let fireRed = Color(hex: 0xD8402A)
+        static let ember = Color(hex: 0xFF6A20)
+        static let smokeDark = Color(hex: 0x3C3638)
+        static let smoke = Color(hex: 0x5E5658)
+        static let smokeLight = Color(hex: 0x8A8083)
+        static let smokePale = Color(hex: 0xBEB6B8)
+        static let charred = Color(hex: 0x2A2426)
+        static let ash = Color(hex: 0x968682)
+        static let ashTop = Color(hex: 0xB2A49E)
+        static let ashSide = Color(hex: 0x6E6060)
     }
 
     enum Metric {

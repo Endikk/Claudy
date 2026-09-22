@@ -63,7 +63,7 @@ struct FullView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            ClaudyTyping(isTyping: snapshot.session.isActive)
+            ClaudyTyping(isTyping: snapshot.session.isActive, isOverloaded: snapshot.isOverloaded)
                 .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
             Text("Claudy")

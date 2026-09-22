@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.2 — 22 September 2026
+
+### Added
+
+- **Claudy at 100 %.** When the 5-hour session or the weekly limit fills up, Claudy types
+  frantically, the laptop sparks, smokes and explodes, and Claudy is left ashen with crossed-out
+  eyes while grey smoke rises from the charred keyboard. The explosion plays once, while the
+  quota fills with the widget on screen; opening Claudy on a full quota shows the dead state
+  directly. Claudy comes back to life when the quota frees up. The per-model window does not
+  trigger it, since another model still answers. Same in the menu bar, and a still frame when
+  "Reduce motion" is on.
+
 ## 1.5.1 — 21 September 2026
 
 ### Fixed

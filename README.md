@@ -88,11 +88,12 @@ Refreshes every 3 minutes, and immediately when the machine wakes.
 
 ## Star history
 
-<a href="https://star-history.com/#Endikk/Claudy&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Endikk/Claudy&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=Endikk/Claudy&type=Date" width="620" alt="Star history">
-  </picture>
+<a href="https://www.star-history.com/?repos=Endikk%2FClaudy&type=date&releases=&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Endikk/Claudy&type=date&theme=dark&logscale&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Endikk/Claudy&type=date&logscale&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Endikk/Claudy&type=date&logscale&legend=bottom-right" />
+ </picture>
 </a>
 
 ## Branches
@@ -111,3 +112,5 @@ A bug, an idea, a figure that does not match claude.ai? Open an
 `~/Library/Application Support/Claudy/api.log` are welcome. PRs are open.
 
 MIT, maintained by [@Endikk](https://github.com/Endikk).
+
+<p align="center"><img src="docs/claudy-overload.gif" width="212" alt="Claudy at 100 %: the laptop explodes and the mascot is left ashen, with crossed-out eyes"></p>
