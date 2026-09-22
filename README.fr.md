@@ -89,11 +89,12 @@ Rafraîchissement toutes les 3 minutes, et immédiat au réveil de la machine.
 
 ## Historique des stars
 
-<a href="https://star-history.com/#Endikk/Claudy&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Endikk/Claudy&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=Endikk/Claudy&type=Date" width="620" alt="Historique des stars">
-  </picture>
+<a href="https://www.star-history.com/?repos=Endikk%2FClaudy&type=date&releases=&legend=bottom-right">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Endikk/Claudy&type=date&theme=dark&logscale&legend=bottom-right" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Endikk/Claudy&type=date&logscale&legend=bottom-right" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Endikk/Claudy&type=date&logscale&legend=bottom-right" />
+ </picture>
 </a>
 
 ## Branches
