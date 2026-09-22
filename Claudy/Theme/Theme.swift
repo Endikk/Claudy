@@ -73,6 +73,8 @@ enum Theme {
         static let ash = Color(hex: 0x968682)
         static let ashTop = Color(hex: 0xB2A49E)
         static let ashSide = Color(hex: 0x6E6060)
+        /// Under the waving Claudy: a soft shadow, the only translucent ink.
+        static let groundShadow = Color.black.opacity(0.2)
     }
 
     enum Metric {

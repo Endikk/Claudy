@@ -147,6 +147,7 @@ struct ClaudyTyping: View {
         case "c": return [Theme.Pixel.ash]
         case "t": return [Theme.Pixel.ashTop]
         case "d": return [Theme.Pixel.ashSide]
+        case "s": return [Theme.Pixel.groundShadow]
         default:  return []
         }
     }
@@ -164,6 +165,15 @@ struct ClaudyTyping: View {
     /// One overload frame as a bitmap. Larger than the sprite, which sits at `spriteOrigin`.
     static func overloadImage(_ index: Int, tint: Color, cell: CGFloat) -> NSImage {
         bitmap(ClaudyOverload.frames[index], tint: tint, cell: cell)
+    }
+
+    /// One wave frame as a bitmap, padded on both sides to the sprite's width so the
+    /// percentage next to the menu bar icon does not move when Claude starts waving.
+    static func waveImage(_ index: Int, tint: Color, cell: CGFloat) -> NSImage {
+        let padding = max(0, Sprite.columns - ClaudyWave.columns)
+        let left = String(repeating: ".", count: padding / 2)
+        let right = String(repeating: ".", count: padding - padding / 2)
+        return bitmap(ClaudyWave.frames[index].map { left + $0 + right }, tint: tint, cell: cell)
     }
 
     private static func bitmap(_ frame: [String], tint: Color, cell: CGFloat) -> NSImage {
