@@ -122,6 +122,12 @@ struct UsageSnapshot {
         return min(max((peak - 0.95) / 0.05, 0), 1)
     }
 
+    /// A quota that blocks work is full: the 5h session or the weekly limit. The per-model
+    /// window is left out, since another model still answers. Unmeasured windows never count.
+    var isOverloaded: Bool {
+        [session, weekly].contains { $0.isMeasured && $0.percent >= 1 }
+    }
+
     /// State shown before the first `fetch()` — never visible for more than a few milliseconds,
     /// but it spares every view an optional.
     static let placeholder = UsageSnapshot(

@@ -10,7 +10,7 @@ struct MinimalView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                ClaudyTyping(tint: tint, isTyping: session.isActive)
+                ClaudyTyping(tint: tint, isTyping: session.isActive, isOverloaded: viewModel.snapshot.isOverloaded)
                     .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
