@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
-## Unreleased
+## 1.5.2 — 22 September 2026
 
 ### Added
 
