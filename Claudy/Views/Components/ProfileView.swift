@@ -130,7 +130,7 @@ struct ProfilePopup: View {
     }
 }
 
-/// Ligne d'action de la fiche compte, avec surbrillance au survol.
+/// An action row on the account card, highlighted on hover.
 private struct PopupRow: View {
     let title: String
     let icon: String

@@ -38,6 +38,7 @@ enum UsageAggregator {
             session: session,
             weekly: weekly,
             sonnet: third,
+            spend: spendGauge(reading?.spend, source: source),
             history: history(rolling, today: today, calendar: calendar),
             models: models(rolling),
             projects: projects(rolling),
@@ -55,8 +56,8 @@ enum UsageAggregator {
     /// two never merge into one number.
     private static func sessionGauge(_ quota: QuotaWindow?, entries: [TranscriptEntry],
                                      now: Date, source: QuotaSource) -> UsageWindow {
+        let block = currentLocalBlock(entries, now: now)
         guard let quota, source.isMeasured else {
-            let block = currentLocalBlock(entries, now: now)
             return UsageWindow(
                 title: "Session", window: "5h",
                 percent: 0, tokensUsed: block?.tokens ?? 0,
@@ -74,7 +75,8 @@ enum UsageAggregator {
             tokensUsed: entries.filter { $0.date >= start }.reduce(0) { $0 + $1.tokens },
             windowStart: start, resetDate: quota.resetsAt ?? now,
             accent: .coral,
-            isMeasured: true
+            isMeasured: true,
+            localActivityEnd: block?.end
         )
     }
 
@@ -105,6 +107,20 @@ enum UsageAggregator {
             windowStart: start, resetDate: quota.resetsAt ?? now,
             accent: accent,
             isMeasured: true
+        )
+    }
+
+    /// Monthly spend cap. The window is the calendar month, so the pace marker reads as it does
+    /// elsewhere: halfway through the month, steady spending sits at 50 %.
+    private static func spendGauge(_ spend: SpendReading?, source: QuotaSource) -> UsageWindow? {
+        guard let spend, source.isMeasured else { return nil }
+        return UsageWindow(
+            title: "Spend", window: "month",
+            percent: spend.percent, tokensUsed: 0,
+            windowStart: spend.startsAt, resetDate: spend.resetsAt,
+            accent: .coral,
+            isMeasured: true,
+            amount: spend
         )
     }
 
@@ -220,7 +236,7 @@ enum UsageAggregator {
     }
 
     /// Folder name, prefixed by its parent when two shown projects share one, so `work/api` and
-    /// `perso/api` stay distinguishable.
+    /// `personal/api` stay distinguishable.
     static func displayNames(for paths: [String]) -> [String: String] {
         func name(_ path: String) -> String {
             let last = (path as NSString).lastPathComponent

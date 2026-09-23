@@ -25,8 +25,13 @@ struct BrewUpgradeRunner: UpgradeRunner {
     /// two fixed locations and quoted, and a process id. On success it reopens Claudy, but only
     /// if brew quit it: a Claudy still running restarts itself, and opening here too would
     /// launch it twice.
+    ///
+    /// `brew update` first: on its own, brew refreshes the tap once a day at most, and a tap
+    /// that predates the release answers "the latest version is already installed" with status
+    /// 0. A failed update does not stop the upgrade, which then says why in the log.
     static func script(brew: String, claudy pid: Int32) -> String {
         """
+        "\(brew)" update --quiet
         "\(brew)" upgrade --cask claudy
         status=$?
         if [ "$status" -eq 0 ] && ! kill -0 \(pid) 2>/dev/null; then /usr/bin/open -b \(bundleIdentifier); fi

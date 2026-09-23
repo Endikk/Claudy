@@ -10,17 +10,21 @@ struct MenuBarView: View {
     @State private var hoveredModel: String?
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
-    private var session: UsageWindow { snapshot.session }
-    private var sessionTint: Color { Theme.tint(session.accent, at: session.percent) }
+    /// The 5h session, or the monthly spend on a plan billed on usage.
+    private var lead: UsageWindow { snapshot.primary }
+    private var leadTint: Color { Theme.tint(lead.accent, at: lead.percent) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             if viewModel.isSignedIn || snapshot.isDemo {
                 HStack(alignment: .top, spacing: 4) {
-                    QuotaRing(window: session)
-                    QuotaRing(window: snapshot.weekly, delay: 0.08)
-                    QuotaRing(window: snapshot.sonnet, delay: 0.16)
+                    QuotaRing(window: lead)
+                    // A plan billed on usage has no weekly or per-model quota to ring.
+                    if snapshot.spend == nil {
+                        QuotaRing(window: snapshot.weekly, delay: 0.08)
+                        QuotaRing(window: snapshot.sonnet, delay: 0.16)
+                    }
                 }
                 hairline
                 WeekBarsChart(samples: snapshot.history, tint: Theme.Accent.coral.color)
@@ -28,7 +32,12 @@ struct MenuBarView: View {
                     hairline
                     modelSplit
                 }
-            } else {
+                if viewModel.isSignedIn {
+                    hairline
+                    accountRow
+                }
+            } else if viewModel.hasLoaded {
+                // Before the first reading, a signed-in user would see the way in flash by.
                 signedOut
             }
             UpdateRow()
@@ -40,7 +49,7 @@ struct MenuBarView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            ClaudyTyping(tint: sessionTint, isTyping: session.isActive, isOverloaded: snapshot.isOverloaded)
+            ClaudyTyping(tint: leadTint, isTyping: snapshot.session.isRunning, isOverloaded: snapshot.isOverloaded)
                 .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
             Text("Claudy")
@@ -158,12 +167,29 @@ struct MenuBarView: View {
 
     /// No gauges without a session, same rule as the widget: say so and offer the way in.
     private var signedOut: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Not signed in to Claude")
                 .font(Theme.Font.label(12, .medium))
                 .foregroundStyle(.primary.opacity(0.7))
-            Button("Sign in to Claude…") { viewModel.startSignIn() }
-                .disabled(viewModel.isSigningIn)
+            SignInControls()
+        }
+    }
+
+    /// Whose quotas these are, and the way out. Signing out leaves Claude Code signed in.
+    private var accountRow: some View {
+        HStack(spacing: 8) {
+            Text(snapshot.account.email.isEmpty ? snapshot.account.name : snapshot.account.email)
+                .font(Theme.Font.label(10.5, .medium))
+                .foregroundStyle(.primary.opacity(0.55))
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Spacer(minLength: 8)
+
+            Button("Sign out", action: viewModel.signOut)
+                .buttonStyle(.borderless)
+                .font(Theme.Font.label(11, .medium))
+                .help("Claudy stops reading your quotas until you sign back in. Claude Code stays signed in.")
         }
     }
 

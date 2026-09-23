@@ -9,6 +9,17 @@ private struct StubFeed: ReleaseFeed {
 
 private struct Offline: Error {}
 
+/// A feed whose latest release can change between checks, counting how often it is asked.
+private final class LiveFeed: ReleaseFeed, @unchecked Sendable {
+    var latestRelease: Release
+    private(set) var calls = 0
+    init(_ release: Release) { latestRelease = release }
+    func latest() async throws -> Release {
+        calls += 1
+        return latestRelease
+    }
+}
+
 private final class StubRunner: UpgradeRunner, @unchecked Sendable {
     let status: Int32
     private(set) var terminalOpened = false
@@ -37,8 +48,10 @@ final class UpdateCheckerTests: XCTestCase {
     }
 
     private func checker(current: String, latest: Result<Release, Error>,
-                         runner: UpgradeRunner? = nil) -> UpdateChecker {
-        UpdateChecker(current: AppVersion(current), feed: StubFeed(result: latest), runner: runner, store: store)
+                         runner: UpgradeRunner? = nil,
+                         installed: String? = nil) -> UpdateChecker {
+        UpdateChecker(current: AppVersion(current), feed: StubFeed(result: latest), runner: runner, store: store,
+                      installedVersion: { installed.flatMap(AppVersion.init) })
     }
 
     /// Lets the upgrade task started by `update()` run to its end.
@@ -138,6 +151,38 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertTrue(later.shouldAnnounce)
     }
 
+    // MARK: - Manual refresh
+
+    func testRefreshFindsAReleasePublishedSinceLaunch() async {
+        let feed = LiveFeed(release("1.5.2"))
+        var clock = Date(timeIntervalSince1970: 0)
+        let updates = UpdateChecker(current: AppVersion("1.5.2"), feed: feed, store: store, now: { clock })
+        await updates.check()
+        XCTAssertNil(updates.available)
+
+        feed.latestRelease = release("1.5.3")
+        clock += UpdateChecker.manualCheckSpacing
+        await updates.checkNow()
+
+        XCTAssertEqual(updates.available?.version.description, "1.5.3")
+    }
+
+    func testRefreshBurstAsksGitHubOnce() async {
+        let feed = LiveFeed(release("1.5.2"))
+        var clock = Date(timeIntervalSince1970: 0)
+        let updates = UpdateChecker(current: AppVersion("1.5.2"), feed: feed, store: store, now: { clock })
+        await updates.check()
+
+        for _ in 0..<5 { await updates.checkNow() }
+        clock += UpdateChecker.manualCheckSpacing - 1
+        await updates.checkNow()
+        XCTAssertEqual(feed.calls, 1)
+
+        clock += 1
+        await updates.checkNow()
+        XCTAssertEqual(feed.calls, 2)
+    }
+
     // MARK: - Greeting
 
     func testClaudyWavesUntilOpenedAndAgainAfterAModeSwitch() async {
@@ -176,7 +221,8 @@ final class UpdateCheckerTests: XCTestCase {
     // MARK: - One-click upgrade
 
     func testSuccessfulUpgradeRestarts() async {
-        let updates = checker(current: "1.5.2", latest: .success(release("1.5.3")), runner: StubRunner(status: 0))
+        let updates = checker(current: "1.5.2", latest: .success(release("1.5.3")), runner: StubRunner(status: 0),
+                              installed: "1.5.3")
         await updates.check()
         XCTAssertTrue(updates.canUpgradeInPlace)
 
@@ -184,6 +230,24 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(updates.upgradeState, .upgrading)
         await settle(updates)
         XCTAssertEqual(updates.upgradeState, .restarting)
+    }
+
+    /// brew exits 0 without installing anything when its tap has not caught up with the release.
+    /// Restarting would bring the same version back, dot included.
+    func testUpgradeThatInstalledNothingOffersTerminal() async {
+        let updates = checker(current: "1.5.2", latest: .success(release("1.5.3")), runner: StubRunner(status: 0),
+                              installed: "1.5.2")
+        await updates.check()
+
+        updates.update()
+        await settle(updates)
+        XCTAssertEqual(updates.upgradeState, .failed)
+    }
+
+    func testVersionOnDiskReadsTheBundlesInfoPlist() {
+        let bundled = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        XCTAssertNotNil(bundled)
+        XCTAssertEqual(UpdateChecker.versionOnDisk()?.description, bundled.flatMap(AppVersion.init)?.description)
     }
 
     func testFailedUpgradeOffersTerminal() async {
@@ -206,9 +270,14 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertFalse(updates.canUpgradeInPlace)
     }
 
-    func testUpgradeScriptRunsTheCaskUpgradeAndReopensClaudy() {
+    func testUpgradeScriptRunsTheCaskUpgradeAndReopensClaudy() throws {
         let script = BrewUpgradeRunner.script(brew: "/opt/homebrew/bin/brew", claudy: 4242)
         XCTAssertTrue(script.contains(#""/opt/homebrew/bin/brew" upgrade --cask claudy"#))
+        // brew refreshes its taps once a day at most on its own: a release out since then would
+        // read as "the latest version is already installed", with exit status 0.
+        let update = try XCTUnwrap(script.range(of: #""/opt/homebrew/bin/brew" update --quiet"#))
+        let upgrade = try XCTUnwrap(script.range(of: "upgrade --cask claudy"))
+        XCTAssertLessThan(update.lowerBound, upgrade.lowerBound)
         XCTAssertTrue(script.contains("open -b com.claudy.Claudy"))
         // Reopen only on success, only if brew quit Claudy, and hand brew's status back.
         XCTAssertTrue(script.contains(#"[ "$status" -eq 0 ] && ! kill -0 4242"#))

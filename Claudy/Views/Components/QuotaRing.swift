@@ -77,7 +77,7 @@ struct QuotaRing: View {
 
     private var helpText: String {
         guard window.isActive else { return "\(window.title) · \(window.window)" }
-        return "\(window.title) · \(window.window) — resets at \(UsageViewModel.clock(window.resetDate)). "
+        return "\(window.title) · \(window.window), resets \(UsageViewModel.resetTime(window.resetDate)). "
             + "The dot marks the time elapsed in the window."
     }
 }

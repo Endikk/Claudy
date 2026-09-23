@@ -49,11 +49,16 @@ enum AccountLoader {
     }
 
     private static func plan(from oauth: [String: Any]) -> String {
-        planLabel(from: (oauth["organizationRateLimitTier"] as? String)
-            ?? (oauth["userRateLimitTier"] as? String)
-            ?? (oauth["seatTier"] as? String)
-            ?? (oauth["organizationType"] as? String)
-            ?? "")
+        planLabel(candidates: ["organizationRateLimitTier", "userRateLimitTier",
+                               "seatTier", "organizationType"].map { oauth[$0] as? String })
+    }
+
+    /// Label from the first non-empty field, except that Enterprise wins outright wherever it
+    /// appears: its tier ("default_claude_zero") is internal quota plumbing and would read "Zero".
+    static func planLabel(candidates: [String?]) -> String {
+        let values = candidates.compactMap { $0?.trimmed }.filter { !$0.isEmpty }
+        if values.contains(where: { $0.lowercased().contains("enterprise") }) { return "Enterprise" }
+        return planLabel(from: values.first ?? "")
     }
 
     /// "default_claude_max_5x" → "Max 5×", "claude_pro" → "Pro". Purely generic: no tier is

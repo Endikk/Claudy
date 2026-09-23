@@ -30,7 +30,9 @@ actor LocalUsageDataSource: UsageDataSource {
         let payload = await client.fetch()
 
         var reading = payload.reading
-        if let bridge = UsageBridge.read() {
+        // Signed out on purpose means no quota at all: the bar would otherwise keep a percentage
+        // relayed by Claude Code's status line next to a card saying "not signed in".
+        if !payload.isSignedOutByUser, let bridge = UsageBridge.read() {
             let apiIsFresh = reading.map { $0.source == .api } ?? false
             if !apiIsFresh { reading = bridge }
         }

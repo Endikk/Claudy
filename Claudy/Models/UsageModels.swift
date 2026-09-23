@@ -21,9 +21,25 @@ struct UsageWindow {
     /// True when `percent` comes from a real account quota; false when no measurement exists.
     var isMeasured: Bool = true
 
+    /// Money behind the percentage, on a monthly spend cap only. It replaces the token line: a
+    /// month of tokens is not something the local transcripts can count.
+    var amount: SpendReading? = nil
+
     /// False when no window is running: there is nothing to count down, and showing a reset
     /// time already in the past would be a lie.
     var isActive: Bool { isMeasured && resetDate > Date() }
+
+    /// End of this machine's current activity block, when the transcripts show one. Kept apart
+    /// from `resetDate` so it can animate Claudy without ever turning into a countdown.
+    var localActivityEnd: Date? = nil
+
+    /// True while a window runs on the account or Claude Code works on this machine. This is
+    /// what animates Claudy: `isActive` alone freezes the mascot whenever the account has no
+    /// window to report, unreadable quota or Claude Code billing another account alike.
+    var isRunning: Bool {
+        let now = Date()
+        return resetDate > now || (localActivityEnd.map { $0 > now } ?? false)
+    }
 
     /// Share of the window already elapsed, 0…1. This is where the pace marker sits: halfway
     /// through a window, steady consumption would read 50 %.
@@ -89,6 +105,13 @@ struct UsageSnapshot {
     var session: UsageWindow
     var weekly: UsageWindow
     var sonnet: UsageWindow
+    /// Monthly spend cap of a usage-billed plan (Enterprise), `nil` on plans metered in windows.
+    /// Such a plan has no session or weekly quota, so this gauge leads the card instead.
+    var spend: UsageWindow? = nil
+
+    /// The gauge the card leads with. `session` still drives the mascot either way: it is placed
+    /// from local activity when the account has no 5-hour window.
+    var primary: UsageWindow { spend ?? session }
 
     /// Seven points, oldest first; the last one is today and therefore partial.
     var history: [TokenSample]
@@ -118,14 +141,18 @@ struct UsageSnapshot {
     /// a signal you catch without reading a number. An unmeasured gauge never triggers it:
     /// nothing raises an alarm about a figure we do not have.
     var strain: Double {
-        let peak = [session, weekly, sonnet].filter(\.isMeasured).map(\.percent).max() ?? 0
+        let peak = ([session, weekly, sonnet] + [spend].compactMap { $0 })
+            .filter(\.isMeasured).map(\.percent).max() ?? 0
         return min(max((peak - 0.95) / 0.05, 0), 1)
     }
 
-    /// A quota that blocks work is full: the 5h session or the weekly limit. The per-model
-    /// window is left out, since another model still answers. Unmeasured windows never count.
+    /// A quota that blocks work is full: the 5h session, the weekly limit, or the monthly spend
+    /// cap. The per-model window is left out, since another model still answers. Unmeasured
+    /// windows never count.
     var isOverloaded: Bool {
-        [session, weekly].contains { $0.isMeasured && $0.percent >= 1 }
+        if spend?.amount?.isLimitReached == true { return true }
+        return ([session, weekly] + [spend].compactMap { $0 })
+            .contains { $0.isMeasured && $0.percent >= 1 }
     }
 
     /// State shown before the first `fetch()` — never visible for more than a few milliseconds,

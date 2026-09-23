@@ -86,13 +86,27 @@ enum Theme {
         /// Transparent margin around the card, where the drop shadow lives. The window is
         /// therefore larger than the visible card by `shadowInset` on each edge, so any on-screen
         /// positioning must reason about the *visual* rectangle.
-        static let shadowInset: CGFloat = 14
+        ///
+        /// Derived from the shadow: a Gaussian shadow only fades out some three radii past its
+        /// offset edge, and the window edge cuts whatever is left, which shows as a grey box
+        /// around the card on a light wallpaper.
+        static let shadowInset: CGFloat = (3 * Shadow.radius + abs(Shadow.offset)).rounded(.up)
         /// Gap between the visible card and the screen edge, in its anchor corner.
         static let screenMargin: CGFloat = 8
         static let padding: CGFloat = 16
         /// Height of the usage/ports switch, and the corner of its selected segment.
         static let tabHeight: CGFloat = 22
         static let tabCorner: CGFloat = 7
+    }
+
+    /// The card's drop shadow, drawn by `CardShadow`.
+    enum Shadow {
+        static let radius: CGFloat = 8
+        static let offset: CGFloat = 4
+        static let opacity: Double = 0.3
+        /// A tight second shadow that keeps the card's edge drawn on a white wallpaper.
+        static let contactRadius: CGFloat = 1
+        static let contactOpacity: Double = 0.18
     }
 
     enum Motion {

@@ -12,9 +12,9 @@ enum OAuthError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .timedOut: "Sign-in timed out — try again."
-        case .stateMismatch: "Unexpected authorisation response (state) — try again."
-        case .malformedCode: "Invalid code — paste exactly what the page shows (code#state)."
+        case .timedOut: "Sign-in timed out. Try again."
+        case .stateMismatch: "Unexpected authorisation response (state). Try again."
+        case .malformedCode: "Invalid code: paste exactly what the page shows (code#state)."
         case .exchangeFailed(let status): "Code exchange refused (HTTP \(status))."
         case .cancelled: "Sign-in cancelled."
         }

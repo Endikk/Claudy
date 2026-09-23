@@ -22,6 +22,13 @@ actor ClaudeAccountClient {
         let profile: OAuthProfile?
         /// True when a token is available, borrowed or Claudy's own.
         let isSignedIn: Bool
+        /// The user signed Claudy out: nothing is to be shown, not even what Claude Code relays
+        /// through its status line. Carried here so it is read with the reading, in one call.
+        var isSignedOutByUser = false
+
+        static var signedOut: Payload {
+            Payload(reading: nil, profile: nil, isSignedIn: false, isSignedOutByUser: true)
+        }
     }
 
     /// Shared instance: the data source and the view model's sign-in/sign-out actions must talk
@@ -72,37 +79,87 @@ actor ClaudeAccountClient {
     private var lastSuccess: Date?
     private var failureCount = 0
     private var nextAttempt = Date.distantPast
+    private var lastManualRetry: Date?
+    /// Set by a manual retry: the next reading skips the cache. `lastSuccess` stays, since it is
+    /// what lets a failed retry fall back to the last reading instead of "—".
+    private var skipsCache = false
     /// Claudy's own token declared dead (`invalid_grant`): it is no longer attempted, and the
     /// borrowed token takes over until an explicit new sign-in.
     private var ownTokenIsDead = false
 
+    /// Set by "Sign out", cleared by signing back in. Persisted, so a relaunch keeps Claudy signed
+    /// out whatever Claude Code does meanwhile.
+    static let signedOutKey = "claudy.signedOut"
+
+    private let store: UserDefaults
+    /// Claude Code's token, read-only, and the deletion of Claudy's own keychain item. Injected
+    /// so tests never reach the real keychain.
+    private let borrowedToken: () -> OAuthCredentials?
+    private let eraseOwnToken: () -> Void
+
+    /// Bumped by every sign-in and sign-out. The actor is reentrant, so a reading or a token
+    /// refresh can still be waiting on the network when the session changes: whatever it brings
+    /// back then belongs to the previous session and is dropped, never written back. Without
+    /// this, a refresh landing after a sign-out would put a live token back in the keychain.
+    private var generation = 0
+
+    init(store: UserDefaults = .standard,
+         borrowedToken: @escaping () -> OAuthCredentials? = ClaudeCodeCredentials.load,
+         eraseOwnToken: @escaping () -> Void = ClaudeCredentialsStore.erase) {
+        self.store = store
+        self.borrowedToken = borrowedToken
+        self.eraseOwnToken = eraseOwnToken
+    }
+
+    /// True after "Sign out": no token is read, not even Claude Code's, until the user signs back
+    /// in. Without it the borrowed token would take over at the next reading and the sign-out
+    /// would undo itself.
+    var isSignedOutByUser: Bool { store.bool(forKey: Self.signedOutKey) }
+
     /// Current reading, from cache, from the network, or from the last known state.
     func fetch() async -> Payload {
-        let now = Date()
+        guard !isSignedOutByUser else { return .signedOut }
+        let payload = await read()
+        // The actor is reentrant: a sign-out landing while a request was in flight wins over that
+        // request's answer.
+        return isSignedOutByUser ? .signedOut : payload
+    }
 
-        if let lastSuccess, now.timeIntervalSince(lastSuccess) < Self.cacheTTL, lastReading != nil {
+    private func read() async -> Payload {
+        let now = Date()
+        let started = generation
+
+        if !skipsCache, let lastSuccess, now.timeIntervalSince(lastSuccess) < Self.cacheTTL, lastReading != nil {
             return Payload(reading: lastReading, profile: lastProfile, isSignedIn: true)
         }
         guard now >= nextAttempt else { return stalePayload() }
+        skipsCache = false
 
-        await resolveCredentials()
+        await resolveCredentials(started)
+        guard started == generation else { return stalePayload() }
 
         // An unreadable token must not wipe a valid reading; onboarding returns only if we
         // never had one.
         guard let credentials, !credentials.accessToken.isEmpty else { return stalePayload() }
 
         var (data, status, retryAfter) = await get(Self.usageURL, token: credentials.accessToken)
-        if status == 401, await recoverFromUnauthorized(), let token = self.credentials?.accessToken {
+        guard started == generation else { return stalePayload() }
+        if status == 401, await recoverFromUnauthorized(started), let token = self.credentials?.accessToken {
             (data, status, retryAfter) = await get(Self.usageURL, token: token)
+            guard started == generation else { return stalePayload() }
         }
         guard status == 200, let data, let reading = Self.parseUsage(data) else {
-            return recordFailure("usage HTTP \(status)", status: status, retryAfter: retryAfter)
+            let reason = status == 200 ? "usage HTTP 200 without any quota in the payload"
+                                       : "usage HTTP \(status)"
+            return recordFailure(reason, status: status, retryAfter: retryAfter)
         }
 
         let profileIsStale = profileFetchedAt.map { now.timeIntervalSince($0) > Self.profileTTL } ?? true
         if profileIsStale, let token = self.credentials?.accessToken {
             let (profileData, profileStatus, _) = await get(Self.profileURL, token: token)
-            if profileStatus == 200, let profileData, let profile = Self.parseProfile(profileData) {
+            guard started == generation else { return stalePayload() }
+            if profileStatus == 200, let profileData,
+               let profile = Self.parseProfile(profileData, subscription: self.credentials?.subscriptionType) {
                 lastProfile = profile
                 profileFetchedAt = now
             }
@@ -131,6 +188,7 @@ actor ClaudeAccountClient {
             session: stillValid(lastReading.session),
             weekly: stillValid(lastReading.weekly),
             scoped: stillValid(lastReading.scoped),
+            spend: lastReading.spend.flatMap { $0.resetsAt > now ? $0 : nil },
             source: .stale(lastSuccess)
         )
         if stale.isEmpty { stale.source = .unavailable }
@@ -159,33 +217,58 @@ actor ClaudeAccountClient {
         status == 0 || (500...599).contains(status)
     }
 
+    /// A manual retry lifts the server's backoff once a minute at most: holding ⌘R repeats the
+    /// key, and each repeat would otherwise send a request. Same span as the cache.
+    static let manualRetrySpacing: TimeInterval = cacheTTL
+
     /// Immediate retry requested by the user: a click on "refresh" must attempt something, even
-    /// in the middle of an hour-long backoff.
-    func resetBackoff() {
+    /// in the middle of an hour-long backoff. False when the last one is under a minute old.
+    @discardableResult
+    func resetBackoff(now: Date = Date()) -> Bool {
+        if let lastManualRetry, now.timeIntervalSince(lastManualRetry) < Self.manualRetrySpacing { return false }
+        lastManualRetry = now
         failureCount = 0
         nextAttempt = .distantPast
-        lastSuccess = nil
+        skipsCache = true
+        return true
     }
 
     /// Stores the tokens obtained through Claudy's own OAuth flow in its own keychain item.
     func signIn(_ newCredentials: OAuthCredentials) {
-        credentials = newCredentials
+        store.removeObject(forKey: Self.signedOutKey)
+        startSession(with: newCredentials)
         ClaudeCredentialsStore.persist(newCredentials)
-        ownTokenIsDead = false
-        resetSchedule()
     }
 
-    /// Forgets Claudy's own token. Claude Code's stores are never touched, so the borrowed token
-    /// simply takes over at the next reading.
+    /// Signing back in while Claude Code holds a live session: borrowing it again is enough, no
+    /// browser needed. False when Claude Code has none, and the browser sign-in has to run.
+    func resumeWithClaudeCode() -> Bool {
+        guard let borrowed = borrowedToken(), !Self.isExpired(borrowed) else { return false }
+        store.removeObject(forKey: Self.signedOutKey)
+        startSession(with: borrowed)
+        DiagnosticLog.append("signed back in: borrowing Claude Code's token")
+        return true
+    }
+
+    /// Erases Claudy's own token and stops borrowing Claude Code's until the user signs back in.
+    /// Claude Code's stores are never touched: the CLI stays signed in.
     func signOut() {
-        ClaudeCredentialsStore.erase()
-        credentials = nil
+        store.set(true, forKey: Self.signedOutKey)
+        eraseOwnToken()
+        startSession(with: nil)
+        DiagnosticLog.append("signed out: Claudy token removed, Claude Code's no longer read")
+    }
+
+    /// A new session keeps nothing of the previous one: no reading, no profile, since the account
+    /// may differ, and no schedule. Work still in flight for the old one is dropped on arrival.
+    private func startSession(with newCredentials: OAuthCredentials?) {
+        generation += 1
+        credentials = newCredentials
         lastReading = nil
         lastProfile = nil
         profileFetchedAt = nil
         ownTokenIsDead = false
         resetSchedule()
-        DiagnosticLog.append("signed out — Claudy token removed")
     }
 
     private func resetSchedule() {
@@ -213,21 +296,23 @@ actor ClaudeAccountClient {
     /// re-reading the keychain every three minutes would spawn a `security` process for nothing.
     /// Expired, it is still tried last: only the server decides, and better that than announcing
     /// "signed out" on the strength of a local date.
-    private func resolveCredentials() async {
+    private func resolveCredentials(_ started: Int) async {
         if let current = credentials, current.isBorrowed, !Self.isExpired(current) { return }
 
-        let borrowed = ClaudeCodeCredentials.load()
+        let borrowed = borrowedToken()
         if let borrowed, !Self.isExpired(borrowed) {
             credentials = borrowed
             return
         }
 
         if !ownTokenIsDead, let own = await ClaudeCredentialsStore.load() {
+            guard started == generation else { return }
             credentials = own
             if !Self.isExpired(own) { return }
-            if await refreshOwnToken(force: false) { return }
+            if await refreshOwnToken(force: false, started: started) { return }
         }
 
+        guard started == generation else { return }
         if let borrowed { credentials = borrowed }
     }
 
@@ -239,11 +324,11 @@ actor ClaudeAccountClient {
 
     /// Response to a 401. On a borrowed token there is nothing to refresh: Claude Code may have
     /// written a new one meanwhile, so a re-read is enough — and it is all Claudy allows itself.
-    private func recoverFromUnauthorized() async -> Bool {
+    private func recoverFromUnauthorized(_ started: Int) async -> Bool {
         guard let current = credentials else { return false }
 
         if current.isBorrowed {
-            guard let fresh = ClaudeCodeCredentials.load(),
+            guard let fresh = borrowedToken(),
                   fresh.accessToken != current.accessToken else {
                 DiagnosticLog.append("usage HTTP 401 on borrowed token — Claude Code must sign in again")
                 return false
@@ -253,14 +338,15 @@ actor ClaudeAccountClient {
         }
 
         DiagnosticLog.append("usage HTTP 401 — forcing refresh")
-        return await refreshOwnToken(force: true)
+        return await refreshOwnToken(force: true, started: started)
     }
 
     /// Refreshes **Claudy's own** token. The store is re-read first: a previous pass may have done
     /// it already, in which case spending our refresh token would be both useless and destructive
     /// (rotation).
-    private func refreshOwnToken(force: Bool) async -> Bool {
+    private func refreshOwnToken(force: Bool, started: Int) async -> Bool {
         if let fresh = await ClaudeCredentialsStore.load() {
+            guard started == generation else { return false }
             let tokenChanged = fresh.accessToken != credentials?.accessToken
             credentials = fresh
             if tokenChanged { return true }
@@ -291,6 +377,12 @@ actor ClaudeAccountClient {
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let status = (response as? HTTPURLResponse)?.statusCode else {
             DiagnosticLog.append("refresh: network unavailable")
+            return false
+        }
+        // Signed out (or in again) while the request was out: the new token is discarded, not
+        // written back to a keychain the user just emptied.
+        guard started == generation else {
+            DiagnosticLog.append("refresh answer dropped: the session changed meanwhile")
             return false
         }
         guard status == 200,
@@ -340,8 +432,9 @@ actor ClaudeAccountClient {
 
     /// Reads `/api/oauth/usage`. Two representations coexist in one payload: the top-level fields
     /// (`utilization`, 0-100) that `/usage` reads, and `limits[]`, the only place naming the model
-    /// of the per-model window. The former leads, the latter completes.
-    static func parseUsage(_ data: Data) -> QuotaReading? {
+    /// of the per-model window. The former leads, the latter completes. A payload with neither
+    /// window belongs to a usage-billed plan, whose only quota is its monthly spend cap.
+    static func parseUsage(_ data: Data, now: Date = Date()) -> QuotaReading? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
 
         var reading = QuotaReading(session: nil, weekly: nil, scoped: nil, source: .api)
@@ -378,7 +471,46 @@ actor ClaudeAccountClient {
             }
         }
 
+        if reading.session == nil, reading.weekly == nil {
+            reading.spend = spend(root, now: now)
+        }
+
         return reading.isEmpty ? nil : reading
+    }
+
+    /// Enterprise plans are billed on usage: `five_hour` and `seven_day` come back null and the
+    /// meter is `spend`, each amount in minor units with its exponent (4631 at exponent 2 is
+    /// $46.31). `extra_usage`, the older shape of the same budget, is the fallback. Pro and Max
+    /// carry these blocks too, as their extra-usage cap, which is why only a payload without
+    /// windows is read here.
+    private static func spend(_ root: [String: Any], now: Date) -> SpendReading? {
+        let extra = root["extra_usage"] as? [String: Any]
+        let reached = (extra?["spend_limit_reached"] as? Bool) ?? false
+        let resetsAt = SpendReading.periodEnd(after: now)
+
+        if let block = root["spend"] as? [String: Any], (block["enabled"] as? Bool) != false,
+           let used = amount(block["used"]), let limit = amount(block["limit"]), limit.value > 0 {
+            return SpendReading(used: used.value, limit: limit.value, currency: limit.currency,
+                                isLimitReached: reached, resetsAt: resetsAt)
+        }
+
+        guard let extra, (extra["is_enabled"] as? Bool) == true,
+              let usedMinor = extra["used_credits"] as? NSNumber,
+              let limitMinor = extra["monthly_limit"] as? NSNumber, limitMinor.doubleValue > 0 else {
+            return nil
+        }
+        let scale = pow(10, (extra["decimal_places"] as? NSNumber)?.doubleValue ?? 2)
+        return SpendReading(used: usedMinor.doubleValue / scale, limit: limitMinor.doubleValue / scale,
+                            currency: (extra["currency"] as? String) ?? "USD",
+                            isLimitReached: reached, resetsAt: resetsAt)
+    }
+
+    /// `{ "amount_minor": 4631, "currency": "USD", "exponent": 2 }` → 46.31 USD.
+    private static func amount(_ raw: Any?) -> (value: Double, currency: String)? {
+        guard let object = raw as? [String: Any],
+              let minor = object["amount_minor"] as? NSNumber else { return nil }
+        let exponent = (object["exponent"] as? NSNumber)?.doubleValue ?? 2
+        return (minor.doubleValue / pow(10, exponent), (object["currency"] as? String) ?? "USD")
     }
 
     /// One top-level block: `{ "utilization": 59.0, "resets_at": "…" }`, `null` when inapplicable.
@@ -389,7 +521,9 @@ actor ClaudeAccountClient {
         return QuotaWindow(percent: utilization.doubleValue / 100, resetsAt: resetsAt, label: label)
     }
 
-    private static func parseProfile(_ data: Data) -> OAuthProfile? {
+    /// `subscription` is the token's own `subscriptionType` ("enterprise"), kept as the last
+    /// candidate: the organisation's tier says more on every plan but Enterprise.
+    private static func parseProfile(_ data: Data, subscription: String?) -> OAuthProfile? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let account = root["account"] as? [String: Any] else { return nil }
 
@@ -398,15 +532,17 @@ actor ClaudeAccountClient {
             ?? (account["display_name"] as? String) ?? ""
         guard !name.isEmpty else { return nil }
 
-        let tier = (organization?["rate_limit_tier"] as? String)
-            ?? (organization?["seat_tier"] as? String)
-            ?? (organization?["organization_type"] as? String)
-            ?? ""
+        let plan = AccountLoader.planLabel(candidates: [
+            organization?["rate_limit_tier"] as? String,
+            organization?["seat_tier"] as? String,
+            organization?["organization_type"] as? String,
+            subscription,
+        ])
 
         return OAuthProfile(
             name: name,
             email: (account["email"] as? String) ?? "",
-            plan: AccountLoader.planLabel(from: tier),
+            plan: plan,
             organization: (organization?["name"] as? String) ?? ""
         )
     }
