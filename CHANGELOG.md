@@ -2,6 +2,64 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.4 (23 September 2026)
+
+### Added
+
+- **Enterprise accounts.** An Enterprise plan is billed on usage: no 5-hour or weekly window, just
+  a monthly spend cap set by the organisation. Claudy took that answer for a failure and showed
+  "—". The card now leads with the month's spend ("$46.31 of $500.00"), the reset date on the
+  1st and the usual pace marker, and the laptop explodes when the cap is reached. The account
+  card says "Enterprise" rather than an internal tier name.
+- **Sign in and out from the menu bar.** The popover shows who is signed in with a "Sign out"
+  button, and the right-click menu offers "Sign in to Claude…" or "Sign out of Claude". Signed
+  out, the popover carries the whole sign-in, including the field for pasting the code when the
+  browser cannot hand it back on its own.
+- **Refresh also looks for a new Claudy.** Any refresh you ask for (the button, ⌘R, the
+  right-click menu) checks GitHub for a new release too, so an update published since launch
+  shows up without waiting for the daily check. Clicking again and again asks GitHub once a
+  minute at most. A wait imposed by Anthropic's server is lifted once a minute at most too, so
+  a held ⌘R or a burst of clicks cannot send a request each.
+
+### Fixed
+
+- **Output tokens were undercounted by about 40 %.** Claude Code writes one response over several
+  lines, and the early ones carry the output count reached so far. Claudy kept the first line, so
+  every day of the history, the model and project splits and the "7 days" total came out short.
+  It now keeps the final count, including for a response it read while still being written, and
+  a response copied into a resumed session counts once whatever order the files are read in.
+- **No tokens at all on some Macs.** A `~/.claude/projects` folder moved to another disk behind a
+  symbolic link read as empty. Claudy now follows the link, and also reads
+  `~/.config/claude/projects`, where some Claude Code releases keep their transcripts.
+- **Sign out now signs out.** Claudy only erased its own token, then picked Claude Code's up
+  again at the next reading, so the button did nothing on most Macs. Claudy now stays signed out,
+  across relaunches, until you sign back in. Claude Code itself stays signed in. Signing back in
+  reuses Claude Code's session with no browser round trip when it has one.
+- **⌘V pastes the sign-in code.** With no menu bar of its own, Claudy had no Edit menu, so text
+  fields ignored ⌘C, ⌘V and ⌘A: the code could only be pasted with a right click.
+- **Update could restart into the same version.** On its own, brew refreshes the Claudy tap once
+  a day at most. A release out since then read as "the latest version is already installed",
+  brew reported success, and Claudy restarted into the version it was already running, dot
+  included. Update now runs `brew update` first, and if the version on disk has not changed it
+  offers the Terminal instead of restarting.
+- **A failed refresh blanked the gauges.** Clicking refresh while Anthropic was unreachable threw
+  the last reading away, and the card fell to "—" instead of showing it as stale. The last
+  reading now stays, dated, as it does when an automatic refresh fails.
+- **Claudy stood still on some Macs.** The mascot only typed while the account reported a 5-hour
+  window, so it froze whenever there was none to read: quota unavailable, or Claude Code billing
+  another account such as an API key. It now types whenever Claude Code works on this Mac too.
+- **A grey box around the card.** On a light wallpaper, the card's shadow was cut at the edge of
+  its window and showed as a grey frame. The glass also turned grey on grey in dark mode over a
+  light wallpaper, or the reverse. The shadow now fades out inside the window, and the glass uses
+  a material that follows the wallpaper less.
+
+### Changed
+
+- **English only.** The sign-in screen still showed its waiting message in French; it now reads
+  "Waiting for the browser…". The install and build scripts, the Homebrew cask and the remaining
+  source comments are in English too. The French docs are gone: [README.fr.md](README.fr.md) is
+  the one French page left, and it links to the English docs.
+
 ## 1.5.3 — 22 September 2026
 
 ### Added

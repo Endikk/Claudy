@@ -11,8 +11,8 @@
 # User install:
 #   brew install --cask Endikk/claudy/claudy
 cask "claudy" do
-  version "1.5.3"
-  sha256 "be39974777aefdbe91f598d11caeb04063d9016c07dae26b02e0da2d44445608"
+  version "1.5.4"
+  sha256 "8dbe68d1f28ce29a64f6d109c99f204cf31ef3ae1297694655a11cd7cb105ff8"
 
   url "https://github.com/Endikk/Claudy/releases/download/v#{version}/Claudy-#{version}.zip"
   name "Claudy"
