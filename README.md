@@ -10,7 +10,7 @@
 [![macOS](https://img.shields.io/badge/macOS-13%2B-black?style=flat-square)](https://www.apple.com/macos/)
 [![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](LICENSE)
 
-🇫🇷 [Lire ce README en français](README.fr.md)
+🇫🇷 [This README in French](README.fr.md)
 
 <p align="center"><img src="docs/claudy-typing.gif" width="132" alt="Claudy, the pixel mascot, typing at its laptop"></p>
 

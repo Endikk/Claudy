@@ -82,9 +82,11 @@ Rafraîchissement toutes les 3 minutes, et immédiat au réveil de la machine.
 
 ## Documentation
 
-- [Fonctionnement](docs/fr/fonctionnement.md) — sources des données, invariants des quotas,
+En anglais uniquement.
+
+- [Fonctionnement](docs/how-it-works.md) — sources des données, invariants des quotas,
   passerelle statusline, repère de rythme, mode démonstration, vie privée.
-- [Développement](docs/fr/developpement.md) — lancer, produire le `.app`, structure du projet,
+- [Développement](docs/development.md) — lancer, produire le `.app`, structure du projet,
   contraintes de fenêtre à connaître avant d'y toucher.
 
 ## Historique des stars
