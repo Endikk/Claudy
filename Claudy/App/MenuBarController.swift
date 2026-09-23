@@ -120,7 +120,9 @@ final class MenuBarController: NSObject {
     private func update(with snapshot: UsageSnapshot) {
         guard let button = item?.button else { return }
         let session = snapshot.session
-        let tint = Theme.tint(session.accent, at: session.percent)
+        // The figure in the bar: the 5h session, or the monthly spend on a plan billed on usage.
+        let lead = snapshot.primary
+        let tint = Theme.tint(lead.accent, at: lead.percent)
 
         let badged = updates.available != nil
         if framesTint != tint || framesBadged != badged {
@@ -138,7 +140,7 @@ final class MenuBarController: NSObject {
             framesBadged = badged
         }
 
-        let percent = session.isMeasured ? "\(Int(session.percent * 100))%" : "—"
+        let percent = lead.isMeasured ? "\(Int(lead.percent * 100))%" : "—"
         button.attributedTitle = NSAttributedString(
             string: " \(percent)",
             attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)]
@@ -150,15 +152,16 @@ final class MenuBarController: NSObject {
                 self.bubble.show(below: button)
             }
         }
-                button.toolTip = session.isActive
-            ? "Session \(percent) · reset \(UsageViewModel.clock(session.resetDate))"
+        button.toolTip = lead.isActive
+            ? "\(lead.title) \(percent) · reset \(UsageViewModel.resetTime(lead.resetDate))"
             : "Claudy"
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let overloaded = snapshot.isOverloaded
         // The pre-launch placeholder is not a reading: remembering it would turn the first real
         // reading of a full quota into an explosion at launch instead of the dead state.
-        let isReading = snapshot.isDemo || [session, snapshot.weekly, snapshot.sonnet].contains(where: \.isMeasured)
+        let isReading = snapshot.isDemo
+            || [session, snapshot.weekly, snapshot.sonnet, lead].contains(where: \.isMeasured)
         defer { if isReading { wasOverloaded = overloaded } }
 
         if overloaded {
@@ -173,7 +176,7 @@ final class MenuBarController: NSObject {
             // A full quota matters more than a new version: the dead state wins over the wave.
             animation = .waving
         } else {
-            animation = session.isActive && !reduceMotion ? .typing : .still
+            animation = session.isRunning && !reduceMotion ? .typing : .still
         }
         applyAnimation(reduceMotion: reduceMotion)
     }
@@ -283,6 +286,10 @@ final class MenuBarController: NSObject {
         menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Show floating widget", action: #selector(leaveMenuBar), keyEquivalent: "")
             .target = self
+        if let account = accountItem() {
+            menu.addItem(.separator())
+            menu.addItem(account)
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Claudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         item?.menu = menu
@@ -325,5 +332,30 @@ final class MenuBarController: NSObject {
 
     @objc private func leaveMenuBar() {
         viewModel.toggleMenuBar()
+    }
+
+    /// Sign in or out, whichever applies. Nothing before the first reading, which has yet to say
+    /// which; nothing on the demo set, which has no account. An item without an action shows
+    /// disabled while a sign-in is already under way.
+    private func accountItem() -> NSMenuItem? {
+        if viewModel.isSignedIn {
+            let item = NSMenuItem(title: "Sign out of Claude", action: #selector(signOut), keyEquivalent: "")
+            item.target = self
+            return item
+        }
+        guard viewModel.hasLoaded, !viewModel.snapshot.isDemo else { return nil }
+        let item = NSMenuItem(title: "Sign in to Claude…",
+                              action: viewModel.isSigningIn ? nil : #selector(signIn),
+                              keyEquivalent: "")
+        item.target = self
+        return item
+    }
+
+    @objc private func signIn() {
+        viewModel.startSignIn()
+    }
+
+    @objc private func signOut() {
+        viewModel.signOut()
     }
 }

@@ -5,8 +5,9 @@ struct MinimalView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
 
-    private var session: UsageWindow { viewModel.snapshot.session }
-    private var tint: Color { Theme.tint(session.accent, at: session.percent) }
+    /// The 5h session, or the monthly spend on a plan billed on usage.
+    private var lead: UsageWindow { viewModel.snapshot.primary }
+    private var tint: Color { Theme.tint(lead.accent, at: lead.percent) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,16 +16,17 @@ struct MinimalView: View {
                     if updates.isGreeting && !viewModel.snapshot.isOverloaded {
                         ClaudyWaving(tint: tint, cell: 1)
                     } else {
-                        ClaudyTyping(tint: tint, isTyping: session.isActive, isOverloaded: viewModel.snapshot.isOverloaded)
+                        ClaudyTyping(tint: tint, isTyping: viewModel.snapshot.session.isRunning,
+                                     isOverloaded: viewModel.snapshot.isOverloaded)
                     }
                 }
                 .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
 
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")
+                    Text(lead.isMeasured ? "\(Int(lead.percent * 100))" : "—")
                         .font(Theme.Font.hero(28))
-                        .foregroundStyle(.primary.opacity(session.isMeasured ? 0.95 : 0.45))
-                    if session.isMeasured {
+                        .foregroundStyle(.primary.opacity(lead.isMeasured ? 0.95 : 0.45))
+                    if lead.isMeasured {
                         Text("%")
                             .font(Theme.Font.label(13, .medium))
                             .foregroundStyle(.primary.opacity(0.4))
@@ -45,10 +47,10 @@ struct MinimalView: View {
                 Spacer(minLength: 6)
 
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
+                    Text(lead.isActive ? "reset" : (lead.isMeasured ? "session" : "quota"))
                         .microLabel(0.35)
-                    Text(session.isActive ? UsageViewModel.clock(session.resetDate)
-                                          : (session.isMeasured ? "inactive" : "unavailable"))
+                    Text(lead.isActive ? UsageViewModel.resetTime(lead.resetDate)
+                                          : (lead.isMeasured ? "inactive" : "unavailable"))
                         .font(Theme.Font.value(12, .medium))
                         .foregroundStyle(.primary.opacity(0.65))
                 }
@@ -57,8 +59,8 @@ struct MinimalView: View {
             .padding(.top, 9)
             .padding(.bottom, 8)
 
-            UsageBar(percent: session.percent, tint: tint, height: 3, showsGlow: false,
-                     pace: session.isActive ? session.elapsed : nil)
+            UsageBar(percent: lead.percent, tint: tint, height: 3, showsGlow: false,
+                     pace: lead.isActive ? lead.elapsed : nil)
         }
         .frame(width: Theme.Metric.minimalWidth)
         .contentShape(Rectangle())

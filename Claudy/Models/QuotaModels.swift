@@ -51,13 +51,48 @@ enum QuotaSource: Equatable {
     }
 }
 
+/// Monthly spend cap of a usage-billed plan (Enterprise), as the account reports it. Such a plan
+/// has no 5-hour or weekly window: this cap is its only quota.
+struct SpendReading: Equatable {
+    /// Amounts in major units: 46.31 means $46.31.
+    let used: Double
+    /// Always above zero: no cap, or a zero one, is not a quota and never becomes a reading.
+    let limit: Double
+    /// ISO 4217 code, "USD".
+    let currency: String
+    /// Anthropic's own verdict, which can come before `used` reaches `limit` to the cent.
+    let isLimitReached: Bool
+    let resetsAt: Date
+
+    /// 0…1, from the amounts rather than the rounded `percent` the API also sends.
+    var percent: Double { limit > 0 ? min(max(used / limit, 0), 1) : 0 }
+
+    var startsAt: Date { Self.utc.date(byAdding: .month, value: -1, to: resetsAt) ?? resetsAt }
+
+    /// Spend caps reset at 00:00 UTC on the first of each month. The API does not send that
+    /// instant, so it is derived from the rule, which is also what claude.ai ▸ Usage shows.
+    static func periodEnd(after date: Date) -> Date {
+        let month = utc.dateComponents([.year, .month], from: date)
+        let start = utc.date(from: month) ?? date
+        return utc.date(byAdding: .month, value: 1, to: start) ?? date
+    }
+
+    private static let utc: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        return calendar
+    }()
+}
+
 /// Full reading of the account's quotas at one instant.
 struct QuotaReading: Equatable {
     var session: QuotaWindow?
     var weekly: QuotaWindow?
     /// Weekly window scoped to one model ("weekly_scoped").
     var scoped: QuotaWindow?
+    /// Monthly spend cap, set only on a plan that reports no window.
+    var spend: SpendReading? = nil
     var source: QuotaSource
 
-    var isEmpty: Bool { session == nil && weekly == nil && scoped == nil }
+    var isEmpty: Bool { session == nil && weekly == nil && scoped == nil && spend == nil }
 }

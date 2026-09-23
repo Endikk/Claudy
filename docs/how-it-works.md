@@ -26,17 +26,29 @@ defaults write com.claudy.Claudy claudy.configDir ~/my-claude-folder
 When a custom directory is set there is no fallback to the home folder: redirecting the
 configuration isolates completely.
 
+Without one, transcripts are read from `~/.claude/projects` and also from
+`~/.config/claude/projects` (`$XDG_CONFIG_HOME/claude/projects` when that variable is set), the
+location some Claude Code releases wrote to. `ccusage` reads both for the same reason. A response
+found in both folders counts once. A `projects` folder moved to another disk behind a symbolic
+link is followed.
+
 Counted tokens are the sum of the four counters (`input`, `output`, `cache_creation`,
 `cache_read`). Cache reads dominate: a busy week routinely passes a billion tokens, hence the "B"
 unit in the interface.
 
-Claude Code rewrites the same response across several transcript lines, one per content block,
-with an identical `usage` block. Claudy **deduplicates** on `(message.id, requestId)` — the same
-key `ccusage` uses — without which totals would be inflated roughly twofold.
+Claude Code writes the same response across several transcript lines, one per content block.
+Claudy **deduplicates** on `(message.id, requestId)`, the key `ccusage` uses too. Without it,
+totals would be inflated roughly twofold.
+
+The copies are not identical. The early lines carry the output count reached so far, and only the
+last one carries the final count. Claudy keeps the largest copy, which is the final one. Keeping
+the first copy, as earlier versions did, undercounted output tokens by about 40 %. A resumed
+session (`--resume`) copies earlier responses into a new transcript: those are deduplicated the
+same way, across files, whatever order the disk lists them in.
 
 A project's name comes from the line's `cwd` field, never from the transcript folder name, which
-is a transliteration that loses accents and separators (`~/Documents/Développement/My-App` becomes
-`-Users-…-D-veloppement-My-App`).
+is a transliteration that loses accents and separators (`~/Documents/Naïve/My-App` becomes
+`-Users-…-Documents-Na-ve-My-App`).
 
 ### How the percentages stay true
 
@@ -82,6 +94,35 @@ Better to show nothing than a number that means nothing.
 Tokens counted in the transcripts are still displayed, but for what they are: **this machine's**
 consumption ("12.4 M tokens on this machine"), the 7-day history and the per-model and per-project
 splits. They never mix with the account percentage.
+
+### Enterprise: a monthly spend cap
+
+Enterprise plans are billed on usage. They have no 5-hour or weekly window: the API answers
+`five_hour: null` and `seven_day: null`, and the quota is a monthly spend cap set by the
+organisation, carried in a `spend` block:
+
+```json
+"spend": {
+  "used":  { "amount_minor": 4631,  "currency": "USD", "exponent": 2 },
+  "limit": { "amount_minor": 50000, "currency": "USD", "exponent": 2 }
+}
+```
+
+`4631` at exponent 2 is $46.31. When `spend` is missing, Claudy reads `extra_usage`
+(`used_credits`, `monthly_limit`, `decimal_places`), the older shape of the same budget.
+
+On such an account the card leads with **Spend · month**: the percentage worked out from the two
+amounts (the API's own `percent` is rounded), the amounts themselves ("$46.31 of $500.00") and the
+reset date. Caps reset at 00:00 UTC on the 1st; the API does not send that instant, so it is
+derived from the rule. The pace marker reads the share of the month elapsed. The weekly and
+per-model columns step aside, having no quota to show. At the cap, the laptop explodes as it does
+at 100 % of a session.
+
+Pro and Max carry a `spend` block too: their extra-usage cap. Claudy only reads it when both
+windows are absent, so it never hides a live session.
+
+An account with no cap, or with spending turned off, has no quota at all. The gauges then show
+"—", as for any missing measurement.
 
 ### Status-line bridge (optional)
 

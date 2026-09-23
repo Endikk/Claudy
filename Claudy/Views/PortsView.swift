@@ -13,12 +13,12 @@ struct PortsView: View {
             case .scanning:
                 message("Scanning ports…")
             case .unavailable(let reason):
-                message("Scan unavailable — \(reason)")
+                message("Scan unavailable: \(reason)")
             case .ready(let ports, _) where ports.isEmpty:
                 message("No port left open by Claude.")
             case .ready(let ports, let isDegraded):
                 if isDegraded {
-                    Text("Process environments unreadable — orphans cannot be detected.")
+                    Text("Process environments unreadable, so orphans cannot be detected.")
                         .font(Theme.Font.label(9.5, .medium))
                         .foregroundStyle(Theme.Accent.amber.color.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)

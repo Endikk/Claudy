@@ -30,6 +30,7 @@ struct RootView: View {
 
     var body: some View {
         card
+            .background(CardShadow(corner: corner))
             .padding(Theme.Metric.shadowInset)
             // Any click on the card counts as opening Claudy: the wave has been seen.
             .simultaneousGesture(TapGesture().onEnded { updates.acknowledgeGreeting() })
@@ -62,12 +63,13 @@ struct RootView: View {
         )
         .overlay(strainBorder)
         .overlay(profileLayer)
-        .shadow(color: .black.opacity(0.34), radius: 18, y: 8)
     }
 
     private var cardBackground: some View {
         ZStack {
-            VisualEffectView(material: .hudWindow, blending: .behindWindow)
+            // The material that least follows the wallpaper. `.hudWindow` turned mid-grey in dark
+            // mode over a light wallpaper, and in light mode over a dark one: grey text on grey.
+            VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
             LinearGradient(
                 colors: isDark
                     ? [.white.opacity(0.10), .white.opacity(0.015)]
@@ -84,7 +86,7 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Fiche compte
+    // MARK: - Account card
 
     @ViewBuilder
     private var profileLayer: some View {
@@ -129,7 +131,7 @@ struct RootView: View {
     @ViewBuilder
     private var menu: some View {
         Button {
-            Task { await viewModel.refresh() }
+            Task { await viewModel.refresh(userInitiated: true) }
         } label: {
             Label("Refresh", systemImage: "arrow.clockwise")
         }
@@ -162,7 +164,7 @@ struct RootView: View {
         Toggle("Always on top", isOn: $viewModel.isAlwaysOnTop)
 
         if LaunchAtLogin.isAdHocSigned {
-            Button("Launch at login (unavailable — app is unsigned)") {}
+            Button("Launch at login (unavailable, app is unsigned)") {}
                 .disabled(true)
         } else {
             Toggle(

@@ -1,30 +1,30 @@
-# Cask Homebrew de Claudy.
+# Homebrew cask for Claudy.
 #
-# Publication : copier ce fichier dans le tap `Endikk/homebrew-claudy` (répertoire Casks/),
-# puis mettre à jour `version` ET `sha256` à chaque release :
+# Publishing: copy this file into the `Endikk/homebrew-claudy` tap (Casks/ directory),
+# then update `version` AND `sha256` on every release:
 #   shasum -a 256 dist/Claudy-<version>.zip
 #
-# SÉCURITÉ : `sha256` doit toujours être épinglé (jamais `:no_check`). C'est la seule
-# vérification d'intégrité de la chaîne — le postflight ci-dessous retire la quarantaine,
-# il ne doit s'appliquer qu'à un artefact dont l'empreinte a été vérifiée par Homebrew.
+# SECURITY: `sha256` must always be pinned (never `:no_check`). It is the only integrity
+# check in the chain: the postflight below removes the quarantine flag, so it must only
+# ever apply to an artefact whose digest Homebrew has verified.
 #
-# Installation utilisateur :
+# User install:
 #   brew install --cask Endikk/claudy/claudy
 cask "claudy" do
-  version "1.5.3"
-  sha256 "be39974777aefdbe91f598d11caeb04063d9016c07dae26b02e0da2d44445608"
+  version "1.5.4"
+  sha256 "8dbe68d1f28ce29a64f6d109c99f204cf31ef3ae1297694655a11cd7cb105ff8"
 
   url "https://github.com/Endikk/Claudy/releases/download/v#{version}/Claudy-#{version}.zip"
   name "Claudy"
-  desc "Widget de bureau affichant les quotas et la consommation Claude en temps réel"
+  desc "Desktop widget showing Claude quotas and usage in real time"
   homepage "https://github.com/Endikk/Claudy"
 
   depends_on macos: :ventura
 
   app "Claudy.app"
 
-  # L'app n'est pas notarisée (distribution gratuite, sans compte Apple Developer) :
-  # sans ce retrait de quarantaine, Gatekeeper refuserait de la lancer.
+  # The app is not notarised (free distribution, no Apple Developer account):
+  # without removing the quarantine flag, Gatekeeper would refuse to launch it.
   postflight do
     system_command "/usr/bin/xattr",
                    args: ["-dr", "com.apple.quarantine", "#{appdir}/Claudy.app"],
@@ -39,8 +39,8 @@ cask "claudy" do
   ]
 
   caveats <<~EOS
-    Claudy n'est pas notarisé par Apple (projet gratuit, sans compte développeur payant).
-    Le cask retire la quarantaine automatiquement. Le code est open source :
-    https://github.com/Endikk/Claudy — compile-le toi-même si tu préfères.
+    Claudy is not notarised by Apple (free project, no paid developer account).
+    The cask removes the quarantine flag automatically. The code is open source:
+    https://github.com/Endikk/Claudy, build it yourself if you prefer.
   EOS
 end

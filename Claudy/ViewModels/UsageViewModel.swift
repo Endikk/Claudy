@@ -35,8 +35,14 @@ final class UsageViewModel: ObservableObject {
 
     var isSignedIn: Bool { snapshot.isSignedIn }
 
+    /// Called on every refresh the user asks for, even one dropped because a reading is under
+    /// way. The app delegate looks for a new Claudy there.
+    var onUserRefresh: (@MainActor () -> Void)?
+
     private let source: UsageDataSource
     private let oauth = ClaudeOAuth()
+    /// Numbers each click on "Sign in", so a stale attempt knows it was superseded.
+    private var signInAttempt = 0
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
 
@@ -67,7 +73,9 @@ final class UsageViewModel: ObservableObject {
 
     /// Takes a usage reading. `userInitiated` lifts any backoff in progress: a click on
     /// "refresh" must attempt something, even mid-way through an hour-long wait after a 429.
+    /// It also checks for a new version of Claudy.
     func refresh(userInitiated: Bool = false) async {
+        if userInitiated { onUserRefresh?() }
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
@@ -120,11 +128,30 @@ final class UsageViewModel: ObservableObject {
         launchAtLogin = LaunchAtLogin.set(enabled)
     }
 
+    /// Claude Code's session is reused when it has one, with no browser. The browser sign-in runs
+    /// only when it does not.
     func startSignIn() {
         guard !isSigningIn else { return }
         isSigningIn = true
         errorMessage = nil
+        signInAttempt += 1
+        let attempt = signInAttempt
 
+        Task {
+            let resumed = await ClaudeAccountClient.shared.resumeWithClaudeCode()
+            if resumed {
+                // Already restored, even if "Cancel" came while the keychain was being read.
+                isSigningIn = false
+                await refreshAfterSessionChange()
+            } else if isSigningIn, attempt == signInAttempt {
+                // Cancel then sign in again while the keychain was read: only the latest attempt
+                // may open the browser, or two flows would fight over the loopback port.
+                beginBrowserSignIn()
+            }
+        }
+    }
+
+    private func beginBrowserSignIn() {
         switch oauth.begin() {
         case .manual:
             isAwaitingManualCode = true
@@ -162,7 +189,7 @@ final class UsageViewModel: ObservableObject {
         Task {
             await ClaudeAccountClient.shared.signOut()
             withAnimation(Theme.Motion.popup) { isProfileVisible = false }
-            await refresh()
+            await refreshAfterSessionChange()
         }
     }
 
@@ -170,6 +197,15 @@ final class UsageViewModel: ObservableObject {
         await ClaudeAccountClient.shared.signIn(credentials)
         isSigningIn = false
         isAwaitingManualCode = false
+        await refreshAfterSessionChange()
+    }
+
+    /// `refresh` drops a call made while another one runs, and that one may have read the old
+    /// session: wait for it to end, then read again.
+    private func refreshAfterSessionChange() async {
+        while isRefreshing {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
         await refresh()
     }
 
@@ -224,6 +260,24 @@ final class UsageViewModel: ObservableObject {
     /// "14:30"
     static func clock(_ date: Date) -> String {
         clockFormatter.string(from: date)
+    }
+
+    /// When a gauge resets: the time within a day, the date beyond. A monthly cap resetting on
+    /// the 1st would otherwise read as a bare "02:00".
+    static func resetTime(_ date: Date, now: Date = Date()) -> String {
+        date.timeIntervalSince(now) < 86_400 ? clock(date) : dayFormatter.string(from: date)
+    }
+
+    /// "$46.31 of $500.00", each amount in the currency the account reports.
+    static func spent(_ spend: SpendReading, locale: Locale = .current) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = locale
+        formatter.currencyCode = spend.currency
+        let money = { (value: Double) in
+            formatter.string(from: NSNumber(value: value)) ?? "\(value) \(spend.currency)"
+        }
+        return "\(money(spend.used)) of \(money(spend.limit))"
     }
 
     /// A window's distance from its expected pace, ready to display. `nil` when no window is
@@ -296,6 +350,13 @@ final class UsageViewModel: ObservableObject {
         let formatter = DateFormatter()
         formatter.locale = .current
         formatter.setLocalizedDateFormatFromTemplate("HH:mm")
+        return formatter
+    }()
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.setLocalizedDateFormatFromTemplate("d MMM")
         return formatter
     }()
 

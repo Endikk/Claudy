@@ -1,15 +1,16 @@
 import SwiftUI
 
 /// Full mode, top to bottom: header, 5h session, weekly and per-model columns, totals,
-/// sparkline, "Details" accordion, footer.
+/// sparkline, "Details" accordion, footer. On a plan billed on usage, the monthly spend takes
+/// the session's place and the two columns, which have no quota there, step aside.
 struct FullView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
     @EnvironmentObject private var portsViewModel: PortsViewModel
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
-    private var session: UsageWindow { snapshot.session }
-    private var sessionTint: Color { Theme.tint(session.accent, at: session.percent) }
+    private var lead: UsageWindow { snapshot.primary }
+    private var leadTint: Color { Theme.tint(lead.accent, at: lead.percent) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 11) {
@@ -41,9 +42,11 @@ struct FullView: View {
                 .onTapGesture { viewModel.toggleMode() }
                 .help("Click for minimal mode")
 
-            HStack(spacing: 9) {
-                StatColumn(window: snapshot.weekly)
-                StatColumn(window: snapshot.sonnet)
+            if snapshot.spend == nil {
+                HStack(spacing: 9) {
+                    StatColumn(window: snapshot.weekly)
+                    StatColumn(window: snapshot.sonnet)
+                }
             }
 
             totals
@@ -68,9 +71,9 @@ struct FullView: View {
         HStack(spacing: 8) {
             Group {
                 if updates.isGreeting && !snapshot.isOverloaded {
-                    ClaudyWaving(tint: Theme.tint(snapshot.session.accent, at: snapshot.session.percent), cell: 1)
+                    ClaudyWaving(tint: leadTint, cell: 1)
                 } else {
-                    ClaudyTyping(isTyping: snapshot.session.isActive, isOverloaded: snapshot.isOverloaded)
+                    ClaudyTyping(isTyping: snapshot.session.isRunning, isOverloaded: snapshot.isOverloaded)
                 }
             }
             .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
@@ -116,13 +119,13 @@ struct FullView: View {
         case .api:
             "Account quotas, identical to claude.ai ▸ Usage."
         case .bridge:
-            "Counters relayed by Claude Code's status line — same values, no request."
+            "Counters relayed by Claude Code's status line: same values, no request."
         case .stale(let date):
-            "Account momentarily unreachable — reading from \(UsageViewModel.age(since: date)) ago."
+            "Account momentarily unreachable. Reading from \(UsageViewModel.age(since: date)) ago."
         case .unavailable:
             "Quotas unavailable: no figure is shown rather than an estimate."
         case .demo:
-            "Claude Code was not found on this machine — sample data."
+            "Claude Code was not found on this machine: sample data."
         }
     }
 
@@ -141,22 +144,22 @@ struct FullView: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("\(session.title) · \(session.window)")
+                    Text("\(lead.title) · \(lead.window)")
                         .microLabel(0.55)
 
                     HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text(session.isMeasured ? "\(Int(session.percent * 100))" : "—")
+                        Text(lead.isMeasured ? "\(Int(lead.percent * 100))" : "—")
                             .font(Theme.Font.hero(40))
                             .foregroundStyle(
                                 LinearGradient(
-                                    colors: session.isMeasured
+                                    colors: lead.isMeasured
                                         ? [.primary, .primary.opacity(0.72)]
                                         : [.primary.opacity(0.4), .primary.opacity(0.28)],
                                     startPoint: .top,
                                     endPoint: .bottom
                                 )
                             )
-                        if session.isMeasured {
+                        if lead.isMeasured {
                             Text("%")
                                 .font(Theme.Font.label(17, .medium))
                                 .foregroundStyle(.primary.opacity(0.38))
@@ -167,14 +170,14 @@ struct FullView: View {
                 Spacer(minLength: 0)
 
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(session.isActive ? "reset" : (session.isMeasured ? "session" : "quota"))
+                    Text(lead.isActive ? "reset" : (lead.isMeasured ? "session" : "quota"))
                         .microLabel(0.35)
-                    Text(session.isActive ? UsageViewModel.clock(session.resetDate)
-                                          : (session.isMeasured ? "inactive" : "unavailable"))
+                    Text(lead.isActive ? UsageViewModel.resetTime(lead.resetDate)
+                                          : (lead.isMeasured ? "inactive" : "unavailable"))
                         .font(Theme.Font.value(14, .semibold))
                         .foregroundStyle(.primary.opacity(0.8))
-                    if session.isActive {
-                        Text("in \(UsageViewModel.countdown(to: session.resetDate))")
+                    if lead.isActive {
+                        Text("in \(UsageViewModel.countdown(to: lead.resetDate))")
                             .font(Theme.Font.label(9.5, .medium))
                             .foregroundStyle(.primary.opacity(0.35))
                     }
@@ -182,17 +185,18 @@ struct FullView: View {
                 .padding(.top, 12)
             }
 
-            UsageBar(percent: session.percent, tint: sessionTint, height: 8,
-                     pace: session.isActive ? session.elapsed : nil)
+            UsageBar(percent: lead.percent, tint: leadTint, height: 8,
+                     pace: lead.isActive ? lead.elapsed : nil)
 
             HStack(spacing: 6) {
-                Text("\(UsageViewModel.tokens(session.tokensUsed)) tokens on this machine")
+                Text(lead.amount.map { UsageViewModel.spent($0) }
+                     ?? "\(UsageViewModel.tokens(lead.tokensUsed)) tokens on this machine")
                     .font(Theme.Font.value(9.5, .medium))
                     .foregroundStyle(.primary.opacity(0.35))
 
                 Spacer(minLength: 0)
 
-                if let pace = UsageViewModel.pace(session) {
+                if let pace = UsageViewModel.pace(lead) {
                     HStack(spacing: 3) {
                         Circle()
                             .fill(pace.color)

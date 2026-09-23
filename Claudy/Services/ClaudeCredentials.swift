@@ -32,6 +32,11 @@ struct OAuthCredentials {
         guard let scopes = oauth?["scopes"] as? [String], !scopes.isEmpty else { return nil }
         return scopes
     }
+
+    /// "pro", "max", "enterprise": what Claude Code recorded when it signed in.
+    var subscriptionType: String? {
+        (root["claudeAiOauth"] as? [String: Any])?["subscriptionType"] as? String
+    }
 }
 
 /// Claudy's own token store.
@@ -154,7 +159,7 @@ enum ClaudeCredentialsStore {
         if status == errSecItemNotFound {
             var attributes = query
             attributes[kSecValueData as String] = data
-            attributes[kSecAttrLabel as String] = "Claudy — Claude token"
+            attributes[kSecAttrLabel as String] = "Claudy: Claude token"
             return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
         }
         return status == errSecSuccess

@@ -1,30 +1,30 @@
-# Onglet Ports Claude — Implementation Plan
+# Claude Ports Tab: Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ajouter à Claudy un onglet listant les ports TCP en écoute lancés par Claude Code — session vivante comme orphelins — et permettant de les tuer un par un.
+**Goal:** Add a tab to Claudy that lists the listening TCP ports launched by Claude Code (from a live session as well as orphaned ones) and lets the user kill them one by one.
 
-**Architecture:** L'attribution repose sur les variables d'environnement héritées (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_PROJECT_DIR`), lues par `sysctl(KERN_PROCARGS2)` : elles survivent à la mort de la session, donc aucune persistance n'est nécessaire. `lsof` fournit les listeners, `ps` l'arbre de process (utilisé uniquement pour protéger les sessions Claude vivantes du kill). Tout le parsing est isolé dans des fonctions pures testables ; les effets de bord (sous-process, signaux) passent par des protocoles injectables.
+**Architecture:** Attribution relies on inherited environment variables (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_PROJECT_DIR`), read through `sysctl(KERN_PROCARGS2)`: they survive the death of the session, so no persistence is needed. `lsof` provides the listeners, `ps` the process tree (used only to protect live Claude sessions from being killed). All parsing is isolated in pure, testable functions; side effects (subprocesses, signals) go through injectable protocols.
 
-**Tech Stack:** Swift 5.0, SwiftUI, macOS 13+, XCTest, Xcode project `objectVersion = 70` avec dossiers synchronisés.
+**Tech Stack:** Swift 5.0, SwiftUI, macOS 13+, XCTest, Xcode project `objectVersion = 70` with synchronized folders.
 
-**Spec:** `docs/superpowers/specs/2026-09-03-onglet-ports-claude-design.md`
+**Spec:** `docs/superpowers/specs/2026-09-03-claude-ports-tab-design.md`
 
 ## Global Constraints
 
-- Cible : `MACOSX_DEPLOYMENT_TARGET = 13.0`, `SWIFT_VERSION = 5.0`.
-- Les fichiers sous `Claudy/` sont pris automatiquement par le target (dossier synchronisé) — ne jamais éditer `project.pbxproj` pour ajouter un fichier source.
-- Aucune valeur de style en dur dans les vues : couleurs, polices et métriques passent par `Theme`.
-- Sous-process : chemin absolu de l'exécutable, jamais de shell, timeout explicite, échec tracé via `DiagnosticLog` — modèle : `Claudy/Services/ClaudeCodeCredentials.swift`.
-- L'environnement d'un process n'est jamais retourné, affiché, journalisé ni écrit sur disque : seuls le booléen de présence et la valeur de `CLAUDE_PROJECT_DIR` sortent de `ProcessEnvironment`.
-- Aucun test n'envoie de signal à un process réel.
-- Commentaires de code en anglais, comme le reste du projet ; ils disent *pourquoi*, pas *quoi*.
-- Denylist d'attribution, quels que soient les marqueurs : `OrbStack`, `Docker`, `com.docker.backend`.
-- Chaque commit se termine par `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
+- Target: `MACOSX_DEPLOYMENT_TARGET = 13.0`, `SWIFT_VERSION = 5.0`.
+- Files under `Claudy/` are picked up by the target automatically (synchronized folder): never edit `project.pbxproj` to add a source file.
+- No hard-coded style values in views: colors, fonts and metrics go through `Theme`.
+- Subprocesses: absolute executable path, never a shell, explicit timeout, failure logged through `DiagnosticLog`. Model: `Claudy/Services/ClaudeCodeCredentials.swift`.
+- A process's environment is never returned, displayed, logged or written to disk: only the presence boolean and the value of `CLAUDE_PROJECT_DIR` leave `ProcessEnvironment`.
+- No test sends a signal to a real process.
+- Code comments in English, like the rest of the project; they say *why*, not *what*.
+- Attribution denylist, whatever the markers: `OrbStack`, `Docker`, `com.docker.backend`.
+- Every commit ends with `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 
 ---
 
-### Task 1: Target de test
+### Task 1: Test target
 
 **Files:**
 - Modify: `Claudy.xcodeproj/project.pbxproj`
@@ -32,12 +32,12 @@
 - Create: `ClaudyTests/SmokeTests.swift`
 
 **Interfaces:**
-- Consumes: rien
-- Produces: la commande `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS'` — utilisée par toutes les tâches suivantes.
+- Consumes: nothing
+- Produces: the command `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS'`, used by every following task.
 
-- [ ] **Step 1: Écrire le test de fumée**
+- [ ] **Step 1: Write the smoke test**
 
-Créer `ClaudyTests/SmokeTests.swift` :
+Create `ClaudyTests/SmokeTests.swift`:
 
 ```swift
 import XCTest
@@ -50,31 +50,31 @@ final class SmokeTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' 2>&1 | tail -20`
-Expected: FAIL — `Scheme Claudy is not currently configured for the test action`.
+Expected: FAIL with `Scheme Claudy is not currently configured for the test action`.
 
-- [ ] **Step 3: Ajouter le target de test au pbxproj**
+- [ ] **Step 3: Add the test target to the pbxproj**
 
-Les IDs `1A00…0001` à `1A00…000F` sont pris. Utiliser `0010` et suivants.
+IDs `1A00…0001` through `1A00…000F` are taken. Use `0010` and up.
 
-Dans `/* Begin PBXFileReference section */`, après la ligne `Claudy.app` :
+In `/* Begin PBXFileReference section */`, after the `Claudy.app` line:
 
 ```
 		1A0000000000000000000010 /* ClaudyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClaudyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 ```
 
-Dans `/* Begin PBXFileSystemSynchronizedRootGroup section */`, après la ligne `Claudy` :
+In `/* Begin PBXFileSystemSynchronizedRootGroup section */`, after the `Claudy` line:
 
 ```
 		1A0000000000000000000011 /* ClaudyTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = ClaudyTests; sourceTree = "<group>"; };
 ```
 
-Dans le groupe racine `1A0000000000000000000002`, ajouter `1A0000000000000000000011 /* ClaudyTests */,` après l'entrée `Claudy`.
-Dans le groupe `Products`, ajouter `1A0000000000000000000010 /* ClaudyTests.xctest */,`.
+In the root group `1A0000000000000000000002`, add `1A0000000000000000000011 /* ClaudyTests */,` after the `Claudy` entry.
+In the `Products` group, add `1A0000000000000000000010 /* ClaudyTests.xctest */,`.
 
-Dans `/* Begin PBXNativeTarget section */`, après le target `Claudy` :
+In `/* Begin PBXNativeTarget section */`, after the `Claudy` target:
 
 ```
 		1A0000000000000000000012 /* ClaudyTests */ = {
@@ -101,7 +101,7 @@ Dans `/* Begin PBXNativeTarget section */`, après le target `Claudy` :
 		};
 ```
 
-Ajouter les phases de build, dans leurs sections respectives :
+Add the build phases, each in its own section:
 
 ```
 		1A0000000000000000000014 /* Sources */ = {
@@ -123,7 +123,7 @@ Ajouter les phases de build, dans leurs sections respectives :
 		};
 ```
 
-Créer les sections de dépendance (les deux sections n'existent pas encore, les ajouter avant `/* Begin XCBuildConfiguration section */`) :
+Create the dependency sections (neither section exists yet; add them before `/* Begin XCBuildConfiguration section */`):
 
 ```
 /* Begin PBXContainerItemProxy section */
@@ -145,7 +145,7 @@ Créer les sections de dépendance (les deux sections n'existent pas encore, les
 /* End PBXTargetDependency section */
 ```
 
-Dans `/* Begin XCBuildConfiguration section */`, après la configuration `1A00…000F` :
+In `/* Begin XCBuildConfiguration section */`, after the `1A00…000F` configuration:
 
 ```
 		1A0000000000000000000018 /* Debug */ = {
@@ -184,7 +184,7 @@ Dans `/* Begin XCBuildConfiguration section */`, après la configuration `1A00�
 		};
 ```
 
-Dans `/* Begin XCConfigurationList section */` :
+In `/* Begin XCConfigurationList section */`:
 
 ```
 		1A0000000000000000000013 /* Build configuration list for PBXNativeTarget "ClaudyTests" */ = {
@@ -198,7 +198,7 @@ Dans `/* Begin XCConfigurationList section */` :
 		};
 ```
 
-Enfin, dans `PBXProject`, ajouter `1A0000000000000000000012 /* ClaudyTests */,` à la liste `targets`, et dans `TargetAttributes` :
+Finally, in `PBXProject`, add `1A0000000000000000000012 /* ClaudyTests */,` to the `targets` list, and in `TargetAttributes`:
 
 ```
 					1A0000000000000000000012 = {
@@ -207,9 +207,9 @@ Enfin, dans `PBXProject`, ajouter `1A0000000000000000000012 /* ClaudyTests */,` 
 					};
 ```
 
-- [ ] **Step 4: Déclarer le testable dans le scheme**
+- [ ] **Step 4: Declare the testable in the scheme**
 
-Dans `Claudy.xcodeproj/xcshareddata/xcschemes/Claudy.xcscheme`, remplacer les lignes 30-31 (`<Testables>` / `</Testables>` vides) par :
+In `Claudy.xcodeproj/xcshareddata/xcschemes/Claudy.xcscheme`, replace lines 30-31 (the empty `<Testables>` / `</Testables>`) with:
 
 ```xml
       <Testables>
@@ -227,15 +227,15 @@ Dans `Claudy.xcodeproj/xcshareddata/xcschemes/Claudy.xcscheme`, remplacer les li
       </Testables>
 ```
 
-- [ ] **Step 5: Vérifier que le projet s'ouvre et que le test passe**
+- [ ] **Step 5: Verify that the project opens and the test passes**
 
 Run: `xcodebuild -list -project Claudy.xcodeproj`
-Expected: `ClaudyTests` apparaît dans `Targets`.
+Expected: `ClaudyTests` appears under `Targets`.
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' 2>&1 | tail -20`
-Expected: `TEST SUCCEEDED`, 1 test exécuté.
+Expected: `TEST SUCCEEDED`, 1 test executed.
 
-Si le pbxproj est rejeté (`Unable to open base configuration` ou parse error), revenir en arrière avec `git checkout -- Claudy.xcodeproj/project.pbxproj` et recommencer l'étape 3 bloc par bloc.
+If the pbxproj is rejected (`Unable to open base configuration` or a parse error), roll back with `git checkout -- Claudy.xcodeproj/project.pbxproj` and redo step 3 one block at a time.
 
 - [ ] **Step 6: Commit**
 
@@ -251,22 +251,22 @@ EOF
 
 ---
 
-### Task 2: ProcessEnvironment — lecture des marqueurs Claude
+### Task 2: ProcessEnvironment: reading the Claude markers
 
 **Files:**
 - Create: `Claudy/Services/ProcessEnvironment.swift`
 - Test: `ClaudyTests/ProcessEnvironmentTests.swift`
 
 **Interfaces:**
-- Consumes: rien
+- Consumes: nothing
 - Produces:
   - `struct ProcessEnvironment.Markers: Equatable { let isClaude: Bool; let projectDirectory: String? }`
   - `static func ProcessEnvironment.markers(pid: pid_t) -> Markers?`
   - `static func ProcessEnvironment.parse(_ buffer: [UInt8]) -> Markers?`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Créer `ClaudyTests/ProcessEnvironmentTests.swift` :
+Create `ClaudyTests/ProcessEnvironmentTests.swift`:
 
 ```swift
 import XCTest
@@ -340,14 +340,14 @@ final class ProcessEnvironmentTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/ProcessEnvironmentTests 2>&1 | tail -20`
-Expected: FAIL — `cannot find 'ProcessEnvironment' in scope`.
+Expected: FAIL with `cannot find 'ProcessEnvironment' in scope`.
 
-- [ ] **Step 3: Implémenter**
+- [ ] **Step 3: Implement**
 
-Créer `Claudy/Services/ProcessEnvironment.swift` :
+Create `Claudy/Services/ProcessEnvironment.swift`:
 
 ```swift
 import Foundation
@@ -440,23 +440,23 @@ private extension String {
 }
 ```
 
-- [ ] **Step 4: Lancer les tests pour vérifier le succès**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/ProcessEnvironmentTests 2>&1 | tail -20`
 Expected: PASS, 6 tests.
 
-- [ ] **Step 5: Vérifier la lecture réelle depuis l'app**
+- [ ] **Step 5: Verify the real read from the app**
 
-C'est la vérification annoncée dans la spec : la lecture doit fonctionner depuis un process GUI, pas seulement depuis un terminal. Ajouter temporairement dans `AppDelegate.applicationDidFinishLaunching` :
+This is the check announced in the spec: the read must work from a GUI process, not only from a terminal. Temporarily add to `AppDelegate.applicationDidFinishLaunching`:
 
 ```swift
 DiagnosticLog.append("env probe: \(String(describing: ProcessEnvironment.markers(pid: getpid())))")
 ```
 
 Run: `./Scripts/build-app.sh --install`
-Expected: la trace montre `Markers(isClaude: false, projectDirectory: nil)` — non nil. Un `nil` signifierait que `sysctl` est refusé au process GUI et déclencherait le repli décrit dans la spec.
+Expected: the log shows `Markers(isClaude: false, projectDirectory: nil)`, not nil. A `nil` would mean that `sysctl` is refused to the GUI process, and would trigger the fallback described in the spec.
 
-Retirer la ligne de sonde avant de committer.
+Remove the probe line before committing.
 
 - [ ] **Step 6: Commit**
 
@@ -472,14 +472,14 @@ EOF
 
 ---
 
-### Task 3: ProcessTable — arbre des process
+### Task 3: ProcessTable: the process tree
 
 **Files:**
 - Create: `Claudy/Services/ProcessTable.swift`
 - Test: `ClaudyTests/ProcessTableTests.swift`
 
 **Interfaces:**
-- Consumes: rien
+- Consumes: nothing
 - Produces:
   - `struct RunningProcess: Equatable { let pid: pid_t; let parent: pid_t; let startedAt: Date; let arguments: String }`
   - `struct ProcessTable { let processes: [pid_t: RunningProcess] }`
@@ -489,9 +489,9 @@ EOF
   - `func ProcessTable.claudeSessionRoot(of pid: pid_t) -> RunningProcess?`
   - `static func ProcessTable.isClaudeBinary(_ arguments: String) -> Bool`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Créer `ClaudyTests/ProcessTableTests.swift` :
+Create `ClaudyTests/ProcessTableTests.swift`:
 
 ```swift
 import XCTest
@@ -564,14 +564,14 @@ final class ProcessTableTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/ProcessTableTests 2>&1 | tail -20`
-Expected: FAIL — `cannot find 'ProcessTable' in scope`.
+Expected: FAIL with `cannot find 'ProcessTable' in scope`.
 
-- [ ] **Step 3: Implémenter**
+- [ ] **Step 3: Implement**
 
-Créer `Claudy/Services/ProcessTable.swift` :
+Create `Claudy/Services/ProcessTable.swift`:
 
 ```swift
 import Foundation
@@ -586,7 +586,7 @@ struct RunningProcess: Equatable {
 
 /// A snapshot of the process tree, read in one `ps` pass.
 ///
-/// Attribution does not depend on this table — the environment carries that. The tree serves
+/// Attribution does not depend on this table: the environment carries that. The tree serves
 /// one purpose: knowing which Claude session is still alive, so the reaper never kills it.
 struct ProcessTable {
     let processes: [pid_t: RunningProcess]
@@ -685,7 +685,7 @@ private extension Substring {
 }
 ```
 
-Créer aussi `Claudy/Services/Subprocess.swift`, l'exécution partagée dont dépendent `ProcessTable` et `PortScanner` :
+Also create `Claudy/Services/Subprocess.swift`, the shared runner that `ProcessTable` and `PortScanner` depend on:
 
 ```swift
 import Foundation
@@ -694,7 +694,7 @@ import Foundation
 ///
 /// Absolute executable path and an argument array only: no shell is ever involved, so no
 /// string built here can be reinterpreted as a command. The timeout matters as much as the
-/// result — a scan that hangs would freeze the widget's refresh.
+/// result: a scan that hangs would freeze the widget's refresh.
 enum Subprocess {
     static func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> String? {
         let process = Process()
@@ -734,7 +734,7 @@ enum Subprocess {
 }
 ```
 
-- [ ] **Step 4: Lancer les tests pour vérifier le succès**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/ProcessTableTests 2>&1 | tail -20`
 Expected: PASS, 7 tests.
@@ -753,7 +753,7 @@ EOF
 
 ---
 
-### Task 4: PortScanner — listeners et attribution
+### Task 4: PortScanner: listeners and attribution
 
 **Files:**
 - Create: `Claudy/Models/PortModels.swift`
@@ -772,9 +772,9 @@ EOF
   - `static func PortScanner.attribute(listeners:table:markers:) -> [ListeningPort]`
   - `func PortScanner.scan() -> PortScanState`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Créer `ClaudyTests/PortScannerTests.swift` :
+Create `ClaudyTests/PortScannerTests.swift`:
 
 ```swift
 import XCTest
@@ -783,7 +783,7 @@ import XCTest
 final class PortScannerTests: XCTestCase {
 
     /// Real `lsof -nP -iTCP -sTCP:LISTEN -a -u <uid> -F pcn` output. lsof emits fields that
-    /// were never asked for — `f` here — and the parser must ignore them.
+    /// were never asked for (`f` here), and the parser must ignore them.
     private let output = """
     p46694
     cPython
@@ -886,14 +886,14 @@ final class PortScannerTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortScannerTests 2>&1 | tail -20`
-Expected: FAIL — `cannot find 'PortScanner' in scope`.
+Expected: FAIL with `cannot find 'PortScanner' in scope`.
 
-- [ ] **Step 3: Implémenter les modèles**
+- [ ] **Step 3: Implement the models**
 
-Créer `Claudy/Models/PortModels.swift` :
+Create `Claudy/Models/PortModels.swift`:
 
 ```swift
 import Foundation
@@ -932,9 +932,9 @@ enum PortScanState: Equatable {
 }
 ```
 
-- [ ] **Step 4: Implémenter le scanner**
+- [ ] **Step 4: Implement the scanner**
 
-Créer `Claudy/Services/PortScanner.swift` :
+Create `Claudy/Services/PortScanner.swift`:
 
 ```swift
 import Foundation
@@ -943,7 +943,7 @@ import Foundation
 ///
 /// Attribution comes from the process environment, never from the process tree: an orphaned
 /// server has no Claude ancestor left, yet it is exactly the one worth killing. The tree only
-/// answers a second question — is the owning session still alive.
+/// answers a second question: is the owning session still alive.
 struct PortScanner {
 
     /// A container runtime publishes ports for everything it hosts. Killing it would take the
@@ -959,10 +959,10 @@ struct PortScanner {
 
     func scan() -> PortScanState {
         guard let output = Subprocess.run(Self.executable, Self.arguments, timeout: Self.timeout) else {
-            return .unavailable("lsof n'a pas répondu")
+            return .unavailable("lsof did not respond")
         }
         guard let table = ProcessTable.load() else {
-            return .unavailable("ps n'a pas répondu")
+            return .unavailable("ps did not respond")
         }
         let ports = Self.attribute(
             listeners: Self.parseListeners(output),
@@ -973,7 +973,7 @@ struct PortScanner {
     }
 
     /// lsof's field output: one field per line, prefixed by its letter. `p` opens a process
-    /// block, `c` names it, `n` describes one socket. Any other field — `f` among them — is
+    /// block, `c` names it, `n` describes one socket. Any other field (`f` among them) is
     /// ignored rather than assumed absent.
     static func parseListeners(_ output: String) -> [Listener] {
         var listeners: [Listener] = []
@@ -1035,7 +1035,7 @@ struct PortScanner {
 }
 ```
 
-- [ ] **Step 5: Lancer les tests pour vérifier le succès**
+- [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortScannerTests 2>&1 | tail -20`
 Expected: PASS, 8 tests.
@@ -1054,7 +1054,7 @@ EOF
 
 ---
 
-### Task 5: PortReaper — kill sous garde-fous
+### Task 5: PortReaper: kill behind guardrails
 
 **Files:**
 - Create: `Claudy/Services/PortReaper.swift`
@@ -1067,9 +1067,9 @@ EOF
   - `enum KillRefusal: Error, Equatable { case identityChanged, protectedProcess, liveClaudeSession, systemRefused, survivedKill }`
   - `struct PortReaper { init(signals: SignalSending, ownPID: pid_t); func kill(_ port: ListeningPort, table: ProcessTable) -> Result<Void, KillRefusal> }`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Créer `ClaudyTests/PortReaperTests.swift` :
+Create `ClaudyTests/PortReaperTests.swift`:
 
 ```swift
 import XCTest
@@ -1201,14 +1201,14 @@ final class PortReaperTests: XCTestCase {
 }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortReaperTests 2>&1 | tail -20`
-Expected: FAIL — `cannot find 'PortReaper' in scope`.
+Expected: FAIL with `cannot find 'PortReaper' in scope`.
 
-- [ ] **Step 3: Implémenter**
+- [ ] **Step 3: Implement**
 
-Créer `Claudy/Services/PortReaper.swift` :
+Create `Claudy/Services/PortReaper.swift`:
 
 ```swift
 import Foundation
@@ -1276,7 +1276,7 @@ struct PortReaper {
         return waitForExit(port.pid) ? .success(()) : .failure(.survivedKill)
     }
 
-    /// A dev server is usually a tree — the group carries the children with it. The group is
+    /// A dev server is usually a tree: the group carries the children with it. The group is
     /// only signalled when it is neither Claudy's own nor launchd's.
     private func terminate(_ pid: pid_t, using signal: Int32) -> Bool {
         let ownGroup = signals.processGroup(of: ownPID)
@@ -1297,7 +1297,7 @@ struct PortReaper {
 }
 ```
 
-- [ ] **Step 4: Lancer les tests pour vérifier le succès**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortReaperTests 2>&1 | tail -20`
 Expected: PASS, 8 tests.
@@ -1316,7 +1316,7 @@ EOF
 
 ---
 
-### Task 6: PortsViewModel — état et cadence
+### Task 6: PortsViewModel: state and cadence
 
 **Files:**
 - Create: `Claudy/ViewModels/PortsViewModel.swift`
@@ -1325,13 +1325,13 @@ EOF
 **Interfaces:**
 - Consumes: `PortScanState`, `PortScanner`, `PortReaper`, `ProcessTable`
 - Produces:
-  - `protocol PortScanning { func scan() -> PortScanState }` (conformance ajoutée à `PortScanner`)
-  - `@MainActor final class PortsViewModel: ObservableObject` avec `@Published private(set) var state: PortScanState`, `@Published private(set) var failures: [String: String]`, `var orphanCount: Int`, `func refresh() async`, `func kill(_ port: ListeningPort) async`, `func setVisible(_ isVisible: Bool)`
+  - `protocol PortScanning { func scan() -> PortScanState }` (conformance added to `PortScanner`)
+  - `@MainActor final class PortsViewModel: ObservableObject` with `@Published private(set) var state: PortScanState`, `@Published private(set) var failures: [String: String]`, `var orphanCount: Int`, `func refresh() async`, `func kill(_ port: ListeningPort) async`, `func setVisible(_ isVisible: Bool)`
   - `static func PortsViewModel.age(since: Date, now: Date) -> String`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Créer `ClaudyTests/PortsViewModelTests.swift` :
+Create `ClaudyTests/PortsViewModelTests.swift`:
 
 ```swift
 import XCTest
@@ -1367,9 +1367,9 @@ final class PortsViewModelTests: XCTestCase {
     }
 
     func testUnavailableScanIsPublishedAsIs() async {
-        let model = PortsViewModel(scanner: StubScanner(result: .unavailable("lsof n'a pas répondu")))
+        let model = PortsViewModel(scanner: StubScanner(result: .unavailable("lsof did not respond")))
         await model.refresh()
-        XCTAssertEqual(model.state, .unavailable("lsof n'a pas répondu"))
+        XCTAssertEqual(model.state, .unavailable("lsof did not respond"))
     }
 
     func testAgeReadsInTheLargestUsefulUnit() {
@@ -1377,19 +1377,19 @@ final class PortsViewModelTests: XCTestCase {
         XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-45), now: now), "45 s")
         XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-3 * 60), now: now), "3 min")
         XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-5 * 3600), now: now), "5 h")
-        XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-2 * 86400), now: now), "2 j")
+        XCTAssertEqual(PortsViewModel.age(since: now.addingTimeInterval(-2 * 86400), now: now), "2 d")
     }
 }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortsViewModelTests 2>&1 | tail -20`
-Expected: FAIL — `cannot find 'PortsViewModel' in scope`.
+Expected: FAIL with `cannot find 'PortsViewModel' in scope`.
 
-- [ ] **Step 3: Implémenter**
+- [ ] **Step 3: Implement**
 
-Ajouter la conformance en bas de `Claudy/Services/PortScanner.swift` :
+Add the conformance at the bottom of `Claudy/Services/PortScanner.swift`:
 
 ```swift
 protocol PortScanning {
@@ -1399,7 +1399,7 @@ protocol PortScanning {
 extension PortScanner: PortScanning {}
 ```
 
-Créer `Claudy/ViewModels/PortsViewModel.swift` :
+Create `Claudy/ViewModels/PortsViewModel.swift`:
 
 ```swift
 import Foundation
@@ -1407,7 +1407,7 @@ import SwiftUI
 
 /// Drives the Ports tab: what is open, how old it is, and what happened to a kill.
 ///
-/// The scan runs off the main actor — `lsof` and `ps` are cheap but not free, and the widget's
+/// The scan runs off the main actor: `lsof` and `ps` are cheap but not free, and the widget's
 /// gauges must never wait on them. The cadence is slower in the background than on screen:
 /// the only thing a hidden tab owes the user is a correct badge.
 @MainActor
@@ -1481,11 +1481,11 @@ final class PortsViewModel: ObservableObject {
 
     private static func explain(_ refusal: KillRefusal) -> String {
         switch refusal {
-        case .identityChanged: "le process a changé, rien n'a été tué"
-        case .protectedProcess: "process protégé"
-        case .liveClaudeSession: "session Claude en cours"
-        case .systemRefused: "refusé par le système"
-        case .survivedKill: "toujours vivant après SIGKILL"
+        case .identityChanged: "the process changed, nothing was killed"
+        case .protectedProcess: "protected process"
+        case .liveClaudeSession: "live Claude session"
+        case .systemRefused: "refused by the system"
+        case .survivedKill: "still alive after SIGKILL"
         }
     }
 
@@ -1496,13 +1496,13 @@ final class PortsViewModel: ObservableObject {
         case ..<60: return "\(max(seconds, 0)) s"
         case ..<3600: return "\(seconds / 60) min"
         case ..<86400: return "\(seconds / 3600) h"
-        default: return "\(seconds / 86400) j"
+        default: return "\(seconds / 86400) d"
         }
     }
 }
 ```
 
-- [ ] **Step 4: Lancer les tests pour vérifier le succès**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortsViewModelTests 2>&1 | tail -20`
 Expected: PASS, 4 tests.
@@ -1521,7 +1521,7 @@ EOF
 
 ---
 
-### Task 7: TabSwitcher et bascule dans FullView
+### Task 7: TabSwitcher and the switch in FullView
 
 **Files:**
 - Create: `Claudy/Views/Components/TabSwitcher.swift`
@@ -1534,11 +1534,11 @@ EOF
 - Produces:
   - `enum CardTab: String, CaseIterable { case usage, ports }`
   - `struct TabSwitcher: View { init(selection: Binding<CardTab>, badge: Int) }`
-  - `UsageViewModel.tab: CardTab` (publié)
+  - `UsageViewModel.tab: CardTab` (published)
 
-- [ ] **Step 1: Ajouter les métriques au thème**
+- [ ] **Step 1: Add the metrics to the theme**
 
-Dans `Claudy/Theme/Theme.swift`, dans `enum Metric`, après `padding` :
+In `Claudy/Theme/Theme.swift`, in `enum Metric`, after `padding`:
 
 ```swift
         /// Height of the usage/ports switch, and the corner of its selected segment.
@@ -1546,18 +1546,18 @@ Dans `Claudy/Theme/Theme.swift`, dans `enum Metric`, après `padding` :
         static let tabCorner: CGFloat = 7
 ```
 
-- [ ] **Step 2: Ajouter l'onglet au view model**
+- [ ] **Step 2: Add the tab to the view model**
 
-Dans `Claudy/ViewModels/UsageViewModel.swift`, ajouter la propriété publiée près des autres `@Published` :
+In `Claudy/ViewModels/UsageViewModel.swift`, add the published property next to the other `@Published` ones:
 
 ```swift
     /// Which face of the card is showing. Usage is the product; ports is an annex.
     @Published var tab: CardTab = .usage
 ```
 
-- [ ] **Step 3: Écrire le sélecteur**
+- [ ] **Step 3: Write the switcher**
 
-Créer `Claudy/Views/Components/TabSwitcher.swift` :
+Create `Claudy/Views/Components/TabSwitcher.swift`:
 
 ```swift
 import SwiftUI
@@ -1621,15 +1621,15 @@ struct TabSwitcher: View {
 }
 ```
 
-- [ ] **Step 4: Brancher la bascule dans FullView**
+- [ ] **Step 4: Wire the switch into FullView**
 
-Dans `Claudy/Views/FullView.swift`, ajouter le view model des ports en propriété d'environnement, sous la ligne `@EnvironmentObject private var viewModel: UsageViewModel` :
+In `Claudy/Views/FullView.swift`, add the ports view model as an environment property, below the `@EnvironmentObject private var viewModel: UsageViewModel` line:
 
 ```swift
     @EnvironmentObject private var portsViewModel: PortsViewModel
 ```
 
-Remplacer le corps de `body` (le `VStack` actuel, lignes 12-43) par :
+Replace the content of `body` (the current `VStack`, lines 12-43) with:
 
 ```swift
     var body: some View {
@@ -1684,32 +1684,32 @@ Remplacer le corps de `body` (le `VStack` actuel, lignes 12-43) par :
     }
 ```
 
-Note : `onChange(of:perform:)` à un argument est la forme valide pour la cible macOS 13 ; la forme à deux arguments exige macOS 14.
+Note: the one-argument `onChange(of:perform:)` is the valid form for the macOS 13 target; the two-argument form requires macOS 14.
 
-- [ ] **Step 5: Injecter le view model dans l'app**
+- [ ] **Step 5: Inject the view model into the app**
 
-Dans `Claudy/App/AppDelegate.swift`, là où `UsageViewModel` est créé et injecté par `.environmentObject(...)`, créer et injecter également :
+In `Claudy/App/AppDelegate.swift`, where `UsageViewModel` is created and injected with `.environmentObject(...)`, also create and inject:
 
 ```swift
     private let portsViewModel = PortsViewModel()
 ```
 
-puis, à la suite du `.environmentObject(usageViewModel)` existant :
+then, right after the existing `.environmentObject(usageViewModel)`:
 
 ```swift
             .environmentObject(portsViewModel)
 ```
 
-et démarrer la cadence de fond juste après l'affichage de la fenêtre :
+and start the background cadence right after the window is shown:
 
 ```swift
         portsViewModel.start()
 ```
 
-- [ ] **Step 6: Compiler et vérifier visuellement**
+- [ ] **Step 6: Build and check visually**
 
 Run: `xcodebuild build -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' 2>&1 | tail -5`
-Expected: `BUILD SUCCEEDED`. `PortsView` n'existe pas encore — créer un fichier provisoire `Claudy/Views/PortsView.swift` avec `struct PortsView: View { var body: some View { Text("ports") } }`, remplacé intégralement en Task 8.
+Expected: `BUILD SUCCEEDED`. `PortsView` does not exist yet: create a temporary file `Claudy/Views/PortsView.swift` containing `struct PortsView: View { var body: some View { Text("ports") } }`, fully replaced in Task 8.
 
 - [ ] **Step 7: Commit**
 
@@ -1725,19 +1725,19 @@ EOF
 
 ---
 
-### Task 8: PortsView et PortRow
+### Task 8: PortsView and PortRow
 
 **Files:**
-- Modify: `Claudy/Views/PortsView.swift` (remplace le fichier provisoire de la Task 7)
+- Modify: `Claudy/Views/PortsView.swift` (replaces the temporary file from Task 7)
 - Create: `Claudy/Views/Components/PortRow.swift`
 
 **Interfaces:**
 - Consumes: `PortsViewModel`, `ListeningPort`, `PortScanState`, `PortsViewModel.age(since:now:)`
 - Produces: `struct PortsView: View`, `struct PortRow: View`
 
-- [ ] **Step 1: Écrire la ligne**
+- [ ] **Step 1: Write the row**
 
-Créer `Claudy/Views/Components/PortRow.swift` :
+Create `Claudy/Views/Components/PortRow.swift`:
 
 ```swift
 import SwiftUI
@@ -1772,7 +1772,7 @@ struct PortRow: View {
                         .lineLimit(1)
 
                     if port.attribution == .orphan {
-                        Text("orphelin")
+                        Text("orphan")
                             .font(Theme.Font.label(8.5, .semibold))
                             .foregroundStyle(Theme.Accent.amber.color)
                             .padding(.horizontal, 5)
@@ -1821,23 +1821,23 @@ struct PortRow: View {
                     isKilling = true
                     onKill()
                 }
-                .help("Tuer le process du port \(port.port)")
-                .accessibilityLabel("Tuer le process du port \(port.port)")
+                .help("Kill the process on port \(port.port)")
+                .accessibilityLabel("Kill the process on port \(port.port)")
         }
     }
 }
 ```
 
-- [ ] **Step 2: Écrire la vue**
+- [ ] **Step 2: Write the view**
 
-Remplacer entièrement `Claudy/Views/PortsView.swift` :
+Replace `Claudy/Views/PortsView.swift` entirely:
 
 ```swift
 import SwiftUI
 
 /// The ports annex: what Claude Code left listening, and a way to close it.
 ///
-/// The empty state is the common case and is written for it — an empty list here is good news,
+/// The empty state is the common case and is written for it: an empty list here is good news,
 /// not a failure.
 struct PortsView: View {
     @EnvironmentObject private var viewModel: PortsViewModel
@@ -1846,11 +1846,11 @@ struct PortsView: View {
         VStack(alignment: .leading, spacing: 8) {
             switch viewModel.state {
             case .scanning:
-                message("Analyse des ports…")
+                message("Scanning ports…")
             case .unavailable(let reason):
-                message("Scan indisponible — \(reason)")
+                message("Scan unavailable: \(reason)")
             case .ready(let ports) where ports.isEmpty:
-                message("Aucun port ouvert par Claude.")
+                message("No port left open by Claude.")
             case .ready(let ports):
                 list(ports)
             }
@@ -1861,7 +1861,7 @@ struct PortsView: View {
 
     private func list(_ ports: [ListeningPort]) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Ports ouverts par Claude")
+            Text("Ports opened by Claude")
                 .microLabel(0.55)
                 .padding(.bottom, 4)
 
@@ -1888,19 +1888,19 @@ struct PortsView: View {
 }
 ```
 
-- [ ] **Step 3: Compiler**
+- [ ] **Step 3: Build**
 
 Run: `xcodebuild build -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' 2>&1 | tail -5`
 Expected: `BUILD SUCCEEDED`.
 
-- [ ] **Step 4: Vérifier le comportement réel**
+- [ ] **Step 4: Verify the real behavior**
 
-Lancer un serveur depuis une session Claude Code : `python3 -m http.server 4000 --bind 127.0.0.1 &`
+Start a server from a Claude Code session: `python3 -m http.server 4000 --bind 127.0.0.1 &`
 
 Run: `./Scripts/build-app.sh --install`
-Expected, dans l'onglet `ports` : une ligne `4000 · Python`, sans pastille orphelin tant que la session Claude vit. Le clic sur la croix la fait disparaître, et `lsof -nP -iTCP:4000 -sTCP:LISTEN` ne retourne plus rien.
+Expected, in the `ports` tab: a `4000 · Python` row, with no orphan badge while the Claude session is alive. Clicking the cross makes it disappear, and `lsof -nP -iTCP:4000 -sTCP:LISTEN` no longer returns anything.
 
-Vérifier aussi qu'un serveur lancé hors Claude (`python3 -m http.server 4100` depuis Terminal.app) **n'apparaît pas**.
+Also check that a server started outside Claude (`python3 -m http.server 4100` from Terminal.app) **does not appear**.
 
 - [ ] **Step 5: Commit**
 
@@ -1916,7 +1916,7 @@ EOF
 
 ---
 
-### Task 9: Repli quand la lecture d'environnement est refusée
+### Task 9: Fallback when reading the environment is refused
 
 **Files:**
 - Modify: `Claudy/Services/PortScanner.swift`
@@ -1927,12 +1927,12 @@ EOF
 **Interfaces:**
 - Consumes: `ProcessTable.claudeSessionRoot(of:)`
 - Produces:
-  - `PortScanState.ready([ListeningPort])` devient `PortScanState.ready([ListeningPort], isDegraded: Bool)`
+  - `PortScanState.ready([ListeningPort])` becomes `PortScanState.ready([ListeningPort], isDegraded: Bool)`
   - `static func PortScanner.attribute(listeners:table:markers:) -> (ports: [ListeningPort], isDegraded: Bool)`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Ajouter à `ClaudyTests/PortScannerTests.swift` :
+Add to `ClaudyTests/PortScannerTests.swift`:
 
 ```swift
     /// When the kernel refuses to hand over an environment, attribution falls back to the
@@ -1952,7 +1952,7 @@ Ajouter à `ClaudyTests/PortScannerTests.swift` :
         XCTAssertTrue(result.isDegraded)
     }
 
-    /// The fallback cannot see orphans — that is exactly what the degraded flag warns about.
+    /// The fallback cannot see orphans: that is exactly what the degraded flag warns about.
     func testFallbackDropsOrphans() {
         let result = PortScanner.attribute(
             listeners: [Listener(pid: 95778, command: "bun", port: 37701, address: "127.0.0.1")],
@@ -1964,16 +1964,16 @@ Ajouter à `ClaudyTests/PortScannerTests.swift` :
     }
 ```
 
-Dans le même fichier, adapter les six assertions existantes qui lisent le retour de `attribute` : elles portent désormais sur `result.ports` au lieu du tableau direct (par exemple `XCTAssertEqual(ports.count, 1)` devient `XCTAssertEqual(result.ports.count, 1)`), et `let ports = PortScanner.attribute(...)` devient `let result = PortScanner.attribute(...)`.
+In the same file, update the six existing assertions that read the return value of `attribute`: they now apply to `result.ports` instead of the array itself (for example `XCTAssertEqual(ports.count, 1)` becomes `XCTAssertEqual(result.ports.count, 1)`), and `let ports = PortScanner.attribute(...)` becomes `let result = PortScanner.attribute(...)`.
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortScannerTests 2>&1 | tail -20`
-Expected: FAIL — `value of tuple type has no member 'ports'`.
+Expected: FAIL with `value of tuple type has no member 'ports'`.
 
-- [ ] **Step 3: Implémenter le repli**
+- [ ] **Step 3: Implement the fallback**
 
-Dans `Claudy/Models/PortModels.swift`, remplacer le cas `ready` :
+In `Claudy/Models/PortModels.swift`, replace the `ready` case:
 
 ```swift
 enum PortScanState: Equatable {
@@ -1985,7 +1985,7 @@ enum PortScanState: Equatable {
 }
 ```
 
-Dans `Claudy/Services/PortScanner.swift`, remplacer `attribute` et l'appel dans `scan()` :
+In `Claudy/Services/PortScanner.swift`, replace `attribute` and the call in `scan()`:
 
 ```swift
     static func attribute(
@@ -2029,7 +2029,7 @@ Dans `Claudy/Services/PortScanner.swift`, remplacer `attribute` et l'appel dans 
     }
 ```
 
-et dans `scan()` :
+and in `scan()`:
 
 ```swift
         let result = Self.attribute(
@@ -2040,7 +2040,7 @@ et dans `scan()` :
         return .ready(result.ports.sorted { $0.port < $1.port }, isDegraded: result.isDegraded)
 ```
 
-Dans `Claudy/ViewModels/PortsViewModel.swift`, adapter l'extraction :
+In `Claudy/ViewModels/PortsViewModel.swift`, update the extraction:
 
 ```swift
     var ports: [ListeningPort] {
@@ -2049,14 +2049,14 @@ Dans `Claudy/ViewModels/PortsViewModel.swift`, adapter l'extraction :
     }
 ```
 
-Dans `Claudy/Views/PortsView.swift`, adapter les deux cas et ajouter l'avertissement :
+In `Claudy/Views/PortsView.swift`, update both cases and add the warning:
 
 ```swift
             case .ready(let ports, _) where ports.isEmpty:
-                message("Aucun port ouvert par Claude.")
+                message("No port left open by Claude.")
             case .ready(let ports, let isDegraded):
                 if isDegraded {
-                    Text("Environnement des process illisible — les orphelins ne sont pas détectables.")
+                    Text("Process environments unreadable: orphans cannot be detected.")
                         .font(Theme.Font.label(9.5, .medium))
                         .foregroundStyle(Theme.Accent.amber.color.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)
@@ -2064,12 +2064,12 @@ Dans `Claudy/Views/PortsView.swift`, adapter les deux cas et ajouter l'avertisse
                 list(ports)
 ```
 
-Adapter enfin les trois assertions de `ClaudyTests/PortsViewModelTests.swift` qui construisent un `.ready(...)` : elles prennent maintenant `isDegraded: false`.
+Finally, update the three assertions in `ClaudyTests/PortsViewModelTests.swift` that build a `.ready(...)`: they now take `isDegraded: false`.
 
-- [ ] **Step 4: Lancer les tests pour vérifier le succès**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' 2>&1 | tail -20`
-Expected: PASS, 10 tests dans `PortScannerTests`, suite complète verte.
+Expected: PASS, 10 tests in `PortScannerTests`, full suite green.
 
 - [ ] **Step 5: Commit**
 
@@ -2085,7 +2085,7 @@ EOF
 
 ---
 
-### Task 10: « Tout tuer » sur les orphelins
+### Task 10: "Kill all" for orphans
 
 **Files:**
 - Modify: `Claudy/ViewModels/PortsViewModel.swift`
@@ -2099,12 +2099,12 @@ EOF
   - `func PortsViewModel.killAllOrphans() async`
   - `@Published var PortsViewModel.isConfirmingBulkKill: Bool`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+- [ ] **Step 1: Write the failing tests**
 
-Ajouter à `ClaudyTests/PortsViewModelTests.swift` :
+Add to `ClaudyTests/PortsViewModelTests.swift`:
 
 ```swift
-    /// The bulk action never touches a live session's ports — only what Claude left behind.
+    /// The bulk action never touches a live session's ports, only what Claude left behind.
     func testBulkTargetsOrphansOnly() async {
         let model = PortsViewModel(
             scanner: StubScanner(result: .ready([port(500, .orphan), port(501, .live), port(502, .orphan)],
@@ -2125,14 +2125,14 @@ Ajouter à `ClaudyTests/PortsViewModelTests.swift` :
     }
 ```
 
-- [ ] **Step 2: Lancer les tests pour vérifier l'échec**
+- [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortsViewModelTests 2>&1 | tail -20`
-Expected: FAIL — `value of type 'PortsViewModel' has no member 'orphans'`.
+Expected: FAIL with `value of type 'PortsViewModel' has no member 'orphans'`.
 
-- [ ] **Step 3: Implémenter**
+- [ ] **Step 3: Implement**
 
-Dans `Claudy/ViewModels/PortsViewModel.swift`, ajouter :
+In `Claudy/ViewModels/PortsViewModel.swift`, add:
 
 ```swift
     /// Raised while the confirmation is on screen. A bulk kill is the one action here that can
@@ -2156,16 +2156,16 @@ Dans `Claudy/ViewModels/PortsViewModel.swift`, ajouter :
     }
 ```
 
-et remplacer `orphanCount` par `var orphanCount: Int { orphans.count }`.
+and replace `orphanCount` with `var orphanCount: Int { orphans.count }`.
 
-Dans `Claudy/Views/PortsView.swift`, ajouter le pied de liste dans `list(_:)`, après la boucle `ForEach` :
+In `Claudy/Views/PortsView.swift`, add the list footer in `list(_:)`, after the `ForEach` loop:
 
 ```swift
             if viewModel.orphanCount > 1 {
                 Button {
                     viewModel.requestBulkKill()
                 } label: {
-                    Text("Tuer les \(viewModel.orphanCount) orphelins")
+                    Text("Kill \(viewModel.orphanCount) orphans")
                         .font(Theme.Font.label(9.5, .semibold))
                         .foregroundStyle(Theme.danger.opacity(0.9))
                 }
@@ -2174,22 +2174,22 @@ Dans `Claudy/Views/PortsView.swift`, ajouter le pied de liste dans `list(_:)`, a
             }
 ```
 
-et attacher la confirmation au `VStack` racine de `body` :
+and attach the confirmation to the root `VStack` of `body`:
 
 ```swift
         .confirmationDialog(
-            "Tuer \(viewModel.orphanCount) process ?",
+            "Kill \(viewModel.orphanCount) processes?",
             isPresented: $viewModel.isConfirmingBulkKill,
             titleVisibility: .visible
         ) {
-            Button("Tuer \(viewModel.orphans.map { String($0.port) }.joined(separator: ", "))", role: .destructive) {
+            Button("Kill \(viewModel.orphans.map { String($0.port) }.joined(separator: ", "))", role: .destructive) {
                 Task { await viewModel.killAllOrphans() }
             }
-            Button("Annuler", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         }
 ```
 
-- [ ] **Step 4: Lancer les tests pour vérifier le succès**
+- [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' -only-testing:ClaudyTests/PortsViewModelTests 2>&1 | tail -20`
 Expected: PASS, 6 tests.
@@ -2208,7 +2208,7 @@ EOF
 
 ---
 
-### Task 11: Documentation et suite de tests complète
+### Task 11: Documentation and full test suite
 
 **Files:**
 - Modify: `README.md`
@@ -2216,44 +2216,44 @@ EOF
 - Modify: `CHANGELOG.md`
 
 **Interfaces:**
-- Consumes: tout ce qui précède
-- Produces: rien de code
+- Consumes: everything above
+- Produces: no code
 
-- [ ] **Step 1: Lancer la suite complète**
+- [ ] **Step 1: Run the full suite**
 
 Run: `xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS' 2>&1 | tail -20`
 Expected: `TEST SUCCEEDED`, 38 tests (1 + 6 + 7 + 10 + 8 + 6).
 
-- [ ] **Step 2: Documenter la fonctionnalité et sa portée**
+- [ ] **Step 2: Document the feature and its scope**
 
-Dans `README.md`, après le paragraphe « Your data stays with you », ajouter :
+In `README.md`, after the "Your data stays with you" paragraph, add:
 
 ```markdown
 ## Ports
 
-A second tab lists the TCP ports Claude Code left listening — including the ones whose
-session has already exited — and closes them on a click. Attribution reads the Claude
+A second tab lists the TCP ports Claude Code left listening (including the ones whose
+session has already exited) and closes them on a click. Attribution reads the Claude
 markers a process inherits in its environment, so nothing else on your machine is ever
 listed, and nothing is killed without your click. The environment itself is never read
 beyond those markers, never stored and never logged.
 ```
 
-Dans `README.fr.md`, au même endroit :
+In `README.fr.md`, at the same place, the same paragraph written in French (shown here in English):
 
 ```markdown
 ## Ports
 
-Un second onglet liste les ports TCP laissés en écoute par Claude Code — y compris ceux
-dont la session est déjà terminée — et les ferme d'un clic. L'attribution lit les marqueurs
-Claude hérités dans l'environnement du process : rien d'autre sur la machine n'est listé, et
-rien n'est tué sans ton clic. L'environnement lui-même n'est jamais lu au-delà de ces
-marqueurs, jamais stocké, jamais journalisé.
+A second tab lists the TCP ports left listening by Claude Code (including the ones
+whose session has already ended) and closes them with one click. Attribution reads the
+Claude markers inherited in the process environment: nothing else on the machine is listed, and
+nothing is killed without your click. The environment itself is never read beyond those
+markers, never stored, never logged.
 ```
 
-Dans `CHANGELOG.md`, ajouter une entrée en tête, sous la forme déjà utilisée par le fichier :
+In `CHANGELOG.md`, add an entry at the top, in the format the file already uses:
 
 ```markdown
-- Onglet Ports : liste les ports laissés en écoute par Claude Code, orphelins compris, et permet de les tuer un par un.
+- Ports tab: lists the ports left listening by Claude Code, orphans included, and lets you kill them one by one.
 ```
 
 - [ ] **Step 3: Commit**

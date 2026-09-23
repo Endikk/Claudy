@@ -6,7 +6,7 @@
 //   swift Scripts/generate-icon.swift
 //
 // Re-run only when the mark or the icon style changes: the generated PNGs
-// generated files are committed, so nobody else needs to run this script.
+// are committed, so nobody else needs to run this script.
 
 import AppKit
 
@@ -58,7 +58,7 @@ func render(pixels: Int) -> NSBitmapImageRep {
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
     ), let ctx = NSGraphicsContext(bitmapImageRep: rep) else {
-        fatalError("contexte bitmap indisponible")
+        fatalError("bitmap context unavailable")
     }
 
     NSGraphicsContext.saveGraphicsState()
@@ -109,7 +109,7 @@ func render(pixels: Int) -> NSBitmapImageRep {
     return rep
 }
 
-// MARK: - Écriture du catalogue
+// MARK: - Writing the catalog
 
 let scriptURL = URL(fileURLWithPath: CommandLine.arguments[0])
 let root = scriptURL.deletingLastPathComponent().deletingLastPathComponent()
@@ -128,7 +128,7 @@ for size in sizes {
         let name = scale == 1 ? "icon_\(size)x\(size).png" : "icon_\(size)x\(size)@2x.png"
         let rep = render(pixels: size * scale)
         guard let png = rep.representation(using: .png, properties: [:]) else {
-            fatalError("export PNG impossible pour \(name)")
+            fatalError("PNG export failed for \(name)")
         }
         try png.write(to: iconset.appendingPathComponent(name))
         images.append([

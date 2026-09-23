@@ -82,8 +82,8 @@ struct GitHubReleaseFeed: ReleaseFeed {
     }
 }
 
-/// Checks once at launch and then once a day whether a newer Claudy is out. Silent on any
-/// failure: no network means no dot, never an error.
+/// Checks at launch, then once a day, and on every manual refresh, whether a newer Claudy is
+/// out. Silent on any failure: no network means no dot, never an error.
 @MainActor
 final class UpdateChecker: ObservableObject {
 
@@ -115,25 +115,39 @@ final class UpdateChecker: ObservableObject {
     private let store: UserDefaults
     /// A simulated release is announced on every launch: it is never remembered.
     private let remembersAnnouncement: Bool
+    private let now: () -> Date
+    /// The version installed on disk, read after an upgrade. Nil when unreadable.
+    private let installedVersion: () -> AppVersion?
     private var timer: Timer?
+    private var isChecking = false
+    private var lastCheck: Date?
 
     static let checkInterval: TimeInterval = 24 * 3600
+    /// A refresh clicked again and again asks GitHub once a minute at most: it allows 60 calls
+    /// an hour without a token.
+    static let manualCheckSpacing: TimeInterval = 60
     private static let announcedKey = "claudy.update.announced"
 
     init(current: AppVersion? = AppVersion(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""),
          feed: ReleaseFeed? = nil,
          runner: UpgradeRunner? = nil,
-         store: UserDefaults = .standard) {
+         store: UserDefaults = .standard,
+         now: @escaping () -> Date = Date.init,
+         installedVersion: @escaping () -> AppVersion? = UpdateChecker.versionOnDisk) {
         self.current = current
         self.store = store
+        self.now = now
         if let feed {
             self.feed = feed
             self.runner = runner
+            self.installedVersion = installedVersion
             remembersAnnouncement = true
             restartsAfterUpgrade = false
         } else if let simulated = Self.simulatedFeed() {
             self.feed = simulated
             self.runner = Self.simulatedRunner()
+            // A simulated upgrade installs nothing: taken at its word.
+            self.installedVersion = { nil }
             remembersAnnouncement = false
             // Restarting drops the launch arguments: the relaunched copy sees no update, as a
             // real upgrade would leave it.
@@ -141,6 +155,7 @@ final class UpdateChecker: ObservableObject {
         } else {
             self.feed = GitHubReleaseFeed()
             self.runner = runner ?? Self.homebrewRunner()
+            self.installedVersion = installedVersion
             remembersAnnouncement = true
             restartsAfterUpgrade = true
         }
@@ -157,7 +172,12 @@ final class UpdateChecker: ObservableObject {
     }
 
     func check() async {
-        guard let current, let release = try? await feed.latest() else { return }
+        guard let current, !isChecking else { return }
+        isChecking = true
+        lastCheck = now()
+        let latest = try? await feed.latest()
+        isChecking = false
+        guard let release = latest else { return }
         guard release.version > current else {
             available = nil
             shouldAnnounce = false
@@ -172,6 +192,12 @@ final class UpdateChecker: ObservableObject {
         // `-ClaudySimulateAutoUpgrade YES`: press Update by itself, to time the whole upgrade.
         if !remembersAnnouncement, UserDefaults.standard.bool(forKey: "ClaudySimulateAutoUpgrade") { update() }
         #endif
+    }
+
+    /// The refresh button: checks again, unless the last check is under a minute old.
+    func checkNow() async {
+        if let lastCheck, now().timeIntervalSince(lastCheck) < Self.manualCheckSpacing { return }
+        await check()
     }
 
     /// Claudy was opened: stop waving until the next launch or mode switch.
@@ -218,13 +244,30 @@ final class UpdateChecker: ObservableObject {
         upgradeState = .upgrading
         Task {
             let status = await runner.upgrade()
-            guard status == 0 else {
+            guard status == 0, didInstallNewerVersion else {
                 upgradeState = .failed
                 return
             }
             upgradeState = .restarting
             if restartsAfterUpgrade { Self.restart() }
         }
+    }
+
+    /// brew exits 0 without installing anything when its tap has not caught up with the
+    /// release: only a newer bundle on disk proves the upgrade. An unreadable one is taken as
+    /// success, as before this check.
+    private var didInstallNewerVersion: Bool {
+        guard let current, let installed = installedVersion() else { return true }
+        return installed > current
+    }
+
+    /// The bundle's version as it is on disk now. Read from the file: `Bundle` keeps the
+    /// Info.plist it loaded at launch.
+    nonisolated static func versionOnDisk() -> AppVersion? {
+        let plist = Bundle.main.bundleURL.appendingPathComponent("Contents/Info.plist")
+        guard let info = NSDictionary(contentsOf: plist),
+              let version = info["CFBundleShortVersionString"] as? String else { return nil }
+        return AppVersion(version)
     }
 
     /// The fallback after a failed upgrade: the same command, in Terminal, where brew can ask

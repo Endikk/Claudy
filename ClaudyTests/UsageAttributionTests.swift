@@ -96,7 +96,7 @@ final class UsageAttributionTests: XCTestCase {
                  output: 50, sidechain: true),
         ])
 
-        let entries = try await TranscriptScanner(projectsDirectory: { projects }).scan()
+        let entries = try await TranscriptScanner(projectsDirectories: { [projects] }).scan()
 
         XCTAssertEqual(entries.count, 3, "duplicate content-block line counted once, subagent read")
         XCTAssertEqual(Set(entries.map(\.project)), [repo.path],
@@ -113,7 +113,7 @@ final class UsageAttributionTests: XCTestCase {
             line(id: "b", cwd: sandbox.path, session: "s", model: "claude-opus-5", output: 1_000_000),
         ])
 
-        let entries = try await TranscriptScanner(projectsDirectory: { projects }).scan()
+        let entries = try await TranscriptScanner(projectsDirectories: { [projects] }).scan()
 
         XCTAssertEqual(entries.first { $0.dedupKey?.hasPrefix("a") == true }?.weight ?? 0, 0.5, accuracy: 1e-9)
         XCTAssertEqual(entries.first { $0.dedupKey?.hasPrefix("b") == true }?.weight ?? 0, 25, accuracy: 1e-9)
@@ -138,11 +138,55 @@ final class UsageAttributionTests: XCTestCase {
         XCTAssertEqual(snapshot.activeModel, "Opus 5", "fewer tokens, but they weigh more")
     }
 
+    func testLocalActivityKeepsTheSessionRunningWithoutAQuota() {
+        let now = Date()
+        let entries = [entry("claude-opus-5", tokens: 100, weight: 1, project: "/w/Claudy", now: now)]
+
+        let snapshot = UsageAggregator.snapshot(from: entries, account: account, reading: nil, now: now)
+
+        XCTAssertFalse(snapshot.session.isMeasured)
+        XCTAssertFalse(snapshot.session.isActive, "no quota, so no countdown to show")
+        XCTAssertTrue(snapshot.session.isRunning, "Claude Code worked an hour ago: Claudy must type")
+    }
+
+    func testLocalActivityKeepsTheSessionRunningWhenTheAccountHasNoWindow() {
+        let now = Date()
+        let entries = [entry("claude-opus-5", tokens: 100, weight: 1, project: "/w/Claudy", now: now)]
+        // Claude Code bills another account (an API key), so the one Claudy reads has no window.
+        let reading = QuotaReading(session: QuotaWindow(percent: 0, resetsAt: nil),
+                                   weekly: nil, scoped: nil, source: .api)
+
+        let snapshot = UsageAggregator.snapshot(from: entries, account: account, reading: reading, now: now)
+
+        XCTAssertTrue(snapshot.session.isMeasured)
+        XCTAssertFalse(snapshot.session.isActive, "the account runs no window: no countdown")
+        XCTAssertTrue(snapshot.session.isRunning, "Claude Code worked an hour ago: Claudy must type")
+    }
+
+    func testAccountWindowKeepsTheSessionRunningWithoutLocalActivity() {
+        let now = Date()
+        let reading = QuotaReading(session: QuotaWindow(percent: 0.4, resetsAt: now.addingTimeInterval(3600)),
+                                   weekly: nil, scoped: nil, source: .api)
+
+        let snapshot = UsageAggregator.snapshot(from: [], account: account, reading: reading, now: now)
+
+        XCTAssertTrue(snapshot.session.isActive)
+        XCTAssertTrue(snapshot.session.isRunning, "work on another machine still counts")
+    }
+
+    func testNoActivityAndNoQuotaLeavesTheSessionIdle() {
+        let now = Date()
+
+        let snapshot = UsageAggregator.snapshot(from: [], account: account, reading: nil, now: now)
+
+        XCTAssertFalse(snapshot.session.isRunning)
+    }
+
     func testHomonymProjectsShowTheirParent() {
-        let names = UsageAggregator.displayNames(for: ["/work/api", "/perso/api", "/work/site"])
+        let names = UsageAggregator.displayNames(for: ["/work/api", "/personal/api", "/work/site"])
 
         XCTAssertEqual(names["/work/api"], "work/api")
-        XCTAssertEqual(names["/perso/api"], "perso/api")
+        XCTAssertEqual(names["/personal/api"], "personal/api")
         XCTAssertEqual(names["/work/site"], "site")
     }
 

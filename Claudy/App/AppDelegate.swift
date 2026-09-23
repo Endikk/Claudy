@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         bind()
+        viewModel.onUserRefresh = { [updates] in Task { await updates.checkNow() } }
         Task { await viewModel.refresh() }
         updates.start()
     }
@@ -118,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     /// The **visual** bottom-right corner the card should occupy on a given screen. The drop
-    /// shadow lives in a transparent margin; without subtracting it the card would float 14 pt
+    /// shadow lives in a transparent margin; without subtracting it the card would float that far
     /// from the edge instead of hugging the corner.
     private func homeAnchor(on screen: NSScreen?) -> CGPoint {
         let bounds = layoutBounds(on: screen)
@@ -151,7 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// accordion makes it taller.
     ///
     /// Clamping applies to the **visual** rectangle (window minus the shadow margin); clamping the
-    /// whole window would leave an empty 14 pt band along the edges.
+    /// whole window would leave an empty band of that width along the edges.
     private func clamped(_ frame: NSRect, for window: NSWindow) -> NSRect {
         let inset = Theme.Metric.shadowInset
         let margin = Theme.Metric.screenMargin
@@ -202,7 +203,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     // MARK: - Menu
 
-    /// `LSUIElement` removes the menu bar; without this minimal menu, ⌘Q and ⌘R would not respond.
+    /// `LSUIElement` removes the menu bar; without this minimal menu, ⌘Q and ⌘R would not respond,
+    /// and text fields would ignore ⌘V: the sign-in code could only be pasted with a right click.
     private func installMainMenu() {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "Refresh", action: #selector(refreshNow), keyEquivalent: "r")
@@ -213,12 +215,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let appItem = NSMenuItem()
         appItem.submenu = appMenu
 
+        // No target: each action goes to the first responder, the field being edited.
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        let editItem = NSMenuItem()
+        editItem.submenu = editMenu
+
         let mainMenu = NSMenu()
         mainMenu.addItem(appItem)
+        mainMenu.addItem(editItem)
         NSApp.mainMenu = mainMenu
     }
 
     @objc private func refreshNow() {
-        Task { await viewModel.refresh() }
+        Task { await viewModel.refresh(userInitiated: true) }
     }
 }
