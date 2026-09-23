@@ -96,7 +96,7 @@ final class UsageAttributionTests: XCTestCase {
                  output: 50, sidechain: true),
         ])
 
-        let entries = try await TranscriptScanner(projectsDirectory: { projects }).scan()
+        let entries = try await TranscriptScanner(projectsDirectories: { [projects] }).scan()
 
         XCTAssertEqual(entries.count, 3, "duplicate content-block line counted once, subagent read")
         XCTAssertEqual(Set(entries.map(\.project)), [repo.path],
@@ -113,7 +113,7 @@ final class UsageAttributionTests: XCTestCase {
             line(id: "b", cwd: sandbox.path, session: "s", model: "claude-opus-5", output: 1_000_000),
         ])
 
-        let entries = try await TranscriptScanner(projectsDirectory: { projects }).scan()
+        let entries = try await TranscriptScanner(projectsDirectories: { [projects] }).scan()
 
         XCTAssertEqual(entries.first { $0.dedupKey?.hasPrefix("a") == true }?.weight ?? 0, 0.5, accuracy: 1e-9)
         XCTAssertEqual(entries.first { $0.dedupKey?.hasPrefix("b") == true }?.weight ?? 0, 25, accuracy: 1e-9)

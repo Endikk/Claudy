@@ -23,9 +23,29 @@ enum ClaudeHome {
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude", isDirectory: true)
     }
 
-    /// One folder per project, named after its working directory.
-    static var projectsDirectory: URL {
-        configDirectory.appendingPathComponent("projects", isDirectory: true)
+    /// Every folder that may hold transcripts on this machine, each with one folder per project
+    /// named after its working directory.
+    static var projectsDirectories: [URL] {
+        projectsDirectories(custom: customConfigDirectory,
+                            home: FileManager.default.homeDirectoryForCurrentUser,
+                            environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// A custom directory stands alone. Otherwise `~/.claude/projects` comes first, then the XDG
+    /// location (`$XDG_CONFIG_HOME/claude/projects`, `~/.config/claude/projects` by default) that
+    /// some Claude Code releases wrote to. ccusage reads both for the same reason, and responses
+    /// found in both are counted once.
+    static func projectsDirectories(custom: URL?, home: URL, environment: [String: String]) -> [URL] {
+        if let custom { return [custom.appendingPathComponent("projects", isDirectory: true)] }
+
+        let xdgHome = environment["XDG_CONFIG_HOME"]
+            .flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath,
+                                              isDirectory: true) }
+            ?? home.appendingPathComponent(".config", isDirectory: true)
+        return [
+            home.appendingPathComponent(".claude/projects", isDirectory: true),
+            xdgHome.appendingPathComponent("claude/projects", isDirectory: true),
+        ]
     }
 
     /// `.claude.json` lives in the configuration directory when that directory is custom, and at
@@ -39,6 +59,6 @@ enum ClaudeHome {
 
     /// True as soon as any trace of Claude Code exists; without one the app switches to demo mode.
     static var isInstalled: Bool {
-        configFile != nil || FileManager.default.fileExists(atPath: projectsDirectory.path)
+        configFile != nil || projectsDirectories.contains { FileManager.default.fileExists(atPath: $0.path) }
     }
 }

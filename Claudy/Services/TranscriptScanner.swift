@@ -17,9 +17,9 @@ struct TranscriptEntry {
     let sessionID: String
     /// A subagent response. Its tokens count, but it is not a user session.
     let isSidechain: Bool
-    /// `message.id:requestId`. Claude Code rewrites the same response across several lines, one
-    /// per content block, with an identical `usage` block; without this key every response would
-    /// be counted several times. `nil` means no identifiers, so it is always counted.
+    /// `message.id:requestId`. Claude Code writes the same response across several lines, one per
+    /// content block; without this key every response would be counted several times. `nil` means
+    /// no identifiers, so the line counts on its own.
     let dedupKey: String?
 }
 
@@ -39,27 +39,25 @@ actor TranscriptScanner {
     /// offsets and weeks that straddle a boundary.
     private let retention: TimeInterval = 9 * 86_400
 
-    /// Read state for one file. Entries are attached to their file so they can be purged if it
+    /// Read state for one file. Responses are attached to their file so they can be purged if it
     /// is truncated or replaced.
     private struct FileState {
         var offset: UInt64
         /// File identifier (inode): detects a replacement of equal or greater size.
         var fileID: NSObject?
-        var entries: [TranscriptEntry]
+        /// Responses read so far, by `dedupKey`. One without identifiers is keyed by file name and
+        /// byte offset: apart from every other line, yet one key for a copy of the same transcript.
+        var responses: [String: TranscriptEntry]
         var lastSeen: Date
     }
 
     private var files: [URL: FileState] = [:]
 
-    /// Keys already counted, global across files: a resumed session (`--resume`) rewrites the
-    /// same responses into a different transcript.
-    private var seenKeys: [String: (url: URL, date: Date)] = [:]
-
     private var resolver = ProjectResolver()
-    private let projectsDirectory: () -> URL
+    private let projectsDirectories: () -> [URL]
 
-    init(projectsDirectory: @escaping () -> URL = { ClaudeHome.projectsDirectory }) {
-        self.projectsDirectory = projectsDirectory
+    init(projectsDirectories: @escaping () -> [URL] = { ClaudeHome.projectsDirectories }) {
+        self.projectsDirectories = projectsDirectories
     }
 
     private var skippedLines = 0
@@ -92,12 +90,11 @@ actor TranscriptScanner {
         for (url, state) in files where !discoveredSet.contains(url) && state.lastSeen < cutoff {
             files.removeValue(forKey: url)
         }
-        seenKeys = seenKeys.filter { $0.value.date >= cutoff }
-        for url in files.keys {
-            files[url]?.entries.removeAll { $0.date < cutoff }
+        for (url, state) in files {
+            files[url]?.responses = state.responses.filter { $0.value.date >= cutoff }
         }
 
-        var all = assignProjects(files.values.flatMap(\.entries))
+        var all = assignProjects(uniqueResponses())
         all.sort { $0.date < $1.date }
 
         if skippedLines > 0 {
@@ -106,10 +103,57 @@ actor TranscriptScanner {
         return all
     }
 
+    /// One entry per response across every file: a resumed session (`--resume`) rewrites the same
+    /// responses into another transcript. Settled here rather than while reading, so the result
+    /// does not depend on the order the disk lists files in, and a file rewritten without a
+    /// response cannot take it away from the other file holding it.
+    private func uniqueResponses() -> [TranscriptEntry] {
+        var unique: [String: TranscriptEntry] = [:]
+        for state in files.values {
+            for (key, entry) in state.responses {
+                if let held = unique[key], !Self.isMoreComplete(entry, than: held) { continue }
+                unique[key] = entry
+            }
+        }
+        return Array(unique.values)
+    }
+
+    /// Claude Code streams a response over several lines, one per content block, and the early
+    /// ones carry the output count reached so far: keeping the first line undercounted output by
+    /// about 40 %. Counters only grow, so the largest copy is the final one. Ties go to the
+    /// earliest copy, then to the session name, so the choice never depends on reading order.
+    private static func isMoreComplete(_ candidate: TranscriptEntry, than held: TranscriptEntry) -> Bool {
+        if candidate.tokens != held.tokens { return candidate.tokens > held.tokens }
+        if candidate.date != held.date { return candidate.date < held.date }
+        return candidate.sessionID < held.sessionID
+    }
+
+    /// Transcripts under every projects folder. Each folder is resolved first: `projects` moved to
+    /// another disk behind a symbolic link would otherwise read as empty, since the enumerator
+    /// does not follow a link at its root. Two paths leading to one folder are read once.
+    ///
+    /// The first folder that exists must be readable, or the error surfaces. Any later one is a
+    /// fallback: a permission quirk there must not blank a folder that reads fine.
     private func transcriptURLs(modifiedSince cutoff: Date) throws -> [URL] {
+        var visited: Set<String> = []
+        var found: [URL] = []
+        var hasReadAFolder = false
+        for folder in projectsDirectories() {
+            let root = folder.resolvingSymlinksInPath()
+            guard FileManager.default.fileExists(atPath: root.path),
+                  visited.insert(root.path).inserted else { continue }
+            do {
+                found += try transcriptURLs(in: root, modifiedSince: cutoff)
+                hasReadAFolder = true
+            } catch UsageDataError.projectsUnreadable where hasReadAFolder {
+                NSLog("[Claudy] Skipped unreadable transcripts folder %@.", root.path)
+            }
+        }
+        return found
+    }
+
+    private func transcriptURLs(in root: URL, modifiedSince cutoff: Date) throws -> [URL] {
         let manager = FileManager.default
-        let root = projectsDirectory()
-        guard manager.fileExists(atPath: root.path) else { return [] }
         guard manager.isReadableFile(atPath: root.path) else { throw UsageDataError.projectsUnreadable }
 
         let keys: [URLResourceKey] = [.contentModificationDateKey, .isRegularFileKey]
@@ -152,7 +196,7 @@ actor TranscriptScanner {
         let currentID = (try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]))?
             .fileResourceIdentifier as? NSObject
 
-        var state = files[url] ?? FileState(offset: 0, fileID: currentID, entries: [], lastSeen: now)
+        var state = files[url] ?? FileState(offset: 0, fileID: currentID, responses: [:], lastSeen: now)
         state.lastSeen = now
         defer { files[url] = state }
 
@@ -164,9 +208,8 @@ actor TranscriptScanner {
         let replaced = state.fileID != nil && currentID != nil && !state.fileID!.isEqual(currentID)
         if replaced || size < state.offset {
             state.offset = 0
-            state.entries = []
+            state.responses = [:]
             state.fileID = currentID
-            seenKeys = seenKeys.filter { $0.value.url != url }
         }
         if state.fileID == nil { state.fileID = currentID }
 
@@ -184,6 +227,7 @@ actor TranscriptScanner {
         } else {
             return
         }
+        let base = state.offset
         state.offset += UInt64(complete.count)
 
         for line in complete.split(separator: 0x0A) where !line.isEmpty {
@@ -194,11 +238,9 @@ actor TranscriptScanner {
             switch parse(Data(line)) {
             case .entry(let entry):
                 guard entry.date >= cutoff else { continue }
-                if let key = entry.dedupKey {
-                    if seenKeys[key] != nil { continue }
-                    seenKeys[key] = (url, entry.date)
-                }
-                state.entries.append(entry)
+                let key = entry.dedupKey ?? "\(url.lastPathComponent)@\(base + UInt64(line.startIndex))"
+                if let held = state.responses[key], !Self.isMoreComplete(entry, than: held) { continue }
+                state.responses[key] = entry
             case .malformed:
                 skippedLines += 1
             case .irrelevant:
