@@ -5,6 +5,14 @@ private struct EmptySource: UsageDataSource {
     func fetch() async throws -> UsageSnapshot { .placeholder }
 }
 
+private struct SignedInSource: UsageDataSource {
+    func fetch() async throws -> UsageSnapshot {
+        var snapshot = UsageSnapshot.placeholder
+        snapshot.isSignedIn = true
+        return snapshot
+    }
+}
+
 /// The refresh button also looks for a new Claudy. The timer and the wake-up refresh do not:
 /// the update checker keeps its own daily schedule.
 @MainActor
@@ -28,6 +36,34 @@ final class ManualRefreshTests: XCTestCase {
         await viewModel.refresh()
 
         XCTAssertEqual(checks, 0)
+    }
+
+    // MARK: - Automatic refresh pace
+
+    /// While the card asks the user to sign in, Claudy looks again every few seconds: signing in
+    /// to Claude Code must switch the card by itself, not three minutes later.
+    func testSignInCardIsReadAgainWithinSeconds() async {
+        let viewModel = UsageViewModel(source: EmptySource())
+
+        await viewModel.refresh()
+
+        XCTAssertFalse(viewModel.isSignedIn)
+        XCTAssertLessThanOrEqual(viewModel.autoRefreshInterval, 10)
+    }
+
+    func testSignedInCardKeepsTheThreeMinutePace() async {
+        let viewModel = UsageViewModel(source: SignedInSource())
+
+        await viewModel.refresh()
+
+        XCTAssertTrue(viewModel.isSignedIn)
+        XCTAssertEqual(viewModel.autoRefreshInterval, 180)
+    }
+
+    func testCardKeepsTheSlowPaceBeforeItsFirstReading() {
+        let viewModel = UsageViewModel(source: EmptySource())
+
+        XCTAssertEqual(viewModel.autoRefreshInterval, 180)
     }
 
     /// Holding ⌘R repeats the key: each repeat must not lift a backoff the server asked for.

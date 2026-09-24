@@ -96,6 +96,7 @@ final class UsageViewModel: ObservableObject {
         withAnimation(Theme.Motion.mode) {
             hasLoaded = true
         }
+        scheduleAutoRefresh()
     }
 
     func toggleMode() {
@@ -221,8 +222,25 @@ final class UsageViewModel: ObservableObject {
     /// machine each trigger an immediate reading.
     private static let refreshInterval: TimeInterval = 180
 
+    /// While the card asks the user to sign in. Signing in to Claude Code must switch the card
+    /// within seconds, not three minutes later, and the reading costs nothing then: with no token
+    /// there is no request to Anthropic, only a keychain read and the new lines of the history.
+    private static let signInCheckInterval: TimeInterval = 10
+
+    var autoRefreshInterval: TimeInterval {
+        hasLoaded && !isSignedIn && !snapshot.isDemo ? Self.signInCheckInterval : Self.refreshInterval
+    }
+
     private func startAutoRefresh() {
-        let timer = Timer(timeInterval: Self.refreshInterval, repeats: true) { [weak self] _ in
+        scheduleAutoRefresh()
+    }
+
+    /// Restarts the timer when the pace changes: signed in or not.
+    private func scheduleAutoRefresh() {
+        let interval = autoRefreshInterval
+        guard timer?.timeInterval != interval else { return }
+        timer?.invalidate()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
         RunLoop.main.add(timer, forMode: .common)
