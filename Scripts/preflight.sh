@@ -19,8 +19,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-WORK="$ROOT/build/preflight"
+WORK="$ROOT/build/preflight"      # logs, tools and the verdict
 DERIVED="$WORK/DerivedData"
+# What the built app reads and writes lives outside the project. Under ~/Documents, macOS would
+# ask every new build for access to that folder, and the tests would wait on the dialog.
+DATA="${TMPDIR:-/tmp}/claudy-preflight"
 ci=false
 for arg in "$@"; do
     case "$arg" in
@@ -29,16 +32,20 @@ for arg in "$@"; do
     esac
 done
 
-# Budgets, in seconds. A CI runner is a shared virtual machine that starts apps cold: three times
-# the time is allowed, except for the automatic switch, which a 10-second timer paces.
-scale=1
-$ci && scale=3
-read_budget=$((4 * scale))                            # first read of 1 GB
-slow_read_budget=20                                   # same, efficiency cores (this Mac only)
-sign_in_budget=$(awk "BEGIN { print 1.5 * $scale }")  # the sign-in card shows
-switch_budget=15                                      # the card leaves sign-in once a session appears
+# Budgets, in seconds. On this Mac they are the release gate. A CI runner is a shared virtual
+# machine whose timings vary two to three times from one run to the next (a 1 GB read took 5.7 s,
+# then 14.8 s, with the same code): there, budgets only catch a disaster.
+read_budget=4          # first read of 1 GB
+slow_read_budget=20    # same, efficiency cores (this Mac only)
+sign_in_budget=1.5     # the sign-in card shows, over a 1 GB history it must not wait for
+switch_budget=15       # the card leaves sign-in once a session appears (a 10-second timer paces it)
+if $ci; then
+    read_budget=60
+    sign_in_budget=10
+    switch_budget=30
+fi
 
-mkdir -p "$WORK"
+mkdir -p "$WORK" "$DATA"
 summary=()
 failures=0
 
@@ -98,7 +105,7 @@ echo "▸ synthetic histories (${sizes[*]} MB)"
 swiftc -O "$ROOT/Scripts/preflight/MakeHistory.swift" -o "$WORK/make-history"
 histories=()
 for megabytes in "${sizes[@]}"; do
-    history="$WORK/history-$megabytes"
+    history="$DATA/history-$megabytes"
     # Dated from the moment they are written: past a day, they drift out of the seven days read.
     if [[ -z "$(find "$history/projects" -maxdepth 0 -mmin -720 2>/dev/null)" ]]; then
         "$WORK/make-history" "$history" "$megabytes" > /dev/null
@@ -113,7 +120,7 @@ fi
 
 for architecture in "${architectures[@]}"; do
     echo "▸ tests and first reads, $architecture"
-    report="$WORK/reads-$architecture.json"
+    report="$DATA/reads-$architecture.json"
     log="$WORK/tests-$architecture.log"
     rm -f "$report"
     if TEST_RUNNER_CLAUDY_BENCHMARK_HISTORIES="$(IFS=:; echo "${histories[*]}")" \
@@ -143,10 +150,11 @@ if [[ "$(uname -m)" == "x86_64" ]] && system_profiler SPDisplaysDataType 2>/dev/
 else
     echo "▸ real app: sign-in card and automatic switch"
     swiftc -O "$ROOT/Scripts/preflight/LaunchProbe.swift" -o "$WORK/launch-probe"
-    config="$WORK/stand-in-claude"
+    config="$DATA/stand-in-claude"
     rm -rf "$config"
     mkdir -p "$config"
-    ln -s "$WORK/history-20/projects" "$config/projects"
+    # The largest history: a sign-in card that went back to waiting for it would miss its budget.
+    ln -s "$DATA/history-1000/projects" "$config/projects"
 
     # The Claudy in use is closed for the run, then reopened from where it was: opening it by
     # bundle identifier could land on the build just made instead.
@@ -156,7 +164,7 @@ else
         osascript -e 'quit app id "com.claudy.Claudy"' > /dev/null 2>&1 || true
         for _ in $(seq 1 20); do pgrep -x Claudy > /dev/null || break; sleep 0.5; done
     fi
-    probe="$WORK/launch.json"
+    probe="$DATA/launch.json"
     "$WORK/launch-probe" "$APP/Contents/MacOS/Claudy" "$probe" "$config" --switch > /dev/null 2>&1 || true
     record "sign-in card shows after" "$(seconds "$probe" cardSeconds)" "$sign_in_budget"
     record "card leaves sign-in, session appeared" "$(seconds "$probe" switchSeconds)" "$switch_budget"
@@ -182,6 +190,7 @@ if ! $ci && command -v brew > /dev/null; then
 fi
 
 # ── Verdict ──────────────────────────────────────────────────────────────────
+cp "$DATA"/*.json "$WORK"/ 2> /dev/null || true
 echo
 echo "Preflight on $(sysctl -n machdep.cpu.brand_string 2>/dev/null || uname -m), macOS $(sw_vers -productVersion)"
 printf '%s\n' "${summary[@]}" | tee "$WORK/report.txt"

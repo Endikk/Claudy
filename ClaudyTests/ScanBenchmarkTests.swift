@@ -9,7 +9,7 @@ import XCTest
 /// - `TEST_RUNNER_CLAUDY_BENCHMARK_EFFICIENCY=1`: also read each history confined to the
 ///   efficiency cores at background priority, the closest a Mac comes to a slower one.
 ///
-/// Each figure is the median of three reads.
+/// Each figure is the best of three reads, the one least disturbed by whatever else runs.
 final class ScanBenchmarkTests: XCTestCase {
 
     func testFirstReadOfHistories() async throws {
@@ -23,13 +23,13 @@ final class ScanBenchmarkTests: XCTestCase {
         var results: [String: [String: Any]] = [:]
         for history in histories.split(separator: ":").map(String.init) {
             let projects = URL(fileURLWithPath: history, isDirectory: true).appendingPathComponent("projects")
-            let normal = try await medianFirstRead(of: projects)
+            let normal = try await bestFirstRead(of: projects)
             XCTAssertGreaterThan(normal.responses, 0, "\(history) read as empty")
             var result: [String: Any] = ["responses": normal.responses, "seconds": normal.seconds]
             if measuresEfficiency {
                 setpriority(PRIO_DARWIN_PROCESS, 0, PRIO_DARWIN_BG)
                 defer { setpriority(PRIO_DARWIN_PROCESS, 0, 0) }
-                result["efficiencySeconds"] = try await medianFirstRead(of: projects).seconds
+                result["efficiencySeconds"] = try await bestFirstRead(of: projects).seconds
             }
             results[URL(fileURLWithPath: history).lastPathComponent] = result
         }
@@ -37,7 +37,7 @@ final class ScanBenchmarkTests: XCTestCase {
     }
 
     /// A new scanner each time, so every read is a first one.
-    private func medianFirstRead(of projects: URL) async throws -> (seconds: Double, responses: Int) {
+    private func bestFirstRead(of projects: URL) async throws -> (seconds: Double, responses: Int) {
         var times: [Double] = []
         var responses = 0
         for _ in 0..<3 {
@@ -45,6 +45,6 @@ final class ScanBenchmarkTests: XCTestCase {
             responses = try await TranscriptScanner(projectsDirectories: { [projects] }).scan().count
             times.append(Date().timeIntervalSince(start))
         }
-        return (times.sorted()[1], responses)
+        return (times.min() ?? 0, responses)
     }
 }

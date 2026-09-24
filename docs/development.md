@@ -57,16 +57,20 @@ token stores, so no test reads or writes the keychain.
 About a minute and a half, then a verdict. One Release build serves every step: the tests; in the
 same run, the first read of synthetic histories of 20 MB, 250 MB and 1 GB, as is and confined to
 the efficiency cores (the closest this Mac comes to a slower one), under Rosetta too when it is
-installed; then the real app on a stand-in Claude folder, where the sign-in card must show within
-a second and a half and leave by itself once a session file appears; last, the cask's style.
+installed; then the real app on a stand-in Claude folder holding the 1 GB history, where the
+sign-in card must show within a second and a half (it must not wait for that history) and leave by
+itself once a session file appears; last, the cask's style. What the built app reads and writes
+stays in the temporary folder: under `~/Documents`, macOS would ask each new build for access and
+the tests would wait on the dialog.
 Nobody's own history, account or log is touched; the Claudy in use closes for a few seconds and
 reopens.
 
 The same script runs on GitHub's Macs (`.github/workflows/preflight.yml`) on every push to
 `develop` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
-macOS 15 and 26, Intel on macOS 15. There it builds for the machine's own architecture, reads the
-20 MB and 1 GB histories only, and allows three times the time. macOS 13, the oldest Claudy
-supports, is no longer offered there.
+macOS 15 and 26, Intel on macOS 15. There it builds for the machine's own architecture and reads
+the 20 MB and 1 GB histories only. Its timings are reported, not judged: shared machines vary two
+to three times from one run to the next, so the budgets there only catch a disaster, and the
+timing gate is this Mac's. macOS 13, the oldest Claudy supports, is no longer offered there.
 
 GitHub's Intel Mac is a virtual machine whose graphics device Metal cannot load SwiftUI's shaders
 for: any SwiftUI window aborts there, every released version of Claudy included. The tests do not
