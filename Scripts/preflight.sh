@@ -1,18 +1,17 @@
 #!/bin/bash
 #
-# Checks to run before every release. A few minutes, and a verdict at the end.
+# Checks to run before every release, with a verdict at the end.
 #
-#   ./Scripts/preflight.sh         → on this Mac (closes Claudy for a few seconds, then reopens it)
-#   ./Scripts/preflight.sh --ci    → on a CI runner, with performance budgets for a slower machine
+#   ./Scripts/preflight.sh         → on this Mac: universal build, slow-Mac reads, the Homebrew
+#                                    cask. Closes the Claudy in use for a few seconds, then reopens it.
+#   ./Scripts/preflight.sh --ci    → on a CI runner: native build, budgets for a shared machine.
 #
-# 1. The test suite.
-# 2. The Release build: universal binary, signature, plist (build-app.sh).
-# 3. The first read of synthetic histories (20 MB, 250 MB, 1 GB) in a Release build, as is and
-#    confined to the efficiency cores, the closest this Mac comes to a slower one. Under Rosetta
-#    too when it is installed, to run the Intel code.
-# 4. The real app, launched on a stand-in Claude folder: the sign-in card must show within a
-#    second and a half, then leave by itself once a session appears in that folder.
-# 5. The Homebrew cask's style.
+# 1. One Release build, testable, that every later step uses: binary, signature, plist checked.
+# 2. The tests, and in the same run the first read of synthetic histories (20 MB to 1 GB). On this
+#    Mac, again confined to the efficiency cores, and under Rosetta too when it is installed.
+# 3. The real app on a stand-in Claude folder: the sign-in card must show quickly, then leave by
+#    itself once a session file appears in that folder, as Claude Code writes one on sign-in.
+# 4. The Homebrew cask's style, on this Mac only: the cask only changes at release time.
 #
 # Nobody's own data is used: histories are synthetic, the app runs on a stand-in folder with its
 # log kept apart, and its preferences only change for the process through launch arguments.
@@ -30,131 +29,140 @@ for arg in "$@"; do
     esac
 done
 
-# Budgets, in seconds. A CI runner is a shared virtual machine: three times the time is allowed.
+# Budgets, in seconds. A CI runner is a shared virtual machine that starts apps cold: three times
+# the time is allowed, except for the automatic switch, which a 10-second timer paces.
 scale=1
 $ci && scale=3
-read_budget=$((4 * scale))          # first read of 1 GB, as is
-slow_read_budget=$((20 * scale))    # first read of 1 GB, efficiency cores
-sign_in_budget=1.5                  # the sign-in card shows
-switch_budget=15                    # the card leaves sign-in once a session appears
+read_budget=$((4 * scale))                            # first read of 1 GB
+slow_read_budget=20                                   # same, efficiency cores (this Mac only)
+sign_in_budget=$(awk "BEGIN { print 1.5 * $scale }")  # the sign-in card shows
+switch_budget=15                                      # the card leaves sign-in once a session appears
 
 mkdir -p "$WORK"
 summary=()
 failures=0
-
-record() {   # record <label> <value> <budget or -> <unit>
-    local label="$1" value="$2" budget="$3" unit="$4" verdict="ok"
-    if [[ -z "$value" ]]; then
-        fail "$label (no figure)"
-        return
-    fi
-    if [[ "$budget" != "-" ]] && awk "BEGIN { exit !($value > $budget) }"; then
-        verdict="OVER BUDGET ($budget $unit)"
-        failures=$((failures + 1))
-    fi
-    summary+=("$(printf '%-44s %8s %-3s %s' "$label" "$value" "$unit" "$verdict")")
-}
 
 fail() {
     summary+=("$(printf '%-44s %s' "$1" "FAILED")")
     failures=$((failures + 1))
 }
 
-seconds() {  # seconds <json file> <key>, empty when the key is missing
-    { plutil -extract "$2" raw -o - "$1" 2>/dev/null || true; } | awk 'NF { printf "%.2f", $1 }'
+record() {   # record <label> <seconds> <budget or ->
+    local label="$1" value="$2" budget="$3" verdict="ok"
+    if [[ -z "$value" ]]; then
+        fail "$label (no figure)"
+        return
+    fi
+    if [[ "$budget" != "-" ]] && awk "BEGIN { exit !($value > $budget) }"; then
+        verdict="OVER BUDGET ($budget s)"
+        failures=$((failures + 1))
+    fi
+    summary+=("$(printf '%-44s %8s s  %s' "$label" "$value" "$verdict")")
 }
 
-# ── 1. Tests ─────────────────────────────────────────────────────────────────
-echo "▸ tests"
-if xcodebuild test -project "$ROOT/Claudy.xcodeproj" -scheme Claudy -destination 'platform=macOS' \
-        -derivedDataPath "$DERIVED/debug" > "$WORK/tests.log" 2>&1; then
-    summary+=("$(printf '%-44s %s' "tests" "ok ($(grep -c "' passed" "$WORK/tests.log" || true) passed)")")
-else
-    fail "tests (see build/preflight/tests.log)"
-fi
+seconds() {  # seconds <json file> <key path>, empty when missing
+    # plutil prints its "no value" error on standard output on some macOS versions: only a number
+    # read with success counts.
+    local value
+    value="$(plutil -extract "$2" raw -o - "$1" 2>/dev/null)" || return 0
+    [[ "$value" =~ ^[0-9.]+$ ]] && printf '%.2f' "$value"
+    return 0
+}
 
-# ── 2. Release build ─────────────────────────────────────────────────────────
+# ── 1. One build ─────────────────────────────────────────────────────────────
 echo "▸ Release build"
-if "$ROOT/Scripts/build-app.sh" > "$WORK/build.log" 2>&1; then
-    summary+=("$(printf '%-44s %s' "Release build (universal, signed)" "ok")")
-else
+architecture_settings=(ONLY_ACTIVE_ARCH=YES)
+$ci || architecture_settings=(ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO)
+if ! xcodebuild build-for-testing -project "$ROOT/Claudy.xcodeproj" -scheme Claudy -configuration Release \
+        -destination 'platform=macOS' -derivedDataPath "$DERIVED" \
+        ENABLE_TESTABILITY=YES COMPILER_INDEX_STORE_ENABLE=NO "${architecture_settings[@]}" \
+        > "$WORK/build.log" 2>&1; then
     fail "Release build (see build/preflight/build.log)"
+    printf '%s\n' "${summary[@]}"
+    exit 1
 fi
-APP="$ROOT/build/Claudy.app"
+APP="$DERIVED/Build/Products/Release/Claudy.app"
+binary_archs="$(lipo -archs "$APP/Contents/MacOS/Claudy")"
+if { $ci || [[ "$binary_archs" == *arm64* && "$binary_archs" == *x86_64* ]]; } \
+        && codesign --verify --deep "$APP" 2>/dev/null \
+        && plutil -lint "$APP/Contents/Info.plist" > /dev/null; then
+    summary+=("$(printf '%-44s %s' "Release build ($binary_archs)" "ok")")
+else
+    fail "Release build: binary ($binary_archs), signature or plist"
+fi
 
-# ── 3. First read of synthetic histories ─────────────────────────────────────
-echo "▸ synthetic histories"
+# ── 2. Tests and first reads ─────────────────────────────────────────────────
+sizes=(20 250 1000)
+$ci && sizes=(20 1000)
+echo "▸ synthetic histories (${sizes[*]} MB)"
 swiftc -O "$ROOT/Scripts/preflight/MakeHistory.swift" -o "$WORK/make-history"
-for megabytes in 20 250 1000; do
+histories=()
+for megabytes in "${sizes[@]}"; do
     history="$WORK/history-$megabytes"
     # Dated from the moment they are written: past a day, they drift out of the seven days read.
     if [[ -z "$(find "$history/projects" -maxdepth 0 -mmin -720 2>/dev/null)" ]]; then
         "$WORK/make-history" "$history" "$megabytes" > /dev/null
     fi
+    histories+=("$history")
 done
 
-echo "▸ first read, Release build"
-xcodebuild build-for-testing -project "$ROOT/Claudy.xcodeproj" -scheme Claudy -configuration Release \
-    -destination 'platform=macOS' -derivedDataPath "$DERIVED/release" ENABLE_TESTABILITY=YES -quiet \
-    > "$WORK/benchmark-build.log" 2>&1 || fail "benchmark build (see build/preflight/benchmark-build.log)"
-
-architectures=("arm64")
-[[ "$(uname -m)" == "x86_64" ]] && architectures=("x86_64")
-if [[ "$(uname -m)" == "arm64" ]] && arch -x86_64 /usr/bin/true 2>/dev/null; then
+architectures=("$(uname -m)")
+if ! $ci && [[ "$(uname -m)" == "arm64" ]] && arch -x86_64 /usr/bin/true 2>/dev/null; then
     architectures+=("x86_64")
 fi
 
 for architecture in "${architectures[@]}"; do
-    for megabytes in 20 250 1000; do
-        report="$WORK/read-$architecture-$megabytes.json"
-        rm -f "$report"
-        TEST_RUNNER_CLAUDY_BENCHMARK_HISTORY="$WORK/history-$megabytes" \
-        TEST_RUNNER_CLAUDY_BENCHMARK_REPORT="$report" \
-        xcodebuild test-without-building -project "$ROOT/Claudy.xcodeproj" -scheme Claudy \
+    echo "▸ tests and first reads, $architecture"
+    report="$WORK/reads-$architecture.json"
+    log="$WORK/tests-$architecture.log"
+    rm -f "$report"
+    if TEST_RUNNER_CLAUDY_BENCHMARK_HISTORIES="$(IFS=:; echo "${histories[*]}")" \
+       TEST_RUNNER_CLAUDY_BENCHMARK_REPORT="$report" \
+       TEST_RUNNER_CLAUDY_BENCHMARK_EFFICIENCY="$($ci && echo 0 || echo 1)" \
+       xcodebuild test-without-building -project "$ROOT/Claudy.xcodeproj" -scheme Claudy \
             -configuration Release -destination "platform=macOS,arch=$architecture" \
-            -derivedDataPath "$DERIVED/release" -only-testing:ClaudyTests/ScanBenchmarkTests -quiet \
-            > "$WORK/read-$architecture-$megabytes.log" 2>&1 || true
-        if [[ ! -f "$report" ]]; then
-            fail "first read, $megabytes MB, $architecture"
-            continue
-        fi
+            -derivedDataPath "$DERIVED" > "$log" 2>&1; then
+        summary+=("$(printf '%-44s %s' "tests, $architecture" "ok ($(grep -c "' passed" "$log" || true) passed)")")
+    else
+        fail "tests, $architecture (see build/preflight/tests-$architecture.log)"
+    fi
+    for megabytes in "${sizes[@]}"; do
         budget="-"; slow_budget="-"
         if [[ "$megabytes" == 1000 ]]; then budget=$read_budget; slow_budget=$slow_read_budget; fi
-        record "first read, $megabytes MB, $architecture" "$(seconds "$report" seconds)" "$budget" "s"
-        record "  same, efficiency cores" "$(seconds "$report" efficiencySeconds)" "$slow_budget" "s"
+        record "first read, $megabytes MB, $architecture" "$(seconds "$report" "history-$megabytes.seconds")" "$budget"
+        $ci || record "  same, efficiency cores" \
+            "$(seconds "$report" "history-$megabytes.efficiencySeconds")" "$slow_budget"
     done
 done
 
-# ── 4. The real app on a stand-in Claude folder ──────────────────────────────
-echo "▸ real app: sign-in card and automatic switch"
-swiftc -O "$ROOT/Scripts/preflight/LaunchProbe.swift" -o "$WORK/launch-probe"
-config="$WORK/stand-in-claude"
-rm -rf "$config"
-mkdir -p "$config"
-ln -s "$WORK/history-250/projects" "$config/projects"
-
-# The Claudy in use is closed for the run, then reopened from where it was: opening it by bundle
-# identifier could land on the build just made instead.
-running=""
-if ! $ci && pgrep -x Claudy > /dev/null; then
-    running="$(ps -o comm= -p "$(pgrep -x Claudy | head -1)" | sed 's|/Contents/MacOS/Claudy$||')"
-    osascript -e 'quit app id "com.claudy.Claudy"' > /dev/null 2>&1 || true
-    for _ in $(seq 1 20); do pgrep -x Claudy > /dev/null || break; sleep 0.5; done
-fi
-probe="$WORK/launch.json"
-if "$WORK/launch-probe" "$APP/Contents/MacOS/Claudy" "$probe" "$config" --switch > /dev/null 2>&1 \
-        && [[ -n "$(seconds "$probe" cardSeconds)" ]]; then
-    record "sign-in card shows after" "$(seconds "$probe" cardSeconds)" "$sign_in_budget" "s"
-    switched="$(seconds "$probe" switchSeconds)"
-    if [[ -n "$switched" ]]; then
-        record "card leaves sign-in, session appeared" "$switched" "$switch_budget" "s"
-    else
-        fail "card leaves sign-in once a session appears"
-    fi
+# ── 3. The real app on a stand-in Claude folder ──────────────────────────────
+# GitHub's Intel Macs are virtual machines whose graphics device Metal cannot load SwiftUI's
+# shaders for: any SwiftUI window aborts there, Claudy's and every released version's alike.
+if [[ "$(uname -m)" == "x86_64" ]] && system_profiler SPDisplaysDataType 2>/dev/null | grep -qi paravirtual; then
+    summary+=("$(printf '%-44s %s' "real app" "skipped: virtual Intel graphics, no SwiftUI")")
 else
-    fail "real app launch (see build/preflight/launch.json)"
+    echo "▸ real app: sign-in card and automatic switch"
+    swiftc -O "$ROOT/Scripts/preflight/LaunchProbe.swift" -o "$WORK/launch-probe"
+    config="$WORK/stand-in-claude"
+    rm -rf "$config"
+    mkdir -p "$config"
+    ln -s "$WORK/history-20/projects" "$config/projects"
+
+    # The Claudy in use is closed for the run, then reopened from where it was: opening it by
+    # bundle identifier could land on the build just made instead.
+    running=""
+    if ! $ci && pgrep -x Claudy > /dev/null; then
+        running="$(ps -o comm= -p "$(pgrep -x Claudy | head -1)" | sed 's|/Contents/MacOS/Claudy$||')"
+        osascript -e 'quit app id "com.claudy.Claudy"' > /dev/null 2>&1 || true
+        for _ in $(seq 1 20); do pgrep -x Claudy > /dev/null || break; sleep 0.5; done
+    fi
+    probe="$WORK/launch.json"
+    "$WORK/launch-probe" "$APP/Contents/MacOS/Claudy" "$probe" "$config" --switch > /dev/null 2>&1 || true
+    record "sign-in card shows after" "$(seconds "$probe" cardSeconds)" "$sign_in_budget"
+    record "card leaves sign-in, session appeared" "$(seconds "$probe" switchSeconds)" "$switch_budget"
+    [[ -n "$running" ]] && open "$running"
 fi
-[[ -n "$running" ]] && open "$running"
+
 # Keep this project's builds out of Launch Services: after an upgrade, brew reopens Claudy by bundle
 # identifier, and Launch Services can pick any registered copy instead of the installed one.
 lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
@@ -163,8 +171,8 @@ lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
         [[ "$copy" == "$ROOT/build/"* ]] && "$lsregister" -u "$copy" > /dev/null 2>&1
     done || true
 
-# ── 5. Homebrew cask ─────────────────────────────────────────────────────────
-if command -v brew > /dev/null; then
+# ── 4. Homebrew cask ─────────────────────────────────────────────────────────
+if ! $ci && command -v brew > /dev/null; then
     echo "▸ cask"
     if brew style "$ROOT/Casks/claudy.rb" > "$WORK/cask.log" 2>&1; then
         summary+=("$(printf '%-44s %s' "cask style" "ok")")

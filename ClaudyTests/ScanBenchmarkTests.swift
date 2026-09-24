@@ -1,34 +1,39 @@
 import XCTest
 @testable import Claudy
 
-/// Times the first read of a history, in whatever build it runs in. Skipped in a normal test run:
-/// `Scripts/preflight.sh` points it at synthetic histories, in a Release build, through
-/// `TEST_RUNNER_CLAUDY_BENCHMARK_HISTORY` and `TEST_RUNNER_CLAUDY_BENCHMARK_REPORT`.
+/// Times the first read of histories, in whatever build it runs in. Skipped in a normal test run:
+/// `Scripts/preflight.sh` sets, in a Release build,
 ///
-/// Each history is read three times as it is, then three times confined to the efficiency cores
-/// at background priority: the closest this Mac comes to a slower one.
+/// - `TEST_RUNNER_CLAUDY_BENCHMARK_HISTORIES`: history folders, separated by `:`;
+/// - `TEST_RUNNER_CLAUDY_BENCHMARK_REPORT`: the JSON file to write, keyed by folder name;
+/// - `TEST_RUNNER_CLAUDY_BENCHMARK_EFFICIENCY=1`: also read each history confined to the
+///   efficiency cores at background priority, the closest a Mac comes to a slower one.
+///
+/// Each figure is the median of three reads.
 final class ScanBenchmarkTests: XCTestCase {
 
-    func testFirstReadOfAHistory() async throws {
+    func testFirstReadOfHistories() async throws {
         let environment = ProcessInfo.processInfo.environment
-        guard let history = environment["CLAUDY_BENCHMARK_HISTORY"],
+        guard let histories = environment["CLAUDY_BENCHMARK_HISTORIES"],
               let report = environment["CLAUDY_BENCHMARK_REPORT"] else {
             throw XCTSkip("Run by Scripts/preflight.sh only.")
         }
-        let projects = URL(fileURLWithPath: history, isDirectory: true).appendingPathComponent("projects")
+        let measuresEfficiency = environment["CLAUDY_BENCHMARK_EFFICIENCY"] == "1"
 
-        let normal = try await medianFirstRead(of: projects)
-        setpriority(PRIO_DARWIN_PROCESS, 0, PRIO_DARWIN_BG)
-        defer { setpriority(PRIO_DARWIN_PROCESS, 0, 0) }
-        let efficiency = try await medianFirstRead(of: projects)
-
-        let result: [String: Any] = [
-            "responses": normal.responses,
-            "seconds": normal.seconds,
-            "efficiencySeconds": efficiency.seconds,
-        ]
-        try JSONSerialization.data(withJSONObject: result).write(to: URL(fileURLWithPath: report))
-        XCTAssertGreaterThan(normal.responses, 0, "the history read as empty")
+        var results: [String: [String: Any]] = [:]
+        for history in histories.split(separator: ":").map(String.init) {
+            let projects = URL(fileURLWithPath: history, isDirectory: true).appendingPathComponent("projects")
+            let normal = try await medianFirstRead(of: projects)
+            XCTAssertGreaterThan(normal.responses, 0, "\(history) read as empty")
+            var result: [String: Any] = ["responses": normal.responses, "seconds": normal.seconds]
+            if measuresEfficiency {
+                setpriority(PRIO_DARWIN_PROCESS, 0, PRIO_DARWIN_BG)
+                defer { setpriority(PRIO_DARWIN_PROCESS, 0, 0) }
+                result["efficiencySeconds"] = try await medianFirstRead(of: projects).seconds
+            }
+            results[URL(fileURLWithPath: history).lastPathComponent] = result
+        }
+        try JSONSerialization.data(withJSONObject: results).write(to: URL(fileURLWithPath: report))
     }
 
     /// A new scanner each time, so every read is a first one.

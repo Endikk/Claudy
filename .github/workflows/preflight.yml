@@ -1,23 +1,29 @@
 # Runs Scripts/preflight.sh on real Macs that GitHub provides: Apple silicon and Intel, macOS 15
-# and 26. The same checks as on a developer's Mac, with performance budgets for a shared machine.
+# and 26. The same checks as on a developer's Mac, with budgets for a shared machine.
 #
-# Runs on every push to develop and main, and by hand from the Actions tab. Each machine's report
-# is kept as an artefact of the run.
+# Runs on every push to develop that touches more than documentation, and by hand from the
+# Actions tab. A newer push cancels the run it makes obsolete. Each machine's report, and any
+# crash report, is kept with the run.
 name: Preflight
 
 on:
   workflow_dispatch:
   push:
-    branches: [develop, main]
+    branches: [develop]
+    paths-ignore: ['**.md', 'docs/**']
 
 permissions:
   contents: read
+
+concurrency:
+  group: preflight-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   preflight:
     name: ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -44,4 +50,5 @@ jobs:
             build/preflight/report.txt
             build/preflight/*.log
             build/preflight/*.json
+            ~/Library/Logs/DiagnosticReports/Claudy*
           if-no-files-found: ignore

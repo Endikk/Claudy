@@ -54,17 +54,24 @@ token stores, so no test reads or writes the keychain.
 ./Scripts/preflight.sh
 ```
 
-A few minutes, then a verdict: the tests, the Release build, the first read of synthetic
-histories of 20 MB, 250 MB and 1 GB (as is, and confined to the efficiency cores, the closest this
-Mac comes to a slower one), then the real app on a stand-in Claude folder: the sign-in card must
-show within a second and a half, and leave by itself once a session file appears in that folder.
+About a minute and a half, then a verdict. One Release build serves every step: the tests; in the
+same run, the first read of synthetic histories of 20 MB, 250 MB and 1 GB, as is and confined to
+the efficiency cores (the closest this Mac comes to a slower one), under Rosetta too when it is
+installed; then the real app on a stand-in Claude folder, where the sign-in card must show within
+a second and a half and leave by itself once a session file appears; last, the cask's style.
 Nobody's own history, account or log is touched; the Claudy in use closes for a few seconds and
 reopens.
 
-The same script runs on GitHub's Macs on every push to `develop` and `main`, and by hand from the
-Actions tab (`.github/workflows/preflight.yml`): Apple silicon and Intel, macOS 15 and 26, with
-budgets three times looser for shared machines. macOS 13, the oldest Claudy supports, is no longer
-offered there. Rosetta, when installed, adds an Intel run of the reads on an Apple silicon Mac.
+The same script runs on GitHub's Macs (`.github/workflows/preflight.yml`) on every push to
+`develop` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
+macOS 15 and 26, Intel on macOS 15. There it builds for the machine's own architecture, reads the
+20 MB and 1 GB histories only, and allows three times the time. macOS 13, the oldest Claudy
+supports, is no longer offered there.
+
+GitHub's Intel Mac is a virtual machine whose graphics device Metal cannot load SwiftUI's shaders
+for: any SwiftUI window aborts there, every released version of Claudy included. The tests do not
+need one (hosting them, Claudy only installs its menu), the one test that renders is skipped
+there, and so is the real-app step.
 
 ## Structure
 
