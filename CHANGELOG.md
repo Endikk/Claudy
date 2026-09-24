@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.5 (24 September 2026)
+
+### Fixed
+
+- **Claudy could sign Claude Code out.** When Claude Code keeps its token in
+  `~/.claude/.credentials.json` rather than in the keychain, Claudy took that file for its own
+  store: once the token had expired, it renewed it itself, which rotates Claude Code's refresh
+  token and can end a running Claude Code's session. Claudy now only reads that file, as it
+  reads the keychain item, and never renews or rewrites it.
+- **Update from a copy brew did not install.** A build from source, or a copy moved out of
+  `/Applications`, ran brew anyway: brew upgraded the installed app, and the copy reported a
+  failure. Only the copy brew installed upgrades through brew now; any other opens the release
+  page.
+- **A monthly spend cap could give way to another account's windows.** When Anthropic was
+  unreachable, the status-line relay replaced the last known spend of a plan billed on usage
+  with 5-hour and weekly figures, which such a plan does not have. The last spend reading now
+  stays.
+
+### Changed
+
+- **No more deprecation warning from brew.** The cask removes the quarantine flag through
+  `postflight_steps`, the form Homebrew 6.0.16 and later expect, instead of a `postflight`
+  block, which Homebrew now flags as deprecated.
+
 ## 1.5.4 (23 September 2026)
 
 ### Added
