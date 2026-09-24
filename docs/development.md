@@ -48,6 +48,35 @@ The tests run inside the app, which serves as their host. Whatever either of the
 `$TMPDIR/Claudy/api.log`, never to your own `api.log`, and the account client is built with stub
 token stores, so no test reads or writes the keychain.
 
+## Before a release
+
+```bash
+./Scripts/preflight.sh
+```
+
+About a minute and a half, then a verdict. One Release build serves every step: the tests; in the
+same run, the first read of synthetic histories of 20 MB, 250 MB and 1 GB, as is and confined to
+the efficiency cores (the closest this Mac comes to a slower one), under Rosetta too when it is
+installed; then the real app on a stand-in Claude folder holding the 1 GB history, where the
+sign-in card must show within a second and a half (it must not wait for that history) and leave by
+itself once a session file appears; last, the cask's style. What the built app reads and writes
+stays in the temporary folder: under `~/Documents`, macOS would ask each new build for access and
+the tests would wait on the dialog.
+Nobody's own history, account or log is touched; the Claudy in use closes for a few seconds and
+reopens.
+
+The same script runs on GitHub's Macs (`.github/workflows/preflight.yml`) on every push to
+`develop` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
+macOS 15 and 26, Intel on macOS 15. There it builds for the machine's own architecture and reads
+the 20 MB and 1 GB histories only. Its timings are reported, not judged: shared machines vary two
+to three times from one run to the next, so the budgets there only catch a disaster, and the
+timing gate is this Mac's. macOS 13, the oldest Claudy supports, is no longer offered there.
+
+GitHub's Intel Mac is a virtual machine whose graphics device Metal cannot load SwiftUI's shaders
+for: any SwiftUI window aborts there, every released version of Claudy included. The tests do not
+need one (hosting them, Claudy only installs its menu), the one test that renders is skipped
+there, and so is the real-app step.
+
 ## Structure
 
 ```
@@ -69,8 +98,13 @@ Claudy/
 
 Transcripts only grow and quickly reach tens of megabytes. `TranscriptScanner` therefore keeps an
 offset per file and re-reads only the appended tail, after discarding files untouched within the
-window and lines that contain no `"usage"`. Measured on a machine with 13 projects and 33 MB in
-the single largest file: **2.1 s on the first scan, ~110 ms afterwards**.
+window and lines that contain no `"usage"`. Lines are sliced with `memchr` and `memmem`, and
+timestamps read without `ISO8601DateFormatter`: on a 1.7 GB history (919 MB to read in the window,
+18,000 responses), the first pass went from 6.2 s to **2 s** in a Release build, and later passes
+take milliseconds. Measure in Release: a Debug build runs this code several times slower.
+
+The first pass does not hold the card up. The account is read alongside it, and the sign-in card,
+which shows no token count, does not wait for it at all.
 
 The API is polled every 3 minutes with a 60-second cache, and the profile is re-read only every
 6 hours. Polling every 60 seconds, as an earlier version did, produced cascades of HTTP 429.
@@ -97,7 +131,7 @@ Four technical points are worth knowing before changing it:
 `SMAppService.mainApp.register()` requires an app signed with a stable identity. The project is
 configured for ad-hoc signing (`CODE_SIGN_IDENTITY = "-"`) so it builds without a developer
 account: in that state the app detects its own signature and the context menu shows the option
-greyed out as "unavailable — app is unsigned", rather than a checkbox that would untick itself.
+greyed out as "unavailable, app is unsigned", rather than a checkbox that would untick itself.
 
 **Alternative without signing**: System Settings ▸ General ▸ Login Items & Extensions ▸ Open at
 Login ▸ "+" ▸ Claudy.

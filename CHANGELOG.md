@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.6 (25 September 2026)
+
+### Fixed
+
+- **Claudy opens three times faster.** On a large history (1.7 GB of transcripts), the card stayed
+  on its loading spinner for 7.5 seconds after launch. It now shows in about 2: the history is
+  read three times faster, and the account no longer waits for it.
+- **The sign-in card shows at once.** It waited for the whole history to be read, although it
+  shows no token count: 7 seconds on a large one. It now appears as soon as Claudy knows nobody
+  is signed in.
+- **Signing in to Claude Code switches Claudy by itself.** Opened before Claude Code was signed
+  in, Claudy kept asking for a sign-in for up to three minutes. While it shows the sign-in card,
+  it now looks again every 10 seconds, with no request to Anthropic.
+- **A damaged transcript line could crash Claudy on Intel Macs.** A timestamp with more than nine
+  digits after the seconds made Apple's own date parser crash there, at every refresh. The
+  fraction is now read to the nanosecond before any parsing.
+
 ## 1.5.5 (24 September 2026)
 
 ### Fixed

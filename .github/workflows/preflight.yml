@@ -1,0 +1,54 @@
+# Runs Scripts/preflight.sh on real Macs that GitHub provides: Apple silicon and Intel, macOS 15
+# and 26. The same checks as on a developer's Mac, with budgets for a shared machine.
+#
+# Runs on every push to develop that touches more than documentation, and by hand from the
+# Actions tab. A newer push cancels the run it makes obsolete. Each machine's report, and any
+# crash report, is kept with the run.
+name: Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths-ignore: ['**.md', 'docs/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15-intel is the last Intel Mac GitHub provides, until August 2027.
+        runner: [macos-15, macos-15-intel, macos-26]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Newest stable Xcode on the runner
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      - name: Preflight
+        run: ./Scripts/preflight.sh --ci
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: preflight-${{ matrix.runner }}
+          path: |
+            build/preflight/report.txt
+            build/preflight/*.log
+            build/preflight/*.json
+            ~/Library/Logs/DiagnosticReports/Claudy*
+          if-no-files-found: ignore

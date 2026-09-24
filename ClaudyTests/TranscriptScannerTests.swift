@@ -49,6 +49,46 @@ final class TranscriptScannerTests: XCTestCase {
         XCTAssertEqual(later.map(\.tokens), [202], "the final count replaces the partial one")
     }
 
+    func testLineStillBeingWrittenIsReadOnceComplete() async throws {
+        let projects = try makeDirectory("projects")
+        let full = line(id: "m1", output: 7)
+        let cut = full.index(full.startIndex, offsetBy: full.count / 2)
+        let file = try write(projects, "p/s.jsonl", [line(id: "m0", output: 1)])
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(full[..<cut].utf8))
+        let scanner = scanner(projects)
+
+        let early = try await scanner.scan()
+        try handle.write(contentsOf: Data((full[cut...] + "\n").utf8))
+        try handle.close()
+        let later = try await scanner.scan()
+
+        XCTAssertEqual(early.map(\.tokens), [1], "half a line is left for the next pass")
+        XCTAssertEqual(later.map(\.tokens).sorted(), [1, 7])
+    }
+
+    func testFinalLineWithoutNewlineCountsWhenComplete() async throws {
+        let projects = try makeDirectory("projects")
+        let url = projects.appendingPathComponent("p/s.jsonl")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (line(id: "m1", output: 3) + "\n" + line(id: "m2", output: 5)).write(to: url, atomically: true, encoding: .utf8)
+
+        let entries = try await scanner(projects).scan()
+
+        XCTAssertEqual(entries.map(\.tokens).sorted(), [3, 5])
+    }
+
+    func testLinesWithoutUsageAreSkippedWhateverTheirSize() async throws {
+        let projects = try makeDirectory("projects")
+        let prompt = #"{"type":"user","message":{"content":"\#(String(repeating: "x", count: 200_000))"}}"#
+        try write(projects, "p/s.jsonl", [prompt, line(id: "m1", output: 4), "", prompt, line(id: "m2", output: 6)])
+
+        let entries = try await scanner(projects).scan()
+
+        XCTAssertEqual(entries.map(\.tokens).sorted(), [4, 6])
+    }
+
     /// Files are read in whatever order the disk lists them, so each case runs with the
     /// complete copy in either file.
     func testResumedSessionCountsSharedResponsesOnceAtTheirFinalSize() async throws {
@@ -77,6 +117,57 @@ final class TranscriptScannerTests: XCTestCase {
 
             XCTAssertEqual(entries.map(\.tokens).sorted(), [1, 50], "\(rewritten) rewritten")
         }
+    }
+
+    // MARK: - Timestamps
+
+    /// Claude Code's form is read without a formatter; the result must be the formatter's, to the
+    /// millisecond, and anything unusual must still reach the formatter.
+    func testTimestampsMatchTheSystemFormatter() async throws {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        let stamps = ["2026-09-24T07:05:12.345Z", "2026-01-01T00:00:00.000Z", "2025-12-31T23:59:59.999Z",
+                      "2024-02-29T12:00:00.5Z", "2026-03-01T00:00:00.123456Z", "1999-12-31T23:59:59Z"]
+
+        for stamp in stamps {
+            let expected = try XCTUnwrap(formatter.date(from: stamp) ?? plain.date(from: stamp), stamp)
+            let result = await timestamp(stamp)
+            let parsed = try XCTUnwrap(result, stamp)
+            XCTAssertEqual(parsed.timeIntervalSince1970, expected.timeIntervalSince1970, accuracy: 0.001, stamp)
+        }
+    }
+
+    /// Whatever the fast path turns down is the formatter's to judge, lenient as it is: it reads
+    /// 30 February as 2 March, which is what Claudy always did.
+    func testUnusualTimestampsGetTheFormattersAnswer() async {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        let offset = await timestamp("2026-09-24T09:05:12.345+02:00")
+        let utc = await timestamp("2026-09-24T07:05:12.345Z")
+        XCTAssertEqual(offset?.timeIntervalSince1970 ?? 0, utc?.timeIntervalSince1970 ?? -1, accuracy: 0.001,
+                       "an offset goes through the formatter")
+        for stamp in ["2026-02-30T07:05:12.345Z", "2026-13-01T07:05:12.345Z", "yesterday", ""] {
+            let parsed = await timestamp(stamp)
+            XCTAssertEqual(parsed, formatter.date(from: stamp), stamp)
+        }
+    }
+
+    /// A transcript line is data from disk. However long its fraction of a second, it is read to
+    /// the nanosecond: parsed whole, it would overflow, and on Intel Macs `ISO8601DateFormatter`
+    /// itself crashes on it (SIGFPE inside ICU), so it never reaches the formatter untrimmed.
+    func testOverlongFractionIsReadToTheNanosecond() async {
+        let nines = String(repeating: "9", count: 40)
+
+        let expected = await timestamp("2026-09-24T07:05:12.999999999Z")
+        let utc = await timestamp("2026-09-24T07:05:12.\(nines)Z")
+        let offset = await timestamp("2026-09-24T09:05:12.\(nines)+02:00")
+
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(utc, expected)
+        XCTAssertEqual(offset?.timeIntervalSince1970 ?? 0, expected?.timeIntervalSince1970 ?? -1, accuracy: 0.001,
+                       "an offset goes through the formatter, trimmed first")
     }
 
     // MARK: - Previous days
@@ -219,6 +310,10 @@ final class TranscriptScannerTests: XCTestCase {
     // MARK: - Fixtures
 
     private let account = Account(name: "", email: "", plan: "", organization: "", isAdmin: false)
+
+    private func timestamp(_ stamp: String) async -> Date? {
+        await TranscriptScanner(projectsDirectories: { [] }).timestamp(stamp)
+    }
 
     private func scanner(_ projects: URL) -> TranscriptScanner {
         TranscriptScanner(projectsDirectories: { [projects] })

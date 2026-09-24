@@ -1,3 +1,4 @@
+import Metal
 import SwiftUI
 import XCTest
 @testable import Claudy
@@ -17,6 +18,17 @@ final class CardShadowTests: XCTestCase {
     ]
 
     private static let cases = scales.flatMap { scale in cards.map { (scale: scale, size: $0.size, corner: $0.corner) } }
+
+    /// GitHub's Intel Macs are virtual machines whose graphics device Metal cannot load SwiftUI's
+    /// shaders for: rendering there aborts the whole run instead of failing a test.
+    override func setUpWithError() throws {
+        #if arch(x86_64)
+        let device = MTLCreateSystemDefaultDevice()?.name ?? ""
+        if device.isEmpty || device.localizedCaseInsensitiveContains("paravirtual") {
+            throw XCTSkip("SwiftUI cannot render on this virtual graphics device (\(device)).")
+        }
+        #endif
+    }
 
     func testShadowFadesOutBeforeTheWindowEdge() throws {
         for card in Self.cases {

@@ -31,8 +31,8 @@ struct TranscriptEntry {
 /// appended since the previous pass. Without that, refreshing every few minutes would re-read
 /// hundreds of megabytes each time.
 ///
-/// Reads are synchronous and block a cooperative-pool thread: a few seconds on the first pass
-/// over a large history, a few milliseconds afterwards. A deliberate trade-off.
+/// Reads are synchronous and block a cooperative-pool thread: about two seconds on the first pass
+/// over a 900 MB history, a few milliseconds afterwards. A deliberate trade-off.
 actor TranscriptScanner {
 
     /// Window kept in memory. The widest view is seven days; the margin absorbs time-zone
@@ -62,18 +62,6 @@ actor TranscriptScanner {
 
     private var skippedLines = 0
     private var warnedUsageKeys: Set<String> = []
-
-    private let isoWithFraction: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    private let iso: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 
     /// Every response recorded over the retention window, oldest first.
     func scan() throws -> [TranscriptEntry] {
@@ -217,28 +205,15 @@ actor TranscriptScanner {
               (try? handle.seek(toOffset: state.offset)) != nil,
               let data = try? handle.readToEnd(), !data.isEmpty else { return }
 
-        // Only consume up to the last newline: a tail without one is either a write in
-        // progress (retried next pass) or a final line lacking \n, taken only if its JSON parses.
-        let complete: Data
-        if let lastBreak = data.lastIndex(of: 0x0A) {
-            complete = Data(data[data.startIndex...lastBreak])
-        } else if (try? JSONSerialization.jsonObject(with: data)) != nil {
-            complete = data
-        } else {
-            return
-        }
+        let (lines, consumed) = Self.usageLines(in: data)
         let base = state.offset
-        state.offset += UInt64(complete.count)
+        state.offset += UInt64(consumed)
 
-        for line in complete.split(separator: 0x0A) where !line.isEmpty {
-            // Cheap filter before paying for JSON parsing: most transcript lines
-            // (attachments, snapshots, prompts) carry no usage block at all.
-            guard line.range(of: Self.usageMarker) != nil else { continue }
-
-            switch parse(Data(line)) {
+        for range in lines {
+            switch parse(data.subdata(in: range)) {
             case .entry(let entry):
                 guard entry.date >= cutoff else { continue }
-                let key = entry.dedupKey ?? "\(url.lastPathComponent)@\(base + UInt64(line.startIndex))"
+                let key = entry.dedupKey ?? "\(url.lastPathComponent)@\(base + UInt64(range.lowerBound))"
                 if let held = state.responses[key], !Self.isMoreComplete(entry, than: held) { continue }
                 state.responses[key] = entry
             case .malformed:
@@ -249,8 +224,129 @@ actor TranscriptScanner {
         }
     }
 
-    private static let usageMarker = Data("\"usage\"".utf8)
+    /// The lines of `data` holding a `"usage"` block, as byte ranges, and how many bytes were
+    /// consumed. Every complete line is. The tail after the last newline is either a write in
+    /// progress, left for the next pass, or a final line lacking its newline, taken when its
+    /// JSON parses.
+    ///
+    /// Most lines (prompts, attachments, snapshots) carry no usage block, so they are skipped with
+    /// `memchr` and `memmem` before any parsing. The generic `Data.split` and `range(of:)` did the
+    /// same work several times slower: over three seconds on a 900 MB history.
+    ///
+    /// Ranges count from the first byte, so `data` must start at index 0, as `readToEnd` gives it.
+    private static func usageLines(in data: Data) -> (lines: [Range<Int>], consumed: Int) {
+        data.withUnsafeBytes { raw -> ([Range<Int>], Int) in
+            guard let bytes = raw.baseAddress else { return ([], 0) }
+            var lines: [Range<Int>] = []
+            var lineStart = 0
+            while lineStart < raw.count,
+                  let newline = memchr(bytes + lineStart, 0x0A, raw.count - lineStart) {
+                let lineEnd = bytes.distance(to: UnsafeRawPointer(newline))
+                if holdsUsage(bytes + lineStart, lineEnd - lineStart) { lines.append(lineStart..<lineEnd) }
+                lineStart = lineEnd + 1
+            }
+            guard lineStart < raw.count else { return (lines, raw.count) }
+
+            let tail = Data(bytes: bytes + lineStart, count: raw.count - lineStart)
+            guard (try? JSONSerialization.jsonObject(with: tail)) != nil else { return (lines, lineStart) }
+            if holdsUsage(bytes + lineStart, raw.count - lineStart) { lines.append(lineStart..<raw.count) }
+            return (lines, raw.count)
+        }
+    }
+
+    private static let usageMarker: [UInt8] = Array("\"usage\"".utf8)
+
+    private static func holdsUsage(_ bytes: UnsafeRawPointer, _ count: Int) -> Bool {
+        usageMarker.withUnsafeBytes { marker in
+            memmem(bytes, count, marker.baseAddress, marker.count) != nil
+        }
+    }
+
     private static let assistantMarker = Data("\"type\":\"assistant\"".utf8)
+
+    // MARK: - Timestamps
+
+    /// A line's `timestamp`. Claude Code writes `2026-09-24T07:05:12.345Z`, which is read here
+    /// digit by digit: `ISO8601DateFormatter` costs some forty microseconds a date, close to two
+    /// seconds over a large history. Any other form, an offset for one, goes to the formatters,
+    /// which stay this actor's own.
+    func timestamp(_ stamp: String) -> Date? {
+        let stamp = Self.trimmingFraction(stamp)
+        return Self.utcTimestamp(stamp) ?? withFraction.date(from: stamp) ?? withoutFraction.date(from: stamp)
+    }
+
+    /// The stamp with at most nine digits after the seconds. A longer run is read to the
+    /// nanosecond rather than whole: it would overflow here, and on Intel Macs
+    /// `ISO8601DateFormatter` itself crashes on it (SIGFPE inside ICU).
+    private static func trimmingFraction(_ stamp: String) -> String {
+        guard let dot = stamp.firstIndex(of: ".") else { return stamp }
+        let start = stamp.index(after: dot)
+        let digits = stamp[start...].prefix { $0.isASCII && $0.isNumber }
+        guard digits.count > maxFractionDigits else { return stamp }
+        return String(stamp[..<stamp.index(start, offsetBy: maxFractionDigits)] + stamp[digits.endIndex...])
+    }
+
+    private let withFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private let withoutFraction = ISO8601DateFormatter()
+
+    /// Digits of a fraction of a second kept: nanoseconds are more than a transcript holds.
+    private static let maxFractionDigits = 9
+
+    /// `YYYY-MM-DDTHH:MM:SS[.fraction]Z`, or nil for anything else, an impossible date included.
+    private static func utcTimestamp(_ stamp: String) -> Date? {
+        let bytes = Array(stamp.utf8)
+        guard bytes.count >= 20, bytes.last == UInt8(ascii: "Z"),
+              bytes[4] == UInt8(ascii: "-"), bytes[7] == UInt8(ascii: "-"), bytes[10] == UInt8(ascii: "T"),
+              bytes[13] == UInt8(ascii: ":"), bytes[16] == UInt8(ascii: ":") else { return nil }
+
+        func number(_ range: Range<Int>) -> Int? {
+            var value = 0
+            for index in range {
+                let digit = Int(bytes[index]) - 48
+                guard (0...9).contains(digit) else { return nil }
+                value = value * 10 + digit
+            }
+            return value
+        }
+        guard let year = number(0..<4), let month = number(5..<7), let day = number(8..<10),
+              let hour = number(11..<13), let minute = number(14..<16), let second = number(17..<19),
+              (1...12).contains(month), (1...daysIn(month, of: year)).contains(day),
+              hour < 24, minute < 60, second < 60 else { return nil }
+
+        var fraction = 0.0
+        if bytes.count > 20 {
+            let count = bytes.count - 21
+            guard bytes[19] == UInt8(ascii: "."), (1...maxFractionDigits).contains(count),
+                  let digits = number(20..<(bytes.count - 1)) else { return nil }
+            fraction = Double(digits) / pow(10, Double(count))
+        }
+        let seconds = daysSinceEpoch(year: year, month: month, day: day) * 86_400
+            + hour * 3_600 + minute * 60 + second
+        return Date(timeIntervalSince1970: Double(seconds) + fraction)
+    }
+
+    private static func daysIn(_ month: Int, of year: Int) -> Int {
+        switch month {
+        case 2: return year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) ? 29 : 28
+        case 4, 6, 9, 11: return 30
+        default: return 31
+        }
+    }
+
+    /// Days from 1970-01-01 to a Gregorian date (Howard Hinnant's `days_from_civil`).
+    private static func daysSinceEpoch(year: Int, month: Int, day: Int) -> Int {
+        let shifted = month <= 2 ? year - 1 : year
+        let era = (shifted >= 0 ? shifted : shifted - 399) / 400
+        let yearOfEra = shifted - era * 400
+        let dayOfYear = (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1
+        let dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear
+        return era * 146_097 + dayOfEra - 719_468
+    }
 
     // MARK: - Parsing
 
@@ -272,7 +368,7 @@ actor TranscriptScanner {
         guard let model = message["model"] as? String else { return .malformed }
         guard ModelName.isReal(model) else { return .irrelevant }
         guard let stamp = root["timestamp"] as? String,
-              let date = isoWithFraction.date(from: stamp) ?? iso.date(from: stamp)
+              let date = timestamp(stamp)
         else { return .malformed }
 
         warnAboutUnknownCounters(in: usage)

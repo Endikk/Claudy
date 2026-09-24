@@ -16,6 +16,14 @@ final class DiagnosticLogTests: XCTestCase {
         XCTAssertTrue(file.path.hasPrefix(FileManager.default.temporaryDirectory.path))
     }
 
+    /// The pre-release checks launch the real app against a stand-in Claude folder; its log goes
+    /// where they say, never into the user's own.
+    func testLogDirectoryCanBeRedirected() {
+        let directory = DiagnosticLog.directory(environment: ["CLAUDY_LOG_DIRECTORY": "/tmp/claudy-preflight"])
+
+        XCTAssertEqual(directory?.path, "/tmp/claudy-preflight")
+    }
+
     func testAppendWritesTheLine() throws {
         let marker = "diagnostic-log-test-\(UUID().uuidString)"
 
