@@ -25,10 +25,8 @@ cask "claudy" do
 
   # The app is not notarised (free distribution, no Apple Developer account):
   # without removing the quarantine flag, Gatekeeper would refuse to launch it.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Claudy.app"],
-                   sudo: false
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Claudy.app"]
   end
 
   uninstall quit: "com.claudy.Claudy"
