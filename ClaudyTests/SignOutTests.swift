@@ -25,8 +25,25 @@ final class SignOutTests: XCTestCase {
 
     /// The keychain is never reached: Claude Code's token comes from the stub, and the erasing
     /// of Claudy's own item is only counted.
-    private func client(borrowed: OAuthCredentials?, erased: (() -> Void)? = nil) -> ClaudeAccountClient {
-        ClaudeAccountClient(store: store, borrowedToken: { borrowed }, eraseOwnToken: erased ?? {})
+    private func client(borrowed: OAuthCredentials?, erased: (() -> Void)? = nil,
+                        persisted: ((OAuthCredentials) -> Void)? = nil) -> ClaudeAccountClient {
+        let ownToken = OwnTokenStore(load: { nil },
+                                     persist: { persisted?($0); return true },
+                                     erase: erased ?? {})
+        return ClaudeAccountClient(store: store, borrowedToken: { borrowed }, ownToken: ownToken)
+    }
+
+    // MARK: - Signing in
+
+    func testSignInStoresTheTokenThroughTheInjectedStore() async {
+        var stored: [String] = []
+        let running = client(borrowed: nil, persisted: { stored.append($0.accessToken) })
+        let own = OAuthCredentials(accessToken: "own", refreshToken: "refresh",
+                                   expiresAt: Date().addingTimeInterval(3600), root: [:], source: .ownKeychain)
+
+        await running.signIn(own)
+
+        XCTAssertEqual(stored, ["own"])
     }
 
     // MARK: - Signing out

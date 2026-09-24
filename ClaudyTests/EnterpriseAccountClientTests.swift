@@ -7,13 +7,6 @@ final class EnterpriseAccountClientTests: XCTestCase {
 
     private var store: UserDefaults!
     private let suite = "claudy.tests.enterprise-client"
-    /// The client logs failures to the user's real `api.log`: it is put back as it was, so a
-    /// test run never reads as an incident there.
-    private var savedLog: Data?
-    private var logURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("Claudy/api.log")
-    }
 
     private let enterpriseToken = OAuthCredentials(
         accessToken: "enterprise",
@@ -26,7 +19,6 @@ final class EnterpriseAccountClientTests: XCTestCase {
     override func setUp() {
         store = UserDefaults(suiteName: suite)
         store.removePersistentDomain(forName: suite)
-        savedLog = logURL.flatMap { try? Data(contentsOf: $0) }
         StubbedAnthropic.reset()
         URLProtocol.registerClass(StubbedAnthropic.self)
     }
@@ -34,13 +26,11 @@ final class EnterpriseAccountClientTests: XCTestCase {
     override func tearDown() {
         URLProtocol.unregisterClass(StubbedAnthropic.self)
         store.removePersistentDomain(forName: suite)
-        guard let logURL else { return }
-        if let savedLog { try? savedLog.write(to: logURL) } else { try? FileManager.default.removeItem(at: logURL) }
     }
 
     private func client() -> ClaudeAccountClient {
         let token = enterpriseToken
-        return ClaudeAccountClient(store: store, borrowedToken: { token })
+        return ClaudeAccountClient(store: store, borrowedToken: { token }, ownToken: .empty)
     }
 
     func testEnterpriseAnswerIsAReadingNotAFailure() async throws {
