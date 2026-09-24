@@ -69,8 +69,7 @@ final class UsageDataSourceTests: XCTestCase {
         let source = LocalUsageDataSource(scanner: scanner, client: client(token: token), isInstalled: { true })
 
         let fetch = Task { try await source.fetch() }
-        try await waitUntil { StubbedAnthropic.usageRequests > 0 }
-        let askedBeforeTheHistoryEnded = StubbedAnthropic.usageRequests > 0
+        let askedBeforeTheHistoryEnded = (try? await waitUntil { StubbedAnthropic.usageRequests > 0 }) != nil
         await scanner.release()
         let snapshot = try await fetch.value
 
@@ -113,11 +112,15 @@ final class UsageDataSourceTests: XCTestCase {
         let scanner = HeldScanner()
         let source = LocalUsageDataSource(scanner: scanner, client: client(token: nil), isInstalled: { true })
 
-        _ = try await source.fetch()
-        _ = try await source.fetch()
-        await scanner.release()
-
+        let first = Task { try await source.fetch() }
+        try? await waitUntil { await scanner.passes > 0 }
+        let second = Task { try await source.fetch() }
+        try await Task.sleep(nanoseconds: 200_000_000)
         let passes = await scanner.passes
+        await scanner.release()
+        _ = try await first.value
+        _ = try await second.value
+
         XCTAssertEqual(passes, 1)
     }
 
