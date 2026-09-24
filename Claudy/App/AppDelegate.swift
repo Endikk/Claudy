@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         installMainMenu()
+        // Hosting the unit tests, the menu is all Claudy sets up: no card, no menu bar item, no
+        // reading of the account. The tests need none of it, and drawing a window aborts on
+        // GitHub's Intel machines, whose virtual graphics device Metal cannot load SwiftUI's
+        // shaders for.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
 
         let controller = NSHostingController(rootView: RootView()
             .environmentObject(viewModel)

@@ -31,4 +31,10 @@ final class MainMenuTests: XCTestCase {
         XCTAssertNotNil(items.first { $0.keyEquivalent == "r" })
         XCTAssertNotNil(items.first { $0.keyEquivalent == "q" })
     }
+
+    /// Hosting the tests, Claudy installs its menu and nothing else: no card, no menu bar item,
+    /// no reading of the account. Drawing a window aborts on GitHub's Intel machines.
+    func testTestHostShowsNoCard() {
+        XCTAssertFalse(NSApp.windows.contains { $0 is FloatingPanel })
+    }
 }
