@@ -220,12 +220,28 @@ final class UpdateChecker: ObservableObject {
     /// True when one click can upgrade in place; otherwise the button downloads.
     var canUpgradeInPlace: Bool { runner != nil }
 
-    /// Installed with Homebrew and brew found: the upgrade goes through brew.
+    /// Installed with Homebrew and brew found: the upgrade goes through brew. Only for the copy
+    /// brew manages: any other (a build from source, a copy moved elsewhere) would watch brew
+    /// upgrade the installed app, then report a failure and restart into itself.
     private static func homebrewRunner() -> UpgradeRunner? {
-        let caskroom = ["/opt/homebrew/Caskroom/claudy", "/usr/local/Caskroom/claudy"]
-        guard caskroom.contains(where: { FileManager.default.fileExists(atPath: $0) }),
+        let caskrooms = ["/opt/homebrew/Caskroom/claudy", "/usr/local/Caskroom/claudy"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+        guard isManagedByHomebrew(Bundle.main.bundleURL, caskrooms: caskrooms),
               let brew = BrewUpgradeRunner.findBrew() else { return nil }
         return BrewUpgradeRunner(brew: brew)
+    }
+
+    /// True when brew installed this very bundle: it keeps `Caskroom/claudy/<version>/Claudy.app`
+    /// as a link to the app it put in place, wherever its `--appdir` sent it.
+    nonisolated static func isManagedByHomebrew(_ bundle: URL, caskrooms: [URL]) -> Bool {
+        let target = bundle.resolvingSymlinksInPath().path
+        return caskrooms.contains { caskroom in
+            let versions = (try? FileManager.default.contentsOfDirectory(
+                at: caskroom, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
+            return versions.contains {
+                $0.appendingPathComponent("Claudy.app").resolvingSymlinksInPath().path == target
+            }
+        }
     }
 
     func openReleasePage() {

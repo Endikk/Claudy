@@ -11,8 +11,8 @@
 # User install:
 #   brew install --cask Endikk/claudy/claudy
 cask "claudy" do
-  version "1.5.4"
-  sha256 "8dbe68d1f28ce29a64f6d109c99f204cf31ef3ae1297694655a11cd7cb105ff8"
+  version "1.5.5"
+  sha256 "ee59065a1d9444facb0f2bf15496d34fc2b5e4b81080d1cd4f315b41aba37885"
 
   url "https://github.com/Endikk/Claudy/releases/download/v#{version}/Claudy-#{version}.zip"
   name "Claudy"
@@ -25,10 +25,8 @@ cask "claudy" do
 
   # The app is not notarised (free distribution, no Apple Developer account):
   # without removing the quarantine flag, Gatekeeper would refuse to launch it.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/Claudy.app"],
-                   sudo: false
+  postflight_steps do
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Claudy.app"]
   end
 
   uninstall quit: "com.claudy.Claudy"

@@ -92,10 +92,10 @@ actor ClaudeAccountClient {
     static let signedOutKey = "claudy.signedOut"
 
     private let store: UserDefaults
-    /// Claude Code's token, read-only, and the deletion of Claudy's own keychain item. Injected
-    /// so tests never reach the real keychain.
+    /// Claude Code's token, read-only, and Claudy's own keychain item. Injected so tests never
+    /// reach the real keychain.
     private let borrowedToken: () -> OAuthCredentials?
-    private let eraseOwnToken: () -> Void
+    private let ownToken: OwnTokenStore
 
     /// Bumped by every sign-in and sign-out. The actor is reentrant, so a reading or a token
     /// refresh can still be waiting on the network when the session changes: whatever it brings
@@ -105,10 +105,10 @@ actor ClaudeAccountClient {
 
     init(store: UserDefaults = .standard,
          borrowedToken: @escaping () -> OAuthCredentials? = ClaudeCodeCredentials.load,
-         eraseOwnToken: @escaping () -> Void = ClaudeCredentialsStore.erase) {
+         ownToken: OwnTokenStore = .keychain) {
         self.store = store
         self.borrowedToken = borrowedToken
-        self.eraseOwnToken = eraseOwnToken
+        self.ownToken = ownToken
     }
 
     /// True after "Sign out": no token is read, not even Claude Code's, until the user signs back
@@ -237,7 +237,7 @@ actor ClaudeAccountClient {
     func signIn(_ newCredentials: OAuthCredentials) {
         store.removeObject(forKey: Self.signedOutKey)
         startSession(with: newCredentials)
-        ClaudeCredentialsStore.persist(newCredentials)
+        ownToken.persist(newCredentials)
     }
 
     /// Signing back in while Claude Code holds a live session: borrowing it again is enough, no
@@ -254,7 +254,7 @@ actor ClaudeAccountClient {
     /// Claude Code's stores are never touched: the CLI stays signed in.
     func signOut() {
         store.set(true, forKey: Self.signedOutKey)
-        eraseOwnToken()
+        ownToken.erase()
         startSession(with: nil)
         DiagnosticLog.append("signed out: Claudy token removed, Claude Code's no longer read")
     }
@@ -305,7 +305,7 @@ actor ClaudeAccountClient {
             return
         }
 
-        if !ownTokenIsDead, let own = await ClaudeCredentialsStore.load() {
+        if !ownTokenIsDead, let own = ownToken.load() {
             guard started == generation else { return }
             credentials = own
             if !Self.isExpired(own) { return }
@@ -345,7 +345,7 @@ actor ClaudeAccountClient {
     /// it already, in which case spending our refresh token would be both useless and destructive
     /// (rotation).
     private func refreshOwnToken(force: Bool, started: Int) async -> Bool {
-        if let fresh = await ClaudeCredentialsStore.load() {
+        if let fresh = ownToken.load() {
             guard started == generation else { return false }
             let tokenChanged = fresh.accessToken != credentials?.accessToken
             credentials = fresh
@@ -358,11 +358,6 @@ actor ClaudeAccountClient {
             DiagnosticLog.append("refresh impossible: no refresh token")
             return false
         }
-        guard ClaudeCredentialsStore.canPersist(current) else {
-            DiagnosticLog.append("refresh refused: store is not writable")
-            return false
-        }
-
         var request = URLRequest(url: Self.tokenURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -411,7 +406,7 @@ actor ClaudeAccountClient {
         oauth["expiresAt"] = Int((updated.expiresAt ?? Date()).timeIntervalSince1970 * 1000)
         updated.root["claudeAiOauth"] = oauth
 
-        let persisted = ClaudeCredentialsStore.persist(updated)
+        let persisted = ownToken.persist(updated)
         DiagnosticLog.append(persisted ? "refresh OK, store rewritten"
                                        : "refresh OK but persistence FAILED — check the keychain")
         credentials = updated
@@ -559,9 +554,15 @@ actor ClaudeAccountClient {
 /// separates a rate limit (repeated 429s) from a dead token (401 plus failed refresh).
 enum DiagnosticLog {
 
-    private static let file: URL? = {
-        guard let base = FileManager.default.urls(for: .applicationSupportDirectory,
-                                                  in: .userDomainMask).first else { return nil }
+    /// `Application Support/Claudy/api.log`. Under XCTest, the tests and the test host write to a
+    /// temporary copy instead: a stubbed server's failures must never read as incidents in the
+    /// user's own log.
+    static let file: URL? = {
+        let isTestRun = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let base = isTestRun
+            ? FileManager.default.temporaryDirectory
+            : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        guard let base else { return nil }
         let directory = base.appendingPathComponent("Claudy", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("api.log")

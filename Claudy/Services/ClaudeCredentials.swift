@@ -15,7 +15,6 @@ struct OAuthCredentials {
         /// Keychain item created by Claudy ("Claudy-credentials"): owned by the app, so **no
         /// macOS dialog**, on read or on write.
         case ownKeychain
-        case file(URL)
         /// Claude Code's token, read but never written back — Claude Code renews it. No
         /// `refresh_token` is retained for this source.
         case claudeCode
@@ -39,36 +38,31 @@ struct OAuthCredentials {
     }
 }
 
-/// Claudy's own token store.
+/// Claudy's own token store, as the account client uses it. Injected so tests never reach the
+/// real keychain.
+struct OwnTokenStore {
+    var load: () -> OAuthCredentials?
+    var persist: (OAuthCredentials) -> Bool
+    var erase: () -> Void
+
+    static let keychain = OwnTokenStore(load: ClaudeCredentialsStore.load,
+                                        persist: ClaudeCredentialsStore.persist,
+                                        erase: ClaudeCredentialsStore.erase)
+}
+
+/// Claudy's own token store: the keychain item its OAuth sign-in creates, and nothing else.
 ///
-/// Read order: **Claudy's** keychain item first (created by its OAuth sign-in), then
-/// `<config>/.credentials.json` for installs without a keychain — a plain file read, no dialog.
-/// Claude Code's keychain item is never read through `SecItemCopyMatching`; that is what used to
-/// raise "Claudy wants to use your confidential information". Borrowing it is
-/// `ClaudeCodeCredentials`' job, through `/usr/bin/security`.
+/// Claude Code's `<config>/.credentials.json` is not a store of Claudy's. It is borrowed read-only
+/// by `ClaudeCodeCredentials`, refresh token dropped: refreshing it from here would rotate Claude
+/// Code's refresh token and sign Claude Code out. Claude Code's keychain item is never read
+/// through `SecItemCopyMatching` either; that is what used to raise "Claudy wants to use your
+/// confidential information".
 enum ClaudeCredentialsStore {
 
     private static let ownService = "Claudy-credentials"
 
-    private static var credentialsFile: URL {
-        ClaudeHome.configDirectory.appendingPathComponent(".credentials.json")
-    }
-
-    /// Claude Code may be writing the file at that very moment, so a few spaced attempts avoid
-    /// wrongly concluding "token missing or corrupt".
-    static func load() async -> OAuthCredentials? {
-        if let data = keychainData() {
-            return parse(data, source: .ownKeychain)
-        }
-        let file = credentialsFile
-        for attempt in 0..<5 {
-            if attempt > 0 { try? await Task.sleep(nanoseconds: 40_000_000) }
-            if let data = try? Data(contentsOf: file),
-               let credentials = parse(data, source: .file(file)) {
-                return credentials
-            }
-        }
-        return nil
+    static func load() -> OAuthCredentials? {
+        keychainData().flatMap { parse($0, source: .ownKeychain) }
     }
 
     private static func parse(_ data: Data, source: OAuthCredentials.Source) -> OAuthCredentials? {
@@ -88,43 +82,13 @@ enum ClaudeCredentialsStore {
         )
     }
 
-    /// True when `persist` stands a chance. To be checked **before** refreshing a token: rotating
-    /// a refresh token we cannot write back would invalidate the session.
-    static func canPersist(_ credentials: OAuthCredentials) -> Bool {
-        switch credentials.source {
-        case .claudeCode:
-            return false
-        case .ownKeychain:
-            return true
-        case .file(let url):
-            return FileManager.default.isWritableFile(atPath: url.path)
-        }
-    }
-
-    /// Writes the token back to its own store. Rewriting Claude Code's store would steal its
-    /// session, so it is refused outright; the file path writes atomically, through a temporary
-    /// file, so Claude Code never reads half-written JSON.
+    /// Writes the token back to Claudy's keychain item. Rewriting Claude Code's store would steal
+    /// its session, so it is refused outright.
     @discardableResult
     static func persist(_ credentials: OAuthCredentials) -> Bool {
-        guard let data = try? JSONSerialization.data(withJSONObject: credentials.root) else { return false }
-
-        switch credentials.source {
-        case .claudeCode:
-            return false
-        case .ownKeychain:
-            return keychainWrite(data)
-        case .file(let url):
-            let tmp = url.deletingLastPathComponent()
-                .appendingPathComponent(".credentials.json.tmp-\(ProcessInfo.processInfo.processIdentifier)")
-            do {
-                try data.write(to: tmp)
-                _ = try FileManager.default.replaceItemAt(url, withItemAt: tmp)
-                return true
-            } catch {
-                try? FileManager.default.removeItem(at: tmp)
-                return false
-            }
-        }
+        guard !credentials.isBorrowed,
+              let data = try? JSONSerialization.data(withJSONObject: credentials.root) else { return false }
+        return keychainWrite(data)
     }
 
     /// Sign-out: removes Claudy's item. Claude Code's stores are never touched.

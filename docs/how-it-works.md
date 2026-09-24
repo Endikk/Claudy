@@ -183,8 +183,9 @@ The network is used only to talk to Anthropic: `usage` (quotas), `profile` (acco
 — when you use Claudy's own sign-in — the OAuth flow in your browser plus the standard token
 renewal. Nothing else is sent: no telemetry, no conversation content, no third-party server.
 
-By default Claudy borrows Claude Code's token **read-only**, through `/usr/bin/security`, and
-never writes it back; its `refresh_token` is not even kept in memory. If you sign in through
+By default Claudy borrows Claude Code's token **read-only**, through `/usr/bin/security` (or from
+`.credentials.json` when Claude Code keeps it there), and never refreshes or writes it back; its
+`refresh_token` is not even kept in memory. If you sign in through
 Claudy itself, that token lives in a keychain item **of its own** ("Claudy-credentials"), and
 signing out deletes it. Offline, the app keeps working locally and states that its quotas are
 unavailable. The sandbox is disabled solely to allow reading `~/.claude`.

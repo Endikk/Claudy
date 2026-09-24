@@ -38,6 +38,16 @@ From Xcode: *Product ▸ Archive*, then *Distribute App ▸ Copy App*.
 The app is an agent (`LSUIElement`): no Dock icon, no menu bar. Everything goes through a
 **right-click on the card** — and ⌘R / ⌘Q stay active while it has focus.
 
+## Tests
+
+```bash
+xcodebuild test -project Claudy.xcodeproj -scheme Claudy -destination 'platform=macOS'
+```
+
+The tests run inside the app, which serves as their host. Whatever either of them logs goes to
+`$TMPDIR/Claudy/api.log`, never to your own `api.log`, and the account client is built with stub
+token stores, so no test reads or writes the keychain.
+
 ## Structure
 
 ```

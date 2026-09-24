@@ -35,7 +35,7 @@ final class ManualRefreshTests: XCTestCase {
         let suite = "claudy.tests.manualrefresh"
         let store = UserDefaults(suiteName: suite)!
         defer { store.removePersistentDomain(forName: suite) }
-        let client = ClaudeAccountClient(store: store, borrowedToken: { nil })
+        let client = ClaudeAccountClient(store: store, borrowedToken: { nil }, ownToken: .empty)
         let start = Date(timeIntervalSince1970: 0)
 
         let first = await client.resetBackoff(now: start)
