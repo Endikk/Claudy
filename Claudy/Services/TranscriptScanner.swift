@@ -63,7 +63,6 @@ actor TranscriptScanner {
     private var skippedLines = 0
     private var warnedUsageKeys: Set<String> = []
 
-
     /// Every response recorded over the retention window, oldest first.
     func scan() throws -> [TranscriptEntry] {
         let now = Date()
@@ -272,7 +271,19 @@ actor TranscriptScanner {
     /// seconds over a large history. Any other form, an offset for one, goes to the formatters,
     /// which stay this actor's own.
     func timestamp(_ stamp: String) -> Date? {
-        Self.utcTimestamp(stamp) ?? withFraction.date(from: stamp) ?? withoutFraction.date(from: stamp)
+        let stamp = Self.trimmingFraction(stamp)
+        return Self.utcTimestamp(stamp) ?? withFraction.date(from: stamp) ?? withoutFraction.date(from: stamp)
+    }
+
+    /// The stamp with at most nine digits after the seconds. A longer run is read to the
+    /// nanosecond rather than whole: it would overflow here, and on Intel Macs
+    /// `ISO8601DateFormatter` itself crashes on it (SIGFPE inside ICU).
+    private static func trimmingFraction(_ stamp: String) -> String {
+        guard let dot = stamp.firstIndex(of: ".") else { return stamp }
+        let start = stamp.index(after: dot)
+        let digits = stamp[start...].prefix { $0.isASCII && $0.isNumber }
+        guard digits.count > maxFractionDigits else { return stamp }
+        return String(stamp[..<stamp.index(start, offsetBy: maxFractionDigits)] + stamp[digits.endIndex...])
     }
 
     private let withFraction: ISO8601DateFormatter = {
@@ -283,8 +294,7 @@ actor TranscriptScanner {
 
     private let withoutFraction = ISO8601DateFormatter()
 
-    /// Digits of a fraction of a second read here; nanoseconds are more than a transcript holds,
-    /// and a longer run would overflow. Anything longer goes to the formatters.
+    /// Digits of a fraction of a second kept: nanoseconds are more than a transcript holds.
     private static let maxFractionDigits = 9
 
     /// `YYYY-MM-DDTHH:MM:SS[.fraction]Z`, or nil for anything else, an impossible date included.

@@ -154,16 +154,20 @@ final class TranscriptScannerTests: XCTestCase {
         }
     }
 
-    /// A transcript line is data from disk: however long its fraction of a second, reading it
-    /// must not overflow, which would crash Claudy on every refresh.
-    func testOverlongFractionDoesNotCrash() async {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let stamp = "2026-09-24T07:05:12." + String(repeating: "9", count: 40) + "Z"
+    /// A transcript line is data from disk. However long its fraction of a second, it is read to
+    /// the nanosecond: parsed whole, it would overflow, and on Intel Macs `ISO8601DateFormatter`
+    /// itself crashes on it (SIGFPE inside ICU), so it never reaches the formatter untrimmed.
+    func testOverlongFractionIsReadToTheNanosecond() async {
+        let nines = String(repeating: "9", count: 40)
 
-        let parsed = await timestamp(stamp)
+        let expected = await timestamp("2026-09-24T07:05:12.999999999Z")
+        let utc = await timestamp("2026-09-24T07:05:12.\(nines)Z")
+        let offset = await timestamp("2026-09-24T09:05:12.\(nines)+02:00")
 
-        XCTAssertEqual(parsed, formatter.date(from: stamp))
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(utc, expected)
+        XCTAssertEqual(offset?.timeIntervalSince1970 ?? 0, expected?.timeIntervalSince1970 ?? -1, accuracy: 0.001,
+                       "an offset goes through the formatter, trimmed first")
     }
 
     // MARK: - Previous days
