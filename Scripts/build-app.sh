@@ -66,6 +66,14 @@ if $zip; then
     echo "▸ $ZIP"
 fi
 
+# Keep these builds out of Launch Services: after an upgrade, brew reopens Claudy by bundle
+# identifier, and Launch Services can pick any registered copy instead of the installed one.
+if ! $install; then
+    lsregister=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+    "$lsregister" -u "$APP" > /dev/null 2>&1 || true
+    "$lsregister" -u "$BUILD/DerivedData/Build/Products/Release/Claudy.app" > /dev/null 2>&1 || true
+fi
+
 if $install; then
     [[ -d "$APP/Contents" ]] || { echo "invalid bundle: $APP" >&2; exit 1; }
     # A copy that is already running would keep the old binary in memory.
