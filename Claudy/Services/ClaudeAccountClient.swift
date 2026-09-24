@@ -558,15 +558,23 @@ enum DiagnosticLog {
     /// temporary copy instead: a stubbed server's failures must never read as incidents in the
     /// user's own log.
     static let file: URL? = {
-        let isTestRun = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-        let base = isTestRun
-            ? FileManager.default.temporaryDirectory
-            : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        guard let base else { return nil }
-        let directory = base.appendingPathComponent("Claudy", isDirectory: true)
+        guard let directory = directory(environment: ProcessInfo.processInfo.environment) else { return nil }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory.appendingPathComponent("api.log")
     }()
+
+    /// `CLAUDY_LOG_DIRECTORY` wins: the pre-release checks launch the real app against a stand-in
+    /// Claude folder and keep what it logs apart.
+    static func directory(environment: [String: String]) -> URL? {
+        if let custom = environment["CLAUDY_LOG_DIRECTORY"], !custom.isEmpty {
+            return URL(fileURLWithPath: custom, isDirectory: true)
+        }
+        let isTestRun = environment["XCTestConfigurationFilePath"] != nil
+        let base = isTestRun
+            ? FileManager.default.temporaryDirectory
+            : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        return base?.appendingPathComponent("Claudy", isDirectory: true)
+    }
 
     private static let stamp: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
