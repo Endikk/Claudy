@@ -29,13 +29,10 @@ actor LocalUsageDataSource: UsageDataSource {
         let entries = try await scanner.scan()
         let payload = await client.fetch()
 
-        var reading = payload.reading
         // Signed out on purpose means no quota at all: the bar would otherwise keep a percentage
         // relayed by Claude Code's status line next to a card saying "not signed in".
-        if !payload.isSignedOutByUser, let bridge = UsageBridge.read() {
-            let apiIsFresh = reading.map { $0.source == .api } ?? false
-            if !apiIsFresh { reading = bridge }
-        }
+        let bridge = payload.isSignedOutByUser ? nil : UsageBridge.read()
+        let reading = Self.merge(account: payload.reading, bridge: bridge)
 
         var account = AccountLoader.load()
         if let profile = payload.profile {
@@ -51,6 +48,15 @@ actor LocalUsageDataSource: UsageDataSource {
         var snapshot = UsageAggregator.snapshot(from: entries, account: account, reading: reading)
         snapshot.isSignedIn = payload.isSignedIn
         return snapshot
+    }
+
+    /// The account's reading, unless it is not fresh and the status-line bridge has one. A last
+    /// spend reading stays: the bridge only relays 5-hour and weekly windows, which a plan billed
+    /// on usage does not have, so any it carries describe another account.
+    static func merge(account: QuotaReading?, bridge: QuotaReading?) -> QuotaReading? {
+        guard let bridge else { return account }
+        if let account, account.source == .api || account.spend != nil { return account }
+        return bridge
     }
 }
 

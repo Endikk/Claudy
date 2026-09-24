@@ -310,6 +310,34 @@ final class EnterpriseSpendTests: XCTestCase {
         XCTAssertEqual(snapshot.primary.title, "Session")
     }
 
+    // MARK: - Status-line bridge
+
+    /// The bridge only knows 5-hour and weekly windows. A plan billed on usage has none, so a
+    /// last known spend reading must not be swapped for windows that describe another account.
+    func testBridgeNeverReplacesAStaleSpendReading() {
+        let spend = SpendReading(used: 46.31, limit: 500, currency: "USD", isLimitReached: false,
+                                 resetsAt: utc(2026, 10, 1))
+        let stale = QuotaReading(session: nil, weekly: nil, scoped: nil, spend: spend, source: .stale(now))
+        let bridge = QuotaReading(session: QuotaWindow(percent: 0.4, resetsAt: nil), weekly: nil,
+                                  scoped: nil, source: .bridge)
+
+        XCTAssertEqual(LocalUsageDataSource.merge(account: stale, bridge: bridge), stale)
+    }
+
+    func testBridgeStandsInForAStaleOrMissingWindowReading() {
+        let stale = QuotaReading(session: QuotaWindow(percent: 0.2, resetsAt: nil), weekly: nil,
+                                 scoped: nil, source: .stale(now))
+        let fresh = QuotaReading(session: QuotaWindow(percent: 0.3, resetsAt: nil), weekly: nil,
+                                 scoped: nil, source: .api)
+        let bridge = QuotaReading(session: QuotaWindow(percent: 0.4, resetsAt: nil), weekly: nil,
+                                  scoped: nil, source: .bridge)
+
+        XCTAssertEqual(LocalUsageDataSource.merge(account: stale, bridge: bridge), bridge)
+        XCTAssertEqual(LocalUsageDataSource.merge(account: nil, bridge: bridge), bridge)
+        XCTAssertEqual(LocalUsageDataSource.merge(account: fresh, bridge: bridge), fresh)
+        XCTAssertEqual(LocalUsageDataSource.merge(account: stale, bridge: nil), stale)
+    }
+
     @MainActor
     func testAmountsFormatInTheirCurrency() {
         let spend = SpendReading(used: 46.31, limit: 500, currency: "USD", isLimitReached: false,
