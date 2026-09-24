@@ -264,6 +264,28 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertEqual(updates.upgradeState, .idle)
     }
 
+    /// brew upgrades the copy its Caskroom links to. Any other copy (a build from source, a copy
+    /// dragged elsewhere) would watch brew upgrade another app, then restart into itself.
+    func testOnlyTheCopyBrewInstalledUpgradesThroughBrew() throws {
+        let sandbox = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claudy-caskroom-\(UUID().uuidString)", isDirectory: true)
+            .resolvingSymlinksInPath()
+        defer { try? FileManager.default.removeItem(at: sandbox) }
+        let installed = sandbox.appendingPathComponent("Applications/Claudy.app", isDirectory: true)
+        let elsewhere = sandbox.appendingPathComponent("build/Claudy.app", isDirectory: true)
+        let caskroom = sandbox.appendingPathComponent("Caskroom/claudy", isDirectory: true)
+        for directory in [installed, elsewhere, caskroom.appendingPathComponent("1.5.4")] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+        try FileManager.default.createSymbolicLink(at: caskroom.appendingPathComponent("1.5.4/Claudy.app"),
+                                                   withDestinationURL: installed)
+        let missing = sandbox.appendingPathComponent("nowhere/claudy", isDirectory: true)
+
+        XCTAssertTrue(UpdateChecker.isManagedByHomebrew(installed, caskrooms: [missing, caskroom]))
+        XCTAssertFalse(UpdateChecker.isManagedByHomebrew(elsewhere, caskrooms: [missing, caskroom]))
+        XCTAssertFalse(UpdateChecker.isManagedByHomebrew(installed, caskrooms: [missing]))
+    }
+
     func testWithoutHomebrewTheButtonDownloads() async {
         let updates = checker(current: "1.5.2", latest: .success(release("1.5.3")), runner: nil)
         await updates.check()
