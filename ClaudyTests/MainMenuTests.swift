@@ -33,8 +33,9 @@ final class MainMenuTests: XCTestCase {
     }
 
     /// Hosting the tests, Claudy installs its menu and nothing else: no card, no menu bar item,
-    /// no reading of the account. Drawing a window aborts on GitHub's Intel machines.
+    /// no island, no reading of the account. Drawing a window aborts on GitHub's Intel machines.
     func testTestHostShowsNoCard() {
         XCTAssertFalse(NSApp.windows.contains { $0 is FloatingPanel })
+        XCTAssertFalse(NSApp.windows.contains { $0 is NotchPanel })
     }
 }

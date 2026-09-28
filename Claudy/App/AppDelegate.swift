@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let portsViewModel = PortsViewModel()
     let updates = UpdateChecker()
     private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates)
+    private(set) lazy var notch = NotchController(viewModel: viewModel, updates: updates)
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
@@ -53,11 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ) { _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 MainActor.assumeIsolated {
-                    (NSApp.delegate as? AppDelegate)?.clampPanelToScreen()
+                    (NSApp.delegate as? AppDelegate)?.screensChanged()
                 }
             }
         }
 
+        viewModel.hasNotchedScreen = NotchGeometry.current() != nil
         bind()
         viewModel.onUserRefresh = { [updates] in Task { await updates.checkNow() } }
         Task { await viewModel.refresh() }
@@ -98,15 +100,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
 
-    /// The card, or the menu bar item for any other placement: the notch falls back to the menu
-    /// bar wherever the island cannot show.
+    /// Exactly one of the card, the menu bar item and the island.
     private func placeWidget(_ placement: Placement) {
-        if placement == .widget {
-            menuBar.hide()
+        if placement != .widget { panel?.orderOut(nil) }
+        if placement != .menuBar { menuBar.hide() }
+        if placement != .notch { notch.hide() }
+        switch placement {
+        case .widget:
             panel?.orderFrontRegardless()
-        } else {
-            panel?.orderOut(nil)
+        case .menuBar:
             menuBar.show()
+        case .notch:
+            // `effective` says notch only with a notched screen, but it may have gone since.
+            if let geometry = NotchGeometry.current() {
+                notch.show(on: geometry)
+            } else {
+                menuBar.show()
+            }
         }
     }
 
@@ -184,6 +194,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         applyAnchor()
         if let panel {
             anchor = visualAnchor(of: panel)
+        }
+    }
+
+    /// Screens came or went, or changed resolution: the card goes back on screen, and the island
+    /// follows the notch, or hands over to the menu bar item when no screen has one.
+    private func screensChanged() {
+        clampPanelToScreen()
+        let geometry = NotchGeometry.current()
+        viewModel.hasNotchedScreen = geometry != nil
+        // Same placement, new resolution: the notch rectangle moved with it.
+        if let geometry, viewModel.placement == .notch {
+            notch.show(on: geometry)
         }
     }
 
