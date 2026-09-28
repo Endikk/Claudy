@@ -51,6 +51,33 @@ struct NotchGeometry: Equatable {
     }
 
     static func current() -> NotchGeometry? {
-        find(in: NSScreen.screens.map(ScreenMetrics.init))
+        let simulation = UserDefaults.standard.string(forKey: simulationKey)
+        return find(in: simulating(simulation, on: NSScreen.screens.map(ScreenMetrics.init)))
+    }
+}
+
+extension NotchGeometry {
+    /// Checks the island on shapes this Mac does not have: `-ClaudySimulateNotch none` launches
+    /// Claudy as on a Mac without a notch, `-ClaudySimulateNotch 230x44` as with one that size.
+    static let simulationKey = "ClaudySimulateNotch"
+
+    /// The screens as the simulation describes them. "none" removes every notch; "WIDTHxHEIGHT"
+    /// puts a notch of that size at the top centre of the first screen. Nothing, or anything
+    /// unreadable, leaves the screens as they are.
+    static func simulating(_ value: String?, on screens: [ScreenMetrics]) -> [ScreenMetrics] {
+        guard let value else { return screens }
+        if value == "none" {
+            return screens.map {
+                ScreenMetrics(frame: $0.frame, safeAreaTop: 0, leftAreaWidth: nil, rightAreaWidth: nil)
+            }
+        }
+        let size = value.split(separator: "x").compactMap { Double($0) }.map { CGFloat($0) }
+        guard size.count == 2, let first = screens.first,
+              size[0] > 0, size[1] > 0,
+              size[0] < first.frame.width, size[1] < first.frame.height else { return screens }
+        let side = (first.frame.width - size[0]) / 2
+        let notched = ScreenMetrics(frame: first.frame, safeAreaTop: size[1],
+                                    leftAreaWidth: side, rightAreaWidth: side)
+        return [notched] + screens.dropFirst()
     }
 }

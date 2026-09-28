@@ -61,4 +61,32 @@ final class NotchGeometryTests: XCTestCase {
         XCTAssertNil(NotchGeometry.find(in: [external]))
         XCTAssertNil(NotchGeometry.find(in: []))
     }
+
+    // MARK: - Simulation (`ClaudySimulateNotch`)
+
+    func testWithoutSimulationTheScreensAreLeftAlone() {
+        XCTAssertEqual(NotchGeometry.simulating(nil, on: [builtIn, external]), [builtIn, external])
+    }
+
+    /// A MacBook Air M1, an iMac, a Mac mini: no notch anywhere, so no island.
+    func testSimulatingNoneRemovesEveryNotch() {
+        let screens = NotchGeometry.simulating("none", on: [builtIn, external])
+
+        XCTAssertNil(NotchGeometry.find(in: screens))
+        XCTAssertEqual(screens.map(\.frame), [builtIn.frame, external.frame])
+    }
+
+    /// Another notch on the first screen, centred: for checking other shapes on this Mac.
+    func testSimulatingASizePutsThatNotchAtTheTopCentreOfTheFirstScreen() throws {
+        let screens = NotchGeometry.simulating("230x44", on: [external, builtIn])
+
+        let geometry = try XCTUnwrap(NotchGeometry.find(in: screens))
+        XCTAssertEqual(geometry.notch, CGRect(x: 1165, y: 1396, width: 230, height: 44))
+    }
+
+    func testAnUnreadableSimulationIsIgnored() {
+        for value in ["", "wide", "0x32", "200x0", "200", "-5x32", "3000x32"] {
+            XCTAssertEqual(NotchGeometry.simulating(value, on: [builtIn]), [builtIn], value)
+        }
+    }
 }

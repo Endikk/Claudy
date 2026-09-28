@@ -137,6 +137,12 @@ Five technical points are worth knowing before changing it:
   menu bar popover. The mascot and the lead percentage fly from the ears into it
   (`matchedGeometryEffect`): the open view only marks where they land (`notchLanding`).
 
+To see the island as another Mac would show it, launch the built app with a simulated notch:
+`open build/Claudy.app --args -ClaudySimulateNotch none` behaves as a Mac without one (MacBook Air
+M1, iMac, Mac mini: no island, the menus never offer it), and `-ClaudySimulateNotch 230x44` puts a
+notch of that size at the top centre of the first screen. Space the launches out: each one reads
+the account, and a quick series of them gets HTTP 429 from Anthropic for a few minutes.
+
 ## Launch at login
 
 `SMAppService.mainApp.register()` requires an app signed with a stable identity. The project is
