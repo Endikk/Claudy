@@ -28,7 +28,10 @@ let timeout: TimeInterval = 30
 
 let app = Process()
 app.executableURL = URL(fileURLWithPath: binary)
-app.arguments = ["-claudy.inMenuBar", "NO", "-claudy.isMinimal", "NO", "-claudy.configDir", config.path]
+// The card, whatever placement the user saved: `claudy.placement` wins over the menu bar flag,
+// which only builds from before the notch island read.
+app.arguments = ["-claudy.placement", "widget", "-claudy.inMenuBar", "NO", "-claudy.isMinimal", "NO",
+                 "-claudy.configDir", config.path]
 var environment = ProcessInfo.processInfo.environment
 environment["CLAUDY_LOG_DIRECTORY"] = config.appendingPathComponent("logs").path
 app.environment = environment
