@@ -19,7 +19,7 @@ struct MenuBarView: View {
             header
             if viewModel.isSignedIn || snapshot.isDemo {
                 HStack(alignment: .top, spacing: 4) {
-                    QuotaRing(window: lead, isLead: true)
+                    QuotaRing(window: lead)
                     // A plan billed on usage has no weekly or per-model quota to ring.
                     if snapshot.spend == nil {
                         QuotaRing(window: snapshot.weekly, delay: 0.08)
@@ -51,7 +51,6 @@ struct MenuBarView: View {
         HStack(spacing: 8) {
             ClaudyTyping(tint: leadTint, isTyping: snapshot.session.isRunning, isOverloaded: snapshot.isOverloaded)
                 .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
-                .notchLanding(.mascot)
 
             Text("Claudy")
                 .font(Theme.Font.label(14, .semibold))

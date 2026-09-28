@@ -77,7 +77,7 @@ droit sur l'une ou l'autre permet de la déplacer.
 | Clic sur la bande minimale | Passer en mode complet |
 | `usage` / `ports` | Basculer entre les quotas et les ports laissés ouverts par Claude |
 | Clic droit | Rafraîchir · Mode · Emplacement (carte, barre des menus, encoche) · Connexion · Toujours au-dessus · Lancement au démarrage · Quitter |
-| Survol de l'île | Ouvrir les quotas, la semaine et la répartition par modèle sous l'encoche |
+| Survol de l'île | Ouvrir la session, son rythme et son reset, et les autres quotas sous l'encoche |
 | Clic sur l'avatar | Carte du compte |
 | Clic sur « Details » | Répartition par modèle et principaux projets |
 

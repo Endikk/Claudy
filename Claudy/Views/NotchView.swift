@@ -12,8 +12,9 @@ final class NotchModel: ObservableObject {
 }
 
 /// Claudy around the notch. At rest a black band the notch's height extends it on both sides:
-/// the mascot in the left ear, the lead percentage in the right one. Open, the menu bar popover
-/// hangs underneath on the same black. Black to merge with the notch itself.
+/// the mascot in the left ear, the lead percentage in the right one. Open, the island's own view
+/// hangs underneath on the same black (`NotchActivityView`). Black to merge with the notch
+/// itself.
 struct NotchView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
@@ -24,13 +25,11 @@ struct NotchView: View {
 
     private static let restingRadius: CGFloat = 9
     private static let openRadius: CGFloat = 20
-    /// The mascot is drawn at the popover header's size and scaled down into its ear: growing
-    /// into the header is then a scale, and the pixel art stays whole on the way.
-    private static let mascotSize: CGFloat = 27
-    /// At rest, half: the menu bar icon's size, on whole device pixels.
-    private static let mascotRestScale: CGFloat = 0.5
-    /// The figure at rest: 13 points of the ring's 16.
-    private static let percentRestScale: CGFloat = 13.0 / 16
+    /// The mascot and the figure are drawn at their landed size and scaled down into the ears:
+    /// growing into place is then a scale, and the pixel art stays whole on the way.
+    private static let mascotRestScale: CGFloat = 1.0 / 3
+    /// The figure at rest: 13 points.
+    private static let percentRestScale: CGFloat = 13 / IslandPercent.size
 
     /// The 5h session, or the monthly spend on a plan billed on usage.
     private var lead: UsageWindow { viewModel.snapshot.primary }
@@ -52,7 +51,7 @@ struct NotchView: View {
         VStack(spacing: 0) {
             ears
             if model.isOpen {
-                MenuBarView()
+                NotchActivityView()
                     .environment(\.notchFlight, flight)
                     .transition(contentTransition)
             }
@@ -94,9 +93,9 @@ struct NotchView: View {
         )
     }
 
-    /// Open, the mascot and the percentage leave their ears and grow into the popover: the
-    /// mascot into the header, the figure into its ring. The popover only marks the spots
-    /// (`notchLanding`); the ears draw both the whole way, above the fading content.
+    /// Open, the mascot and the percentage leave their ears and grow into the open view, which
+    /// only marks the spots (`notchLanding`): the ears draw both the whole way, above the fading
+    /// content.
     private var ears: some View {
         HStack(spacing: 0) {
             mascot
@@ -118,22 +117,24 @@ struct NotchView: View {
     private var mascot: some View {
         Group {
             if updates.isGreeting && !viewModel.snapshot.isOverloaded {
-                ClaudyWaving(tint: tint, cell: 1)
+                ClaudyWaving(tint: tint, cell: NotchFlight.mascotCell)
             } else {
                 ClaudyTyping(tint: tint, isTyping: viewModel.snapshot.session.isRunning,
                              isOverloaded: viewModel.snapshot.isOverloaded)
             }
         }
-        .frame(width: Self.mascotSize * ClaudyTyping.aspectRatio, height: Self.mascotSize)
+        .frame(width: NotchFlight.mascotSize * ClaudyTyping.aspectRatio, height: NotchFlight.mascotSize)
     }
 
     private var reading: some View {
         HStack(spacing: 3) {
-            QuotaPercent(window: lead)
+            IslandPercent(window: lead)
+                // Its landed size whatever the ear's width, or the figure is cut to "…".
+                .fixedSize()
                 .scaleEffect(model.isOpen ? 1 : Self.percentRestScale)
                 .matchedGeometryEffect(id: NotchFlight.percent, in: flight,
                                        properties: .position, isSource: !model.isOpen)
-            // The popover carries its own update row and error line.
+            // The open view carries its own update row and error line.
             if !model.isOpen {
                 if updates.available != nil {
                     UpdateDot(size: 5)

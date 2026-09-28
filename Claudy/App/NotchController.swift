@@ -123,7 +123,7 @@ final class NotchController {
     private func widenForOpening() {
         settle?.cancel()
         guard let panel, let layout else { return }
-        let width = layout.openWidth(content: Theme.Metric.menuBarWidth, margin: Theme.Metric.shadowInset)
+        let width = layout.openWidth(content: Theme.Metric.islandWidth, margin: Theme.Metric.shadowInset)
         let wide = layout.frame(for: CGSize(width: width, height: panel.frame.height))
         let step = NotchLayout.step(from: panel.frame, to: wide)
         guard step.now != panel.frame else { return }

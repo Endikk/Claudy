@@ -184,3 +184,18 @@ external display is available. Then `./Scripts/preflight.sh` in full.
 - Opening on click instead of hover, or a pinned-open mode.
 - The Ports tab in the island.
 - A floating pill for Macs without a notch.
+
+## Revision (2026-09-29): the island's own open view
+
+After trying the popover inside the island, the open state gets a view of its own,
+`NotchActivityView`, laid out for the notch: wide and low (440 points), like a Live Activity.
+
+- Left: the mascot and the session percentage, flown from the ears and grown into place.
+- Right: the active model, then the weekly and per-model quotas as small bars; on a plan billed
+  on usage, the money spent instead.
+- Below: the session's bar with its pace marker, then the distance from the pace and the reset.
+- When relevant: the update row, the error line, or the sign-in controls.
+
+The menu bar item's popover is unchanged. The open state casts the card's shadow on its sides and
+below; at rest the ears keep none.
+

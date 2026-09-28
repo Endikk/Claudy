@@ -133,8 +133,9 @@ Five technical points are worth knowing before changing it:
   pointer entering or leaving: SwiftUI's own hover areas report to the same view. The shape's
   size comes from a `GeometryReader` with `onChange`: a preference key reached the parent as its
   default value only. The window widens before the island opens, never during it, or the
-  island slides sideways. The mascot and the lead percentage fly from the ears into the popover
-  (`matchedGeometryEffect`): the popover only marks where they land (`notchLanding`).
+  island slides sideways. Open, the island shows its own view (`NotchActivityView`), not the
+  menu bar popover. The mascot and the lead percentage fly from the ears into it
+  (`matchedGeometryEffect`): the open view only marks where they land (`notchLanding`).
 
 ## Launch at login
 

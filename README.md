@@ -76,7 +76,7 @@ to move it.
 | Click the minimal strip | Switch to full mode |
 | `usage` / `ports` | Switch between quotas and the ports Claude left open |
 | Right-click | Refresh · Mode · Placement (card, menu bar, notch) · Sign in · Always on top · Launch at login · Quit |
-| Hover the notch island | Open the quotas, the week and the split by model under the notch |
+| Hover the notch island | Open the session, its pace and reset, and the other quotas under the notch |
 | Click the avatar | Account card |
 | Click "Details" | Split by model and top projects |
 
