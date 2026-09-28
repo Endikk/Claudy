@@ -15,6 +15,12 @@ struct NotchLayout: Equatable {
 
     var restingFrame: CGRect { frame(for: restingSize) }
 
+    /// The open island's width: its content, never narrower than the ears, plus the shadow's
+    /// margin on both sides.
+    func openWidth(content: CGFloat, margin: CGFloat) -> CGFloat {
+        max(restingSize.width, content) + 2 * margin
+    }
+
     /// The window for a shape of `size`, open or not.
     func frame(for size: CGSize) -> CGRect {
         let screen = geometry.screenFrame

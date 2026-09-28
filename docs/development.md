@@ -132,7 +132,9 @@ Five technical points are worth knowing before changing it:
   notch reaches the app below. Only the tracking area covering the whole window counts as the
   pointer entering or leaving: SwiftUI's own hover areas report to the same view. The shape's
   size comes from a `GeometryReader` with `onChange`: a preference key reached the parent as its
-  default value only.
+  default value only. The window widens before the island opens, never during it, or the
+  island slides sideways. The mascot and the lead percentage fly from the ears into the popover
+  (`matchedGeometryEffect`): the popover only marks where they land (`notchLanding`).
 
 ## Launch at login
 

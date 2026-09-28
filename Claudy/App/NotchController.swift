@@ -113,7 +113,22 @@ final class NotchController {
     private func open() {
         // Opening the island counts as opening Claudy: the wave has been seen.
         updates.acknowledgeGreeting()
+        widenForOpening()
         withAnimation(reduceMotion ? nil : Self.opening) { model.isOpen = true }
+    }
+
+    /// The island grows sideways as well as down. Widening the window first, while the island is
+    /// still at rest and laid out at once, keeps that out of the animation: widened mid-flight,
+    /// the window slid the whole island from left to right as it dropped.
+    private func widenForOpening() {
+        settle?.cancel()
+        guard let panel, let layout else { return }
+        let width = layout.openWidth(content: Theme.Metric.menuBarWidth, margin: Theme.Metric.shadowInset)
+        let wide = layout.frame(for: CGSize(width: width, height: panel.frame.height))
+        let step = NotchLayout.step(from: panel.frame, to: wide)
+        guard step.now != panel.frame else { return }
+        panel.setFrame(step.now, display: true)
+        panel.contentView?.layoutSubtreeIfNeeded()
     }
 
     private func close() {

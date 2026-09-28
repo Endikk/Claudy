@@ -7,6 +7,8 @@ struct QuotaRing: View {
     let window: UsageWindow
     /// Stagger between rings, in seconds.
     var delay: Double = 0
+    /// The first ring, the one the bar and the island lead with.
+    var isLead = false
 
     @State private var shown: Double = 0
 
@@ -32,16 +34,7 @@ struct QuotaRing: View {
                     paceDot
                 }
 
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(window.isMeasured ? "\(Int(window.percent * 100))" : "—")
-                        .font(Theme.Font.value(16, .semibold))
-                        .foregroundStyle(.primary.opacity(window.isMeasured ? 0.92 : 0.4))
-                    if window.isMeasured {
-                        Text("%")
-                            .font(Theme.Font.label(9, .medium))
-                            .foregroundStyle(.primary.opacity(0.4))
-                    }
-                }
+                percent
             }
             .frame(width: Self.diameter, height: Self.diameter)
 
@@ -64,6 +57,16 @@ struct QuotaRing: View {
         .onDisappear { shown = 0 }
         .onChange(of: target) { value in
             withAnimation(Theme.Motion.gauge) { shown = value }
+        }
+    }
+
+    /// The lead ring's figure is where the island's right ear lands when it opens.
+    @ViewBuilder
+    private var percent: some View {
+        if isLead {
+            QuotaPercent(window: window).notchLanding(.percent)
+        } else {
+            QuotaPercent(window: window)
         }
     }
 

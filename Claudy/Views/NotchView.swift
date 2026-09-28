@@ -19,14 +19,18 @@ struct NotchView: View {
     @EnvironmentObject private var updates: UpdateChecker
     @ObservedObject var model: NotchModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The mascot and the percentage fly between the ears and the popover in this namespace.
+    @Namespace private var flight
 
     private static let restingRadius: CGFloat = 9
     private static let openRadius: CGFloat = 20
-    /// Room given to the typing mascot. The sprite snaps to whole device pixels inside it, which
-    /// lands on the menu bar icon's size; the rest leaves room for the explosion.
-    private static let mascotHeight: CGFloat = 20
-    /// The menu bar icon's pixel, for the waving sprite, which takes its cell directly.
-    private static let waveCell: CGFloat = 0.5
+    /// The mascot is drawn at the popover header's size and scaled down into its ear: growing
+    /// into the header is then a scale, and the pixel art stays whole on the way.
+    private static let mascotSize: CGFloat = 27
+    /// At rest, half: the menu bar icon's size, on whole device pixels.
+    private static let mascotRestScale: CGFloat = 0.5
+    /// The figure at rest: 13 points of the ring's 16.
+    private static let percentRestScale: CGFloat = 13.0 / 16
 
     /// The 5h session, or the monthly spend on a plan billed on usage.
     private var lead: UsageWindow { viewModel.snapshot.primary }
@@ -49,6 +53,7 @@ struct NotchView: View {
             ears
             if model.isOpen {
                 MenuBarView()
+                    .environment(\.notchFlight, flight)
                     .transition(contentTransition)
             }
         }
@@ -89,9 +94,15 @@ struct NotchView: View {
         )
     }
 
+    /// Open, the mascot and the percentage leave their ears and grow into the popover: the
+    /// mascot into the header, the figure into its ring. The popover only marks the spots
+    /// (`notchLanding`); the ears draw both the whole way, above the fading content.
     private var ears: some View {
         HStack(spacing: 0) {
             mascot
+                .scaleEffect(model.isOpen ? 1 : Self.mascotRestScale)
+                .matchedGeometryEffect(id: NotchFlight.mascot, in: flight,
+                                       properties: .position, isSource: !model.isOpen)
                 .frame(width: NotchLayout.earWidth)
             Color.clear
                 .frame(width: model.notchSize.width)
@@ -99,34 +110,40 @@ struct NotchView: View {
                 .frame(width: NotchLayout.earWidth)
         }
         .frame(height: model.notchSize.height)
+        .zIndex(1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Claudy, \(lead.title) \(percent)")
     }
 
-    @ViewBuilder
     private var mascot: some View {
-        if updates.isGreeting && !viewModel.snapshot.isOverloaded {
-            ClaudyWaving(tint: tint, cell: Self.waveCell)
-        } else {
-            ClaudyTyping(tint: tint, isTyping: viewModel.snapshot.session.isRunning,
-                         isOverloaded: viewModel.snapshot.isOverloaded)
-                .frame(width: Self.mascotHeight * ClaudyTyping.aspectRatio, height: Self.mascotHeight)
+        Group {
+            if updates.isGreeting && !viewModel.snapshot.isOverloaded {
+                ClaudyWaving(tint: tint, cell: 1)
+            } else {
+                ClaudyTyping(tint: tint, isTyping: viewModel.snapshot.session.isRunning,
+                             isOverloaded: viewModel.snapshot.isOverloaded)
+            }
         }
+        .frame(width: Self.mascotSize * ClaudyTyping.aspectRatio, height: Self.mascotSize)
     }
 
     private var reading: some View {
         HStack(spacing: 3) {
-            Text(percent)
-                .font(Theme.Font.value(12.5, .semibold))
-                .foregroundStyle(.primary.opacity(lead.isMeasured ? 0.92 : 0.45))
-            if updates.available != nil {
-                UpdateDot(size: 5)
-            }
-            if let message = viewModel.errorMessage {
-                Circle()
-                    .fill(Theme.danger)
-                    .frame(width: 5, height: 5)
-                    .help(message)
+            QuotaPercent(window: lead)
+                .scaleEffect(model.isOpen ? 1 : Self.percentRestScale)
+                .matchedGeometryEffect(id: NotchFlight.percent, in: flight,
+                                       properties: .position, isSource: !model.isOpen)
+            // The popover carries its own update row and error line.
+            if !model.isOpen {
+                if updates.available != nil {
+                    UpdateDot(size: 5)
+                }
+                if let message = viewModel.errorMessage {
+                    Circle()
+                        .fill(Theme.danger)
+                        .frame(width: 5, height: 5)
+                        .help(message)
+                }
             }
         }
     }

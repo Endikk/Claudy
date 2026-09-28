@@ -76,4 +76,13 @@ final class NotchLayoutTests: XCTestCase {
         XCTAssertEqual(step.now, layout.restingFrame)
         XCTAssertEqual(step.settle, layout.restingFrame)
     }
+
+    /// Known before the island opens, so the window widens while the island is still at rest:
+    /// widened mid-flight, it slid the whole island sideways as it dropped.
+    func testTheOpenWidthCoversTheContentAndItsShadow() throws {
+        let layout = NotchLayout(geometry: try geometry())
+
+        XCTAssertEqual(layout.openWidth(content: 290, margin: 28), 290 + 2 * 28)
+        XCTAssertEqual(layout.openWidth(content: 200, margin: 28), 281 + 2 * 28, "never narrower than the ears")
+    }
 }
