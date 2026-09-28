@@ -25,8 +25,12 @@ final class NotchController {
     private var cancellables = Set<AnyCancellable>()
     private var resignObserver: NSObjectProtocol?
 
-    /// Long enough for `Theme.Motion.popup` to come to rest.
-    private static let settleDelay: TimeInterval = 0.45
+    /// Opening drops from the notch with a slight bounce, as the Dynamic Island does; closing
+    /// goes back quicker and without one.
+    private static let opening = Animation.spring(response: 0.42, dampingFraction: 0.74)
+    private static let closing = Animation.spring(response: 0.3, dampingFraction: 0.92)
+    /// Long enough for `closing` to come to rest.
+    private static let settleDelay: TimeInterval = 0.5
 
     init(viewModel: UsageViewModel, updates: UpdateChecker) {
         self.viewModel = viewModel
@@ -109,16 +113,16 @@ final class NotchController {
     private func open() {
         // Opening the island counts as opening Claudy: the wave has been seen.
         updates.acknowledgeGreeting()
-        withAnimation(motion) { model.isOpen = true }
+        withAnimation(reduceMotion ? nil : Self.opening) { model.isOpen = true }
     }
 
     private func close() {
-        withAnimation(motion) { model.isOpen = false }
+        withAnimation(reduceMotion ? nil : Self.closing) { model.isOpen = false }
     }
 
     /// No spring with Reduce Motion on: the island is simply open or closed.
-    private var motion: Animation? {
-        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : Theme.Motion.popup
+    private var reduceMotion: Bool {
+        NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
     }
 
     /// The manual sign-in code is being typed in the open island.

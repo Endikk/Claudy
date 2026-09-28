@@ -18,6 +18,7 @@ struct NotchView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
     @ObservedObject var model: NotchModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let restingRadius: CGFloat = 9
     private static let openRadius: CGFloat = 20
@@ -35,16 +36,28 @@ struct NotchView: View {
         NotchShape(bottomRadius: model.isOpen ? Self.openRadius : Self.restingRadius)
     }
 
+    /// Hung from the window's top edge whatever the window's size. A flexible frame took the
+    /// island's own height while the window was still the ears' size, so the first frames of the
+    /// opening started from the middle and slid up.
     var body: some View {
+        Color.clear
+            .overlay(alignment: .top) { island }
+    }
+
+    private var island: some View {
         VStack(spacing: 0) {
             ears
             if model.isOpen {
                 MenuBarView()
-                    .transition(.opacity)
+                    .transition(contentTransition)
             }
         }
         .background(shape.fill(Color.black))
         .clipShape(shape)
+        // The card's shadow, open only: at rest the ears merge with the notch, and a margin
+        // around them would take clicks from the menu bar next to them.
+        .background(OutlineShadow(outline: shape).opacity(model.isOpen ? 1 : 0))
+        .padding(model.isOpen ? Self.shadowMargin : EdgeInsets())
         .environment(\.colorScheme, .dark)
         // Its own size whatever the window's: the controller sizes the window from it.
         .fixedSize()
@@ -55,7 +68,25 @@ struct NotchView: View {
                 .onAppear { model.shapeSize = proxy.size }
                 .onChange(of: proxy.size) { size in model.shapeSize = size }
         })
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// Room for the shadow on the sides and below. The top is the screen's edge.
+    private static let shadowMargin = EdgeInsets(
+        top: 0,
+        leading: Theme.Metric.shadowInset,
+        bottom: Theme.Metric.shadowInset,
+        trailing: Theme.Metric.shadowInset
+    )
+
+    /// The content settles in just after the shape starts to drop, from a touch smaller and
+    /// blurred, and leaves first on the way back so the shape closes on nothing.
+    private var contentTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: .modifier(active: Settling(amount: 1), identity: Settling(amount: 0))
+                .animation(.easeOut(duration: 0.28).delay(0.05)),
+            removal: .opacity.animation(.easeIn(duration: 0.12))
+        )
     }
 
     private var ears: some View {
@@ -98,6 +129,18 @@ struct NotchView: View {
                     .help(message)
             }
         }
+    }
+}
+
+/// Content arriving in the island: faded, a touch smaller from the top, blurred.
+private struct Settling: ViewModifier {
+    let amount: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(1 - amount)
+            .scaleEffect(1 - 0.06 * amount, anchor: .top)
+            .blur(radius: 6 * amount)
     }
 }
 
