@@ -81,14 +81,15 @@ there, and so is the real-app step.
 
 ```
 Claudy/
-├── App/          main.swift (AppKit entry) · AppDelegate (window, position, ⌘ menu) · FloatingPanel
-├── Models/       UsageSnapshot and its parts · QuotaModels (account readings and their source)
+├── App/          main.swift (AppKit entry) · AppDelegate (window, position, ⌘ menu) · FloatingPanel ·
+│                 MenuBarController · ClaudyMenu (shared right-click menu) · Notch* (the island)
+├── Models/       UsageSnapshot and its parts · QuotaModels (account readings and their source) · Placement
 ├── Services/     ClaudeHome (paths) · TranscriptScanner (incremental read) ·
 │                 UsageAggregator (windows, gauges) · ClaudeAccountClient (OAuth API) ·
 │                 ClaudeCodeCredentials (read-only borrowed token) · ClaudeCredentials (own store) ·
 │                 ClaudeOAuth (PKCE fallback) · UsageBridge (status-line relay) ·
 │                 UsageDataSource (protocol, local source, switch) · DemoUsageDataSource ·
-│                 AccountLoader · ModelName · LaunchAtLogin
+│                 AccountLoader · ModelName · LaunchAtLogin · NotchGeometry
 ├── ViewModels/   UsageViewModel: state, preferences, formatting
 ├── Theme/        Design tokens · NSVisualEffectView bridge
 └── Views/        RootView (background, modes, context menu) · MinimalView · FullView · Components/
@@ -111,7 +112,7 @@ The API is polled every 3 minutes with a 60-second cache, and the profile is re-
 
 ### Window
 
-Four technical points are worth knowing before changing it:
+Five technical points are worth knowing before changing it:
 
 - **The entry point is AppKit** (`main.swift`), not `@main struct ClaudyApp: App`. Under a SwiftUI
   life cycle the residual scene required by the `App` protocol (`Settings`) fights the floating
@@ -125,6 +126,13 @@ Four technical points are worth knowing before changing it:
   (growth downward), so `AppDelegate.windowDidResize` re-hangs the card on its anchor — it grows
   upward and stays fully visible. The anchor resets to the screen's bottom right on every launch;
   a mouse drag updates it for the session.
+- **The notch island** (`NotchPanel`) sits at `.mainMenu + 3`, over the menu bar and over
+  full-screen apps. Its window follows the black shape (`NotchLayout.step`): it grows at once
+  when the island opens and shrinks only once the shape has closed, so a click just under the
+  notch reaches the app below. Only the tracking area covering the whole window counts as the
+  pointer entering or leaving: SwiftUI's own hover areas report to the same view. The shape's
+  size comes from a `GeometryReader` with `onChange`: a preference key reached the parent as its
+  default value only.
 
 ## Launch at login
 

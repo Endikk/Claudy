@@ -66,14 +66,17 @@ from a repository that is not its own until you approve it explicitly.
 
 ## Use
 
-The app is an agent: no Dock icon, no menu bar. Everything goes through the card.
+The app is an agent: no Dock icon, no menu bar of its own. It shows as a floating card, as an item
+in the menu bar, or, on a Mac with a notch, as an island around the notch. Right-click any of them
+to move it.
 
 | Gesture | Effect |
 |---|---|
 | Drag the card | Move the widget |
 | Click the minimal strip | Switch to full mode |
 | `usage` / `ports` | Switch between quotas and the ports Claude left open |
-| Right-click | Refresh · Mode · Sign in · Always on top · Launch at login · Quit |
+| Right-click | Refresh · Mode · Placement (card, menu bar, notch) · Sign in · Always on top · Launch at login · Quit |
+| Hover the notch island | Open the quotas, the week and the split by model under the notch |
 | Click the avatar | Account card |
 | Click "Details" | Split by model and top projects |
 
