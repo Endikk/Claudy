@@ -66,7 +66,7 @@ Nobody's own history, account or log is touched; the Claudy in use closes for a 
 reopens.
 
 The same script runs on GitHub's Macs (`.github/workflows/preflight.yml`) on every push to
-`develop` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
+`develop` and `main` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
 macOS 15 and 26, Intel on macOS 15. There it builds for the machine's own architecture and reads
 the 20 MB and 1 GB histories only. Its timings are reported, not judged: shared machines vary two
 to three times from one run to the next, so the budgets there only catch a disaster, and the
