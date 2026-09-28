@@ -6,8 +6,8 @@ import Foundation
 @MainActor
 final class NotchHover {
 
-    static let openDelay: TimeInterval = 0.15
-    static let closeDelay: TimeInterval = 0.3
+    nonisolated static let openDelay: TimeInterval = 0.15
+    nonisolated static let closeDelay: TimeInterval = 0.3
 
     private(set) var isOpen = false
 
