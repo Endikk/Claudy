@@ -51,6 +51,7 @@ final class NotchController {
             panel.setFrame(layout.restingFrame, display: true)
         }
         panel.orderFrontRegardless()
+        resyncPointer()
     }
 
     /// Takes the island away, closed, with nothing left pending.
@@ -134,8 +135,17 @@ final class NotchController {
         guard step.settle != step.now else { return }
         settle = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.settleDelay * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            self?.panel?.setFrame(step.settle, display: true)
+            guard !Task.isCancelled, let self else { return }
+            self.panel?.setFrame(step.settle, display: true)
+            self.resyncPointer()
         }
+    }
+
+    /// A window that shrinks away from a still pointer, or appears under one, hears no crossing
+    /// from its tracking area: the pointer's real place decides. Without it, a sign-out from the
+    /// open island left the black panel down over the front app.
+    private func resyncPointer() {
+        guard let panel, panel.isVisible else { return }
+        hover.resync(pointerInside: panel.frame.contains(NSEvent.mouseLocation))
     }
 }

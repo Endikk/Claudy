@@ -10,6 +10,8 @@ final class NotchHover {
     nonisolated static let closeDelay: TimeInterval = 0.3
 
     private(set) var isOpen = false
+    /// Where the pointer was last reported: tracking areas only speak on crossings.
+    private(set) var isPointerInside = false
 
     private let openDelay: TimeInterval
     private let closeDelay: TimeInterval
@@ -36,6 +38,7 @@ final class NotchHover {
 
     /// The pointer entered or left the island. Each call replaces whatever was pending.
     func pointer(inside: Bool) {
+        isPointerInside = inside
         pending?.cancel()
         pending = nil
         if inside {
@@ -55,12 +58,21 @@ final class NotchHover {
         }
     }
 
+    /// The window moved or resized under a pointer that may not have: no crossing was reported.
+    /// Acts only when the pointer is not where it was last reported, so a timer already running
+    /// the right way is left alone.
+    func resync(pointerInside inside: Bool) {
+        guard inside != isPointerInside else { return }
+        pointer(inside: inside)
+    }
+
     /// Closed at once with nothing pending, without calling `close`: the island is being hidden
     /// and its owner resets what it shows.
     func reset() {
         pending?.cancel()
         pending = nil
         isOpen = false
+        isPointerInside = false
     }
 
     private func after(_ delay: TimeInterval, _ action: @escaping @MainActor () -> Void) -> Task<Void, Never> {

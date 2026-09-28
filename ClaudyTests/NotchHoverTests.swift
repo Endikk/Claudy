@@ -113,4 +113,54 @@ final class NotchHoverTests: XCTestCase {
         XCTAssertFalse(hover.isOpen)
         XCTAssertEqual(closes, 0, "the caller hiding the island closes it itself")
     }
+
+    /// The window shrank away from a pointer that did not move (a sign-out swapped the charts
+    /// for the short sign-in block): no exit was reported, the resync closes it.
+    func testAWindowShrinkingAwayFromAStillPointerClosesIt() async {
+        let hover = makeHover()
+        hover.pointer(inside: true)
+        await settle()
+
+        hover.resync(pointerInside: false)
+        await settle()
+
+        XCTAssertEqual(closes, 1)
+        XCTAssertFalse(hover.isOpen)
+    }
+
+    /// Shown under a pointer already on the ears: no entry was reported, the resync opens it.
+    func testAnIslandAppearingUnderThePointerOpens() async {
+        let hover = makeHover()
+
+        hover.resync(pointerInside: true)
+        await settle()
+
+        XCTAssertEqual(opens, 1)
+        XCTAssertTrue(hover.isOpen)
+    }
+
+    func testAResyncThatAgreesChangesNothing() async {
+        let hover = makeHover()
+        hover.pointer(inside: true)
+        await settle()
+
+        hover.resync(pointerInside: true)
+        await settle()
+
+        XCTAssertEqual(opens, 1)
+        XCTAssertEqual(closes, 0)
+        XCTAssertTrue(hover.isOpen)
+    }
+
+    func testAfterAResetThePointerCountsAsOutside() async {
+        let hover = makeHover()
+        hover.pointer(inside: true)
+        await settle()
+        hover.reset()
+
+        hover.resync(pointerInside: true)
+        await settle()
+
+        XCTAssertEqual(opens, 2, "shown again under the pointer, it opens again")
+    }
 }
