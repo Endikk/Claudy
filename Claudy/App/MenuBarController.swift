@@ -15,6 +15,8 @@ final class MenuBarController: NSObject {
     private lazy var bubble = UpdateBubblePanel(content: UpdateBubble { [weak self] in self?.closeBubble() }
         .environmentObject(updates))
     private var cancellables = Set<AnyCancellable>()
+    /// The right-click menu. Its items target it, so it lives as long as the item.
+    private lazy var menuContent = ClaudyMenu(viewModel: viewModel)
 
     private var timer: Timer?
     private var tick = 0
@@ -282,17 +284,7 @@ final class MenuBarController: NSObject {
     /// system's own; the item goes back to sending actions right after.
     private func showMenu(from button: NSStatusBarButton) {
         popover.performClose(nil)
-        let menu = NSMenu()
-        menu.addItem(withTitle: "Refresh", action: #selector(refresh), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Show floating widget", action: #selector(leaveMenuBar), keyEquivalent: "")
-            .target = self
-        if let account = accountItem() {
-            menu.addItem(.separator())
-            menu.addItem(account)
-        }
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Claudy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
-        item?.menu = menu
+        item?.menu = menuContent.make()
         button.performClick(nil)
         item?.menu = nil
     }
@@ -324,38 +316,5 @@ final class MenuBarController: NSObject {
         bubble.dismiss()
         updates.markAnnounced()
         update(with: viewModel.snapshot)
-    }
-
-    @objc private func refresh() {
-        Task { await viewModel.refresh(userInitiated: true) }
-    }
-
-    @objc private func leaveMenuBar() {
-        viewModel.toggleMenuBar()
-    }
-
-    /// Sign in or out, whichever applies. Nothing before the first reading, which has yet to say
-    /// which; nothing on the demo set, which has no account. An item without an action shows
-    /// disabled while a sign-in is already under way.
-    private func accountItem() -> NSMenuItem? {
-        if viewModel.isSignedIn {
-            let item = NSMenuItem(title: "Sign out of Claude", action: #selector(signOut), keyEquivalent: "")
-            item.target = self
-            return item
-        }
-        guard viewModel.hasLoaded, !viewModel.snapshot.isDemo else { return nil }
-        let item = NSMenuItem(title: "Sign in to Claude…",
-                              action: viewModel.isSigningIn ? nil : #selector(signIn),
-                              keyEquivalent: "")
-        item.target = self
-        return item
-    }
-
-    @objc private func signIn() {
-        viewModel.startSignIn()
-    }
-
-    @objc private func signOut() {
-        viewModel.signOut()
     }
 }

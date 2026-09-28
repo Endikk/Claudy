@@ -143,8 +143,12 @@ struct RootView: View {
             )
         }
 
-        Button(action: viewModel.toggleMenuBar) {
-            Label("Show in menu bar", systemImage: "menubar.arrow.up.rectangle")
+        ForEach(viewModel.placement.offered(hasNotch: viewModel.hasNotchedScreen), id: \.self) { placement in
+            Button {
+                viewModel.place(placement)
+            } label: {
+                Label(placement.menuTitle, systemImage: placement.systemImage)
+            }
         }
 
         Divider()

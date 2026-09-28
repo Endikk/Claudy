@@ -81,13 +81,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
 
         // Fires once on subscription too, which places the widget on launch.
-        viewModel.$isInMenuBar
+        viewModel.$placement
+            .combineLatest(viewModel.$hasNotchedScreen)
+            .map { placement, hasNotch in placement.effective(hasNotch: hasNotch) }
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] inMenuBar in self?.placeWidget(inMenuBar: inMenuBar) }
+            .sink { [weak self] placement in self?.placeWidget(placement) }
             .store(in: &cancellables)
 
-        // Moving between the widget and the menu bar greets again while an update is pending.
-        viewModel.$isInMenuBar
+        // Moving Claudy elsewhere greets again while an update is pending.
+        viewModel.$placement
             .dropFirst()
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -95,14 +98,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
 
-    /// Either the floating card or the menu bar item, never both.
-    private func placeWidget(inMenuBar: Bool) {
-        if inMenuBar {
-            panel?.orderOut(nil)
-            menuBar.show()
-        } else {
+    /// The card, or the menu bar item for any other placement: the notch falls back to the menu
+    /// bar wherever the island cannot show.
+    private func placeWidget(_ placement: Placement) {
+        if placement == .widget {
             menuBar.hide()
             panel?.orderFrontRegardless()
+        } else {
+            panel?.orderOut(nil)
+            menuBar.show()
         }
     }
 
