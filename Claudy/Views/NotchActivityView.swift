@@ -77,7 +77,9 @@ struct NotchActivityView: View {
 
             Spacer(minLength: 12)
 
+            // Its full width first: a long model name was cut to "Per m…".
             side
+                .fixedSize()
         }
     }
 
