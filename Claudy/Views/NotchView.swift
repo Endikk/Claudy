@@ -106,7 +106,6 @@ struct NotchView: View {
             Color.clear
                 .frame(width: model.notchSize.width)
             reading
-                .frame(width: NotchLayout.earWidth)
         }
         .frame(height: model.notchSize.height)
         .zIndex(1)
@@ -127,26 +126,36 @@ struct NotchView: View {
     }
 
     private var reading: some View {
-        HStack(spacing: 3) {
-            IslandPercent(window: lead)
-                // Its landed size whatever the ear's width, or the figure is cut to "…".
-                .fixedSize()
-                .scaleEffect(model.isOpen ? 1 : Self.percentRestScale)
-                .matchedGeometryEffect(id: NotchFlight.percent, in: flight,
-                                       properties: .position, isSource: !model.isOpen)
-            // The open view carries its own update row and error line.
-            if !model.isOpen {
-                if updates.available != nil {
-                    UpdateDot(size: 5)
-                }
-                if let message = viewModel.errorMessage {
-                    Circle()
-                        .fill(Theme.danger)
-                        .frame(width: 5, height: 5)
-                        .help(message)
+        IslandPercent(window: lead)
+            // Its landed size whatever the ear's width, or the figure is cut to "…".
+            .fixedSize()
+            .scaleEffect(model.isOpen ? 1 : Self.percentRestScale)
+            .matchedGeometryEffect(id: NotchFlight.percent, in: flight,
+                                   properties: .position, isSource: !model.isOpen)
+            .frame(width: NotchLayout.earWidth)
+            // At the ear's outer edge, apart from the figure: laid out at its landed size, the
+            // figure is wider than the ear, and dots placed after it fell outside the island.
+            .overlay(alignment: .trailing) {
+                // The open view carries its own update row and error line.
+                if !model.isOpen {
+                    dots
                 }
             }
+    }
+
+    private var dots: some View {
+        VStack(spacing: 3) {
+            if updates.available != nil {
+                UpdateDot(size: 5)
+            }
+            if let message = viewModel.errorMessage {
+                Circle()
+                    .fill(Theme.danger)
+                    .frame(width: 5, height: 5)
+                    .help(message)
+            }
         }
+        .padding(.trailing, 2)
     }
 }
 
