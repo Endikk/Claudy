@@ -35,7 +35,8 @@ struct NotchView: View {
     private var tint: Color { Theme.tint(lead.accent, at: lead.percent) }
     private var percent: String { lead.isMeasured ? "\(Int(lead.percent * 100))%" : "—" }
     private var shape: NotchShape {
-        NotchShape(bottomRadius: model.isOpen ? Self.openRadius : Self.restingRadius)
+        NotchShape(bottomRadius: model.isOpen ? Self.openRadius : Self.restingRadius,
+                   shoulder: NotchLayout.shoulder)
     }
 
     /// Hung from the window's top edge whatever the window's size. A flexible frame took the
@@ -55,6 +56,8 @@ struct NotchView: View {
                     .transition(contentTransition)
             }
         }
+        // Room for the shoulders: the glass flares out beside the ears, along the top edge only.
+        .padding(.horizontal, NotchLayout.shoulder)
         .background(glass)
         .clipShape(shape)
         .overlay(rim)
@@ -194,10 +197,12 @@ private struct Settling: ViewModifier {
     }
 }
 
-/// Square on top, flush with the screen edge; rounded at the bottom. The radius animates between
-/// the ears and the open panel.
+/// Flush with the screen's top edge, which it meets through a concave shoulder on each side, as
+/// the notch does; rounded at the bottom. The bottom radius animates between the ears and the
+/// open island. The body sits `shoulder` inside the rect on each side.
 struct NotchShape: Shape {
     var bottomRadius: CGFloat
+    var shoulder: CGFloat = 0
 
     var animatableData: CGFloat {
         get { bottomRadius }
@@ -205,14 +210,24 @@ struct NotchShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let radius = min(bottomRadius, rect.height / 2, rect.width / 2)
+        let flare = min(shoulder, rect.width / 4, rect.height / 2)
+        let left = rect.minX + flare
+        let right = rect.maxX - flare
+        let radius = min(bottomRadius, rect.height / 2, (right - left) / 2)
         var path = Path()
         path.move(to: CGPoint(x: rect.minX, y: rect.minY))
         path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY),
-                    tangent2End: CGPoint(x: rect.minX, y: rect.maxY), radius: radius)
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY),
-                    tangent2End: CGPoint(x: rect.minX, y: rect.minY), radius: radius)
+        if flare > 0 {
+            path.addQuadCurve(to: CGPoint(x: right, y: rect.minY + flare), control: CGPoint(x: right, y: rect.minY))
+        }
+        path.addArc(tangent1End: CGPoint(x: right, y: rect.maxY),
+                    tangent2End: CGPoint(x: left, y: rect.maxY), radius: radius)
+        path.addArc(tangent1End: CGPoint(x: left, y: rect.maxY),
+                    tangent2End: CGPoint(x: left, y: rect.minY + flare), radius: radius)
+        path.addLine(to: CGPoint(x: left, y: rect.minY + flare))
+        if flare > 0 {
+            path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
+        }
         path.closeSubpath()
         return path
     }

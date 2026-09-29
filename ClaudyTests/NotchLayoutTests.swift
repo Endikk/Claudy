@@ -18,8 +18,9 @@ final class NotchLayoutTests: XCTestCase {
     func testAtRestTheEarsFlankTheNotch() throws {
         let layout = NotchLayout(geometry: try geometry())
 
-        XCTAssertEqual(layout.restingSize, CGSize(width: 185 + 2 * 48, height: 32))
-        XCTAssertEqual(layout.restingFrame, CGRect(x: 723.5, y: 1085, width: 281, height: 32))
+        // The notch, an ear and a shoulder on each side.
+        XCTAssertEqual(layout.restingSize, CGSize(width: 185 + 2 * 48 + 2 * 8, height: 32))
+        XCTAssertEqual(layout.restingFrame, CGRect(x: 715.5, y: 1085, width: 297, height: 32))
     }
 
     func testOpenTheShapeHangsFromTheTopCentredOnTheNotch() throws {
@@ -45,12 +46,12 @@ final class NotchLayoutTests: XCTestCase {
         let screen = CGRect(x: -1728, y: 200, width: 1728, height: 1117)
         let layout = NotchLayout(geometry: try geometry(frame: screen))
 
-        XCTAssertEqual(layout.restingFrame, CGRect(x: -1004.5, y: 1285, width: 281, height: 32))
+        XCTAssertEqual(layout.restingFrame, CGRect(x: -1012.5, y: 1285, width: 297, height: 32))
     }
 
     func testGrowingTakesTheLargerFrameAtOnce() throws {
         let layout = NotchLayout(geometry: try geometry())
-        let open = layout.frame(for: CGSize(width: 290, height: 400))
+        let open = layout.frame(for: CGSize(width: 512, height: 220))
 
         let step = NotchLayout.step(from: layout.restingFrame, to: open)
 
@@ -60,7 +61,7 @@ final class NotchLayoutTests: XCTestCase {
 
     func testShrinkingWaitsForTheShapeToClose() throws {
         let layout = NotchLayout(geometry: try geometry())
-        let open = layout.frame(for: CGSize(width: 290, height: 400))
+        let open = layout.frame(for: CGSize(width: 512, height: 220))
 
         let step = NotchLayout.step(from: open, to: layout.restingFrame)
 
@@ -82,7 +83,21 @@ final class NotchLayoutTests: XCTestCase {
     func testTheOpenWidthCoversTheContentAndItsShadow() throws {
         let layout = NotchLayout(geometry: try geometry())
 
-        XCTAssertEqual(layout.openWidth(content: 290, margin: 28), 290 + 2 * 28)
-        XCTAssertEqual(layout.openWidth(content: 200, margin: 28), 281 + 2 * 28, "never narrower than the ears")
+        // The content, a shoulder on each side, then the shadow's margin.
+        XCTAssertEqual(layout.openWidth(content: 440, margin: 28), 440 + 2 * 8 + 2 * 28)
+        XCTAssertEqual(layout.openWidth(content: 200, margin: 28), 297 + 2 * 28, "never narrower than the ears")
+    }
+
+    /// The island flares into the screen's top edge the way the notch does, instead of meeting
+    /// it square: glass above the shoulder's curve, nothing below it.
+    func testTheShapeFlaresIntoTheTopEdge() {
+        let path = NotchShape(bottomRadius: 20, shoulder: 8).path(in: CGRect(x: 0, y: 0, width: 300, height: 100))
+
+        XCTAssertTrue(path.contains(CGPoint(x: 6, y: 1)), "glass along the top edge, left")
+        XCTAssertFalse(path.contains(CGPoint(x: 1, y: 6)), "nothing under the left shoulder")
+        XCTAssertTrue(path.contains(CGPoint(x: 294, y: 1)), "glass along the top edge, right")
+        XCTAssertFalse(path.contains(CGPoint(x: 299, y: 6)), "nothing under the right shoulder")
+        XCTAssertTrue(path.contains(CGPoint(x: 150, y: 50)), "the body")
+        XCTAssertFalse(path.contains(CGPoint(x: 3, y: 50)), "the body starts past the shoulder")
     }
 }

@@ -68,7 +68,7 @@ final class NotchShapesTests: XCTestCase {
             XCTAssertEqual(resting.maxY, item.frame.maxY, "hangs from the top, \(item)")
             XCTAssertEqual(resting.height, item.notch.height, "the notch's height, \(item)")
             XCTAssertEqual(resting.midX, geometry.notch.midX, accuracy: 0.001, "centred, \(item)")
-            XCTAssertEqual(resting.width, item.notch.width + 2 * NotchLayout.earWidth, "\(item)")
+            XCTAssertEqual(resting.width, item.notch.width + 2 * (NotchLayout.earWidth + NotchLayout.shoulder), "\(item)")
             XCTAssertTrue(item.frame.contains(resting), "on screen, \(item)")
         }
     }

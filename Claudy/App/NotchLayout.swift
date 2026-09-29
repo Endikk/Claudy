@@ -7,18 +7,21 @@ struct NotchLayout: Equatable {
 
     /// Width of each ear: the mascot on the left of the notch, the percentage on its right.
     static let earWidth: CGFloat = 48
+    /// Width of the curve on each side where the island flares into the screen's top edge, as
+    /// the notch itself does, instead of meeting it square.
+    static let shoulder: CGFloat = 8
 
-    /// The notch plus one ear on each side, the notch's height.
+    /// The notch plus an ear and a shoulder on each side, the notch's height.
     var restingSize: CGSize {
-        CGSize(width: geometry.notch.width + 2 * Self.earWidth, height: geometry.notch.height)
+        CGSize(width: geometry.notch.width + 2 * (Self.earWidth + Self.shoulder), height: geometry.notch.height)
     }
 
     var restingFrame: CGRect { frame(for: restingSize) }
 
-    /// The open island's width: its content, never narrower than the ears, plus the shadow's
-    /// margin on both sides.
+    /// The open island's width: its content and a shoulder on each side, never narrower than
+    /// the ears, plus the shadow's margin on both sides.
     func openWidth(content: CGFloat, margin: CGFloat) -> CGFloat {
-        max(restingSize.width, content) + 2 * margin
+        max(restingSize.width, content + 2 * Self.shoulder) + 2 * margin
     }
 
     /// The window for a shape of `size`, open or not.
