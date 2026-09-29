@@ -270,8 +270,8 @@ final class UsageViewModel: ObservableObject {
     }
 
     /// "2 h 14 min" or "14 min": time left before a window resets.
-    static func countdown(to date: Date) -> String {
-        let remaining = Int(date.timeIntervalSinceNow)
+    static func countdown(to date: Date, now: Date = Date()) -> String {
+        let remaining = Int(date.timeIntervalSince(now))
         guard remaining > 0 else { return "any moment" }
         let hours = remaining / 3600
         let minutes = (remaining % 3600) / 60

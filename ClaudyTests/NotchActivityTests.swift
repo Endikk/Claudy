@@ -7,7 +7,9 @@ import XCTest
 @MainActor
 final class NotchActivityTests: XCTestCase {
 
-    private let now = Date()
+    /// Ten minutes behind the real clock: the reset line must count from the reading's `now`,
+    /// not from whenever the suite gets to this test on a slow machine.
+    private let now = Date().addingTimeInterval(-600)
 
     private func window(
         _ title: String,

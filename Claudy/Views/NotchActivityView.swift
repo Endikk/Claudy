@@ -19,7 +19,7 @@ struct NotchActivity {
         others = snapshot.spend == nil ? [snapshot.weekly, snapshot.sonnet] : []
         if lead.isActive {
             resetLine = "reset \(UsageViewModel.resetTime(lead.resetDate, now: now))"
-                + " · in \(UsageViewModel.countdown(to: lead.resetDate))"
+                + " · in \(UsageViewModel.countdown(to: lead.resetDate, now: now))"
         } else {
             resetLine = lead.isMeasured ? "inactive" : "unavailable"
         }
