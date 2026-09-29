@@ -52,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             object: nil,
             queue: .main
         ) { _ in
+            MainActor.assumeIsolated {
+                (NSApp.delegate as? AppDelegate)?.notch.hideIfMoved()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 MainActor.assumeIsolated {
                     (NSApp.delegate as? AppDelegate)?.screensChanged()

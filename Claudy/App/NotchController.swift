@@ -65,6 +65,14 @@ final class NotchController {
         panel?.orderOut(nil)
     }
 
+    /// The screens just changed: the notch may have moved, or gone with the lid. Hidden at once
+    /// rather than left where its old frame now falls, possibly on another screen, until the
+    /// delayed pass shows it again where it belongs.
+    func hideIfMoved() {
+        guard panel?.isVisible == true, NotchGeometry.current() != layout?.geometry else { return }
+        hide()
+    }
+
     /// A click elsewhere ended the edit that held the island open: close it if the pointer left.
     func panelResignedKey() {
         guard let panel else { return }
@@ -152,8 +160,10 @@ final class NotchController {
         if step.now != panel.frame { panel.setFrame(step.now, display: true) }
         settle?.cancel()
         guard step.settle != step.now else { return }
+        // Without the spring there is no closing to wait for.
+        let delay = reduceMotion ? 0 : Self.settleDelay
         settle = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.settleDelay * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled, let self else { return }
             self.panel?.setFrame(step.settle, display: true)
             self.resyncPointer()

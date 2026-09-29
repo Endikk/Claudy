@@ -42,6 +42,8 @@ private struct NotchLanding: ViewModifier {
         if let namespace {
             content
                 .opacity(0)
+                // The island's ears already say it: VoiceOver would read the figure twice.
+                .accessibilityHidden(true)
                 .matchedGeometryEffect(id: flight, in: namespace, properties: .position, isSource: true)
         } else {
             content
