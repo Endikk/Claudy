@@ -56,8 +56,9 @@ struct NotchView: View {
                     .transition(contentTransition)
             }
         }
-        .background(shape.fill(Color.black))
+        .background(glass)
         .clipShape(shape)
+        .overlay(rim)
         // The card's shadow, open only: at rest the ears merge with the notch, and a margin
         // around them would take clicks from the menu bar next to them.
         .background(OutlineShadow(outline: shape).opacity(model.isOpen ? 1 : 0))
@@ -72,6 +73,43 @@ struct NotchView: View {
                 .onAppear { model.shapeSize = proxy.size }
                 .onChange(of: proxy.size) { size in model.shapeSize = size }
         })
+    }
+
+    /// Height over which the notch's black melts into the glass, below the ears.
+    private static let notchFade: CGFloat = 26
+
+    /// The card's glass, black where the island meets the notch. At rest the ears are all black
+    /// and merge with it; open, the glass shows below a black band that fades out.
+    private var glass: some View {
+        let band = model.notchSize.height
+        return ZStack {
+            VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
+            LinearGradient(colors: [.white.opacity(0.10), .white.opacity(0.015)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            RadialGradient(colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
+                           center: .topLeading, startRadius: 0, endRadius: 240)
+        }
+        // An overlay, so the band never sizes the glass: taller than the resting ears, it
+        // centred itself on them and left their lower half grey.
+        .overlay(alignment: .top) {
+            LinearGradient(stops: [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: band / (band + Self.notchFade)),
+                .init(color: .black.opacity(0), location: 1),
+            ], startPoint: .top, endPoint: .bottom)
+            .frame(height: band + Self.notchFade)
+        }
+    }
+
+    /// The card's hairline, open only, and faded out towards the top: the island's top edge is
+    /// the screen's, where a line would show against the menu bar.
+    private var rim: some View {
+        shape
+            .stroke(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.16)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1)
+            .opacity(model.isOpen ? 1 : 0)
+            .allowsHitTesting(false)
     }
 
     /// Room for the shadow on the sides and below. The top is the screen's edge.

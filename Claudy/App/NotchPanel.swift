@@ -18,6 +18,9 @@ final class NotchPanel: NSPanel {
         isMovable = false
         // Key only for the manual sign-in code: a click on a button leaves the front app's focus.
         becomesKeyOnlyIfNeeded = true
+        // Dark whatever the system's: the island grows out of the black notch, and its glass,
+        // text fields and menus follow the window's appearance.
+        appearance = NSAppearance(named: .darkAqua)
     }
 
     /// Without this a borderless panel never takes the keyboard, and the code could not be typed.
