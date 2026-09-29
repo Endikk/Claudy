@@ -127,7 +127,7 @@ Five technical points are worth knowing before changing it:
   upward and stays fully visible. The anchor resets to the screen's bottom right on every launch;
   a mouse drag updates it for the session.
 - **The notch island** (`NotchPanel`) sits at `.mainMenu + 3`, over the menu bar and over
-  full-screen apps. Its window follows the black shape (`NotchLayout.step`): it grows at once
+  full-screen apps. Its window follows the island's shape (`NotchLayout.step`): it grows at once
   when the island opens and shrinks only once the shape has closed, so a click just under the
   notch reaches the app below. Only the tracking area covering the whole window counts as the
   pointer entering or leaving: SwiftUI's own hover areas report to the same view. The shape's

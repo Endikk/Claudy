@@ -199,3 +199,7 @@ After trying the popover inside the island, the open state gets a view of its ow
 The menu bar item's popover is unchanged. The open state casts the card's shadow on its sides and
 below; at rest the ears keep none.
 
+The island is no longer black, at rest or open: it wears the card's glass, glow and hairline. On
+the transparent menu bar of recent macOS versions, black ears read as blocks set on the
+wallpaper. Only the notch itself stays black.
+

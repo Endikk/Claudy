@@ -7,14 +7,13 @@ final class NotchModel: ObservableObject {
     @Published var isOpen = false
     /// The notch the ears hug, in points.
     @Published var notchSize: CGSize = .zero
-    /// The black shape's size as last laid out. The controller fits the window to it.
+    /// The island's size as last laid out. The controller fits the window to it.
     @Published var shapeSize: CGSize = .zero
 }
 
-/// Claudy around the notch. At rest a black band the notch's height extends it on both sides:
-/// the mascot in the left ear, the lead percentage in the right one. Open, the island's own view
-/// hangs underneath on the same black (`NotchActivityView`). Black to merge with the notch
-/// itself.
+/// Claudy around the notch. At rest a band the notch's height extends it on both sides, in the
+/// card's glass: the mascot in the left ear, the lead percentage in the right one. Open, the
+/// island's own view (`NotchActivityView`) hangs underneath on the same glass.
 struct NotchView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
@@ -75,40 +74,26 @@ struct NotchView: View {
         })
     }
 
-    /// Height over which the notch's black melts into the glass, below the ears.
-    private static let notchFade: CGFloat = 26
-
-    /// The card's glass, black where the island meets the notch. At rest the ears are all black
-    /// and merge with it; open, the glass shows below a black band that fades out.
+    /// The card's glass, from the notch down, at rest as open: on a transparent menu bar, black
+    /// ears and a black band read as blocks set on the wallpaper. Only the notch itself stays
+    /// black, and the hardware draws it.
     private var glass: some View {
-        let band = model.notchSize.height
-        return ZStack {
+        ZStack {
             VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
             LinearGradient(colors: [.white.opacity(0.10), .white.opacity(0.015)],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
             RadialGradient(colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
                            center: .topLeading, startRadius: 0, endRadius: 240)
         }
-        // An overlay, so the band never sizes the glass: taller than the resting ears, it
-        // centred itself on them and left their lower half grey.
-        .overlay(alignment: .top) {
-            LinearGradient(stops: [
-                .init(color: .black, location: 0),
-                .init(color: .black, location: band / (band + Self.notchFade)),
-                .init(color: .black.opacity(0), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
-            .frame(height: band + Self.notchFade)
-        }
     }
 
-    /// The card's hairline, open only, and faded out towards the top: the island's top edge is
-    /// the screen's, where a line would show against the menu bar.
+    /// The card's hairline, faded out towards the top: the island's top edge is the screen's,
+    /// where a line would show against the menu bar.
     private var rim: some View {
         shape
             .stroke(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.16)],
                                    startPoint: .top, endPoint: .bottom),
                     lineWidth: 1)
-            .opacity(model.isOpen ? 1 : 0)
             .allowsHitTesting(false)
     }
 
