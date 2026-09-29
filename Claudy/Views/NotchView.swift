@@ -61,6 +61,7 @@ struct NotchView: View {
         .background(alignment: .top) {
             ZStack(alignment: .top) {
                 glass
+                topShade
                 collar
             }
         }
@@ -98,21 +99,29 @@ struct NotchView: View {
     /// How far the collar reaches past the notch on each side, and below it once open.
     private static let collarMargin: CGFloat = 4
     private static let collarRadius: CGFloat = 10
+    /// Distance over which the black fades into the glass: round the notch, and down from the
+    /// screen's top edge.
+    private static let blackFade: CGFloat = 12
 
-    /// A black collar round the notch, inside the island: the notch runs into the glass through
-    /// a rounded edge and a hairline, instead of the glass stopping dead against its sides. Under
-    /// the flying mascot and figure, which cross it on their way.
+    /// A black collar round the notch, inside the island, that fades into the glass instead of
+    /// stopping at an edge: the notch melts into the ears rather than the glass meeting its
+    /// sides dead. Under the flying mascot and figure, which cross it on their way.
     private var collar: some View {
-        let outline = NotchShape(bottomRadius: Self.collarRadius, shoulder: Self.collarMargin)
-        return outline
+        NotchShape(bottomRadius: Self.collarRadius, shoulder: Self.collarMargin)
             .fill(Color.black)
-            .overlay(
-                outline.stroke(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.18)],
-                                              startPoint: .top, endPoint: .bottom),
-                               lineWidth: 1)
-            )
+            .shadow(color: .black, radius: Self.blackFade / 2)
+            .shadow(color: .black.opacity(0.6), radius: Self.blackFade)
             .frame(width: model.notchSize.width + 4 * Self.collarMargin,
                    height: model.notchSize.height + (model.isOpen ? Self.collarMargin : 0))
+            .allowsHitTesting(false)
+    }
+
+    /// The screen's top edge darkens into the glass, so the island melts into the black around
+    /// the notch instead of meeting it along a line. Light, and short: a solid band read as a
+    /// block on a transparent menu bar.
+    private var topShade: some View {
+        LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+            .frame(height: Self.blackFade)
             .allowsHitTesting(false)
     }
 
