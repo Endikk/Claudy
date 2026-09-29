@@ -15,8 +15,12 @@ final class UsageViewModel: ObservableObject {
     @Published var isMinimal: Bool { didSet { Defaults.isMinimal = isMinimal } }
     @Published var isAlwaysOnTop: Bool { didSet { Defaults.isAlwaysOnTop = isAlwaysOnTop } }
     @Published var isDetailsExpanded: Bool { didSet { Defaults.isDetailsExpanded = isDetailsExpanded } }
-    /// The widget lives in the menu bar instead of floating over the desktop.
-    @Published var isInMenuBar: Bool { didSet { Defaults.isInMenuBar = isInMenuBar } }
+    /// Where Claudy shows itself: the floating card, the menu bar item or the island around the
+    /// notch. Changed through `place(_:)`.
+    @Published private(set) var placement: Placement { didSet { Defaults.placement = placement } }
+    /// A connected screen has a notch. Kept up to date by the app delegate; the menus offer the
+    /// island only then.
+    @Published var hasNotchedScreen = false
 
     /// Deliberately not persisted: the real state belongs to `SMAppService`, not to our prefs.
     @Published var launchAtLogin: Bool
@@ -51,7 +55,7 @@ final class UsageViewModel: ObservableObject {
         self.isMinimal = Defaults.isMinimal
         self.isAlwaysOnTop = Defaults.isAlwaysOnTop
         self.isDetailsExpanded = Defaults.isDetailsExpanded
-        self.isInMenuBar = Defaults.isInMenuBar
+        self.placement = Defaults.placement
         self.launchAtLogin = LaunchAtLogin.isEnabled
         startAutoRefresh()
 
@@ -106,9 +110,9 @@ final class UsageViewModel: ObservableObject {
         }
     }
 
-    func toggleMenuBar() {
+    func place(_ placement: Placement) {
         isProfileVisible = false
-        isInMenuBar.toggle()
+        self.placement = placement
     }
 
     func toggleDetails() {
@@ -266,8 +270,8 @@ final class UsageViewModel: ObservableObject {
     }
 
     /// "2 h 14 min" or "14 min": time left before a window resets.
-    static func countdown(to date: Date) -> String {
-        let remaining = Int(date.timeIntervalSinceNow)
+    static func countdown(to date: Date, now: Date = Date()) -> String {
+        let remaining = Int(date.timeIntervalSince(now))
         guard remaining > 0 else { return "any moment" }
         let hours = remaining / 3600
         let minutes = (remaining % 3600) / 60
@@ -399,9 +403,14 @@ private enum Defaults {
         set { store.set(newValue, forKey: "claudy.detailsExpanded") }
     }
 
-    static var isInMenuBar: Bool {
-        get { store.bool(forKey: "claudy.inMenuBar") }
-        set { store.set(newValue, forKey: "claudy.inMenuBar") }
+    /// The legacy `claudy.inMenuBar` flag is read, never written: it still decides for a user
+    /// who has not picked a placement since the notch arrived.
+    static var placement: Placement {
+        get {
+            Placement.stored(raw: store.string(forKey: "claudy.placement"),
+                             legacyInMenuBar: store.bool(forKey: "claudy.inMenuBar"))
+        }
+        set { store.set(newValue.rawValue, forKey: "claudy.placement") }
     }
 
 }

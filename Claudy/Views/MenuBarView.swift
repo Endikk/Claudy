@@ -209,8 +209,8 @@ struct MenuBarView: View {
             .disabled(viewModel.isRefreshing)
             .help("Refresh")
 
-            Button("Floating widget", action: viewModel.toggleMenuBar)
-                .help("Leave the menu bar and show the widget on the desktop")
+            Button("Floating widget") { viewModel.place(.widget) }
+                .help("Show the widget on the desktop instead")
         }
         .buttonStyle(.borderless)
         .font(Theme.Font.label(11, .medium))

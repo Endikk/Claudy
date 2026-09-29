@@ -1,15 +1,16 @@
 # Runs Scripts/preflight.sh on real Macs that GitHub provides: Apple silicon and Intel, macOS 15
 # and 26. The same checks as on a developer's Mac, with budgets for a shared machine.
 #
-# Runs on every push to develop that touches more than documentation, and by hand from the
-# Actions tab. A newer push cancels the run it makes obsolete. Each machine's report, and any
-# crash report, is kept with the run.
+# Runs on every push to develop and main that touches more than documentation, and by hand from
+# the Actions tab. A newer push to the same branch cancels the run it makes obsolete; main gets
+# its own run, so the release it points to always carries a verdict, even when a quick push to
+# develop cancelled the one there. Each machine's report, and any crash report, is kept.
 name: Preflight
 
 on:
   workflow_dispatch:
   push:
-    branches: [develop]
+    branches: [develop, main]
     paths-ignore: ['**.md', 'docs/**']
 
 permissions:

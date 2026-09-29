@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.7 (29 September 2026)
+
+### Added
+
+- **Claudy around the notch.** On a MacBook with a notch, the right-click menus now offer a third
+  place for Claudy, next to the floating card and the menu bar: two ears in the card's glass
+  around the notch, the mascot on the left and the session percentage on the right. Hover them
+  and the island drops open from the notch: the mascot and the figure grow into place, with the
+  model at work, the session's bar, pace and reset, and the weekly and per-model quotas. It
+  stays visible over full-screen apps.
+- **Every Mac gets the right choice.** A Mac without a notch never offers the island. With the
+  lid closed on an external display, Claudy waits in the menu bar and comes back around the
+  notch when the lid opens. After the update, Claudy stays where you kept it.
+
 ## 1.5.6 (25 September 2026)
 
 ### Fixed

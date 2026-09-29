@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let portsViewModel = PortsViewModel()
     let updates = UpdateChecker()
     private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates)
+    private(set) lazy var notch = NotchController(viewModel: viewModel, updates: updates)
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
@@ -51,13 +52,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             object: nil,
             queue: .main
         ) { _ in
+            MainActor.assumeIsolated {
+                (NSApp.delegate as? AppDelegate)?.notch.hideIfMoved()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 MainActor.assumeIsolated {
-                    (NSApp.delegate as? AppDelegate)?.clampPanelToScreen()
+                    (NSApp.delegate as? AppDelegate)?.screensChanged()
                 }
             }
         }
 
+        viewModel.hasNotchedScreen = NotchGeometry.current() != nil
         bind()
         viewModel.onUserRefresh = { [updates] in Task { await updates.checkNow() } }
         Task { await viewModel.refresh() }
@@ -81,13 +86,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
 
         // Fires once on subscription too, which places the widget on launch.
-        viewModel.$isInMenuBar
+        viewModel.$placement
+            .combineLatest(viewModel.$hasNotchedScreen)
+            .map { placement, hasNotch in placement.effective(hasNotch: hasNotch) }
+            .removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] inMenuBar in self?.placeWidget(inMenuBar: inMenuBar) }
+            .sink { [weak self] placement in self?.placeWidget(placement) }
             .store(in: &cancellables)
 
-        // Moving between the widget and the menu bar greets again while an update is pending.
-        viewModel.$isInMenuBar
+        // Moving Claudy elsewhere greets again while an update is pending.
+        viewModel.$placement
             .dropFirst()
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -95,14 +103,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
     }
 
-    /// Either the floating card or the menu bar item, never both.
-    private func placeWidget(inMenuBar: Bool) {
-        if inMenuBar {
-            panel?.orderOut(nil)
-            menuBar.show()
-        } else {
-            menuBar.hide()
+    /// Exactly one of the card, the menu bar item and the island.
+    private func placeWidget(_ placement: Placement) {
+        if placement != .widget { panel?.orderOut(nil) }
+        if placement != .menuBar { menuBar.hide() }
+        if placement != .notch { notch.hide() }
+        switch placement {
+        case .widget:
             panel?.orderFrontRegardless()
+        case .menuBar:
+            menuBar.show()
+        case .notch:
+            // `effective` says notch only with a notched screen, but it may have gone since.
+            if let geometry = NotchGeometry.current() {
+                notch.show(on: geometry)
+            } else {
+                menuBar.show()
+            }
         }
     }
 
@@ -180,6 +197,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         applyAnchor()
         if let panel {
             anchor = visualAnchor(of: panel)
+        }
+    }
+
+    /// Screens came or went, or changed resolution: the card goes back on screen, and the island
+    /// follows the notch, or hands over to the menu bar item when no screen has one.
+    private func screensChanged() {
+        clampPanelToScreen()
+        let geometry = NotchGeometry.current()
+        viewModel.hasNotchedScreen = geometry != nil
+        // Same placement, new resolution: the notch rectangle moved with it.
+        if let geometry, viewModel.placement == .notch {
+            notch.show(on: geometry)
         }
     }
 

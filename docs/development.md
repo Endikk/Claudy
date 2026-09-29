@@ -66,7 +66,7 @@ Nobody's own history, account or log is touched; the Claudy in use closes for a 
 reopens.
 
 The same script runs on GitHub's Macs (`.github/workflows/preflight.yml`) on every push to
-`develop` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
+`develop` and `main` that changes more than documentation, and by hand from the Actions tab: Apple silicon on
 macOS 15 and 26, Intel on macOS 15. There it builds for the machine's own architecture and reads
 the 20 MB and 1 GB histories only. Its timings are reported, not judged: shared machines vary two
 to three times from one run to the next, so the budgets there only catch a disaster, and the
@@ -81,14 +81,15 @@ there, and so is the real-app step.
 
 ```
 Claudy/
-├── App/          main.swift (AppKit entry) · AppDelegate (window, position, ⌘ menu) · FloatingPanel
-├── Models/       UsageSnapshot and its parts · QuotaModels (account readings and their source)
+├── App/          main.swift (AppKit entry) · AppDelegate (window, position, ⌘ menu) · FloatingPanel ·
+│                 MenuBarController · ClaudyMenu (shared right-click menu) · Notch* (the island)
+├── Models/       UsageSnapshot and its parts · QuotaModels (account readings and their source) · Placement
 ├── Services/     ClaudeHome (paths) · TranscriptScanner (incremental read) ·
 │                 UsageAggregator (windows, gauges) · ClaudeAccountClient (OAuth API) ·
 │                 ClaudeCodeCredentials (read-only borrowed token) · ClaudeCredentials (own store) ·
 │                 ClaudeOAuth (PKCE fallback) · UsageBridge (status-line relay) ·
 │                 UsageDataSource (protocol, local source, switch) · DemoUsageDataSource ·
-│                 AccountLoader · ModelName · LaunchAtLogin
+│                 AccountLoader · ModelName · LaunchAtLogin · NotchGeometry
 ├── ViewModels/   UsageViewModel: state, preferences, formatting
 ├── Theme/        Design tokens · NSVisualEffectView bridge
 └── Views/        RootView (background, modes, context menu) · MinimalView · FullView · Components/
@@ -111,7 +112,7 @@ The API is polled every 3 minutes with a 60-second cache, and the profile is re-
 
 ### Window
 
-Four technical points are worth knowing before changing it:
+Five technical points are worth knowing before changing it:
 
 - **The entry point is AppKit** (`main.swift`), not `@main struct ClaudyApp: App`. Under a SwiftUI
   life cycle the residual scene required by the `App` protocol (`Settings`) fights the floating
@@ -125,6 +126,22 @@ Four technical points are worth knowing before changing it:
   (growth downward), so `AppDelegate.windowDidResize` re-hangs the card on its anchor — it grows
   upward and stays fully visible. The anchor resets to the screen's bottom right on every launch;
   a mouse drag updates it for the session.
+- **The notch island** (`NotchPanel`) sits at `.mainMenu + 3`, over the menu bar and over
+  full-screen apps. Its window follows the island's shape (`NotchLayout.step`): it grows at once
+  when the island opens and shrinks only once the shape has closed, so a click just under the
+  notch reaches the app below. Only the tracking area covering the whole window counts as the
+  pointer entering or leaving: SwiftUI's own hover areas report to the same view. The shape's
+  size comes from a `GeometryReader` with `onChange`: a preference key reached the parent as its
+  default value only. The window widens before the island opens, never during it, or the
+  island slides sideways. Open, the island shows its own view (`NotchActivityView`), not the
+  menu bar popover. The mascot and the lead percentage fly from the ears into it
+  (`matchedGeometryEffect`): the open view only marks where they land (`notchLanding`).
+
+To see the island as another Mac would show it, launch the built app with a simulated notch:
+`open build/Claudy.app --args -ClaudySimulateNotch none` behaves as a Mac without one (MacBook Air
+M1, iMac, Mac mini: no island, the menus never offer it), and `-ClaudySimulateNotch 230x44` puts a
+notch of that size at the top centre of the first screen. Space the launches out: each one reads
+the account, and a quick series of them gets HTTP 429 from Anthropic for a few minutes.
 
 ## Launch at login
 
