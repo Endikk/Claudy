@@ -58,8 +58,9 @@ struct NotchView: View {
         }
         // Room for the shoulders: the glass flares out beside the ears, along the top edge only.
         .padding(.horizontal, NotchLayout.shoulder)
-        .background(framedGlass)
+        .background(glass)
         .clipShape(shape)
+        .overlay(rim)
         // The card's shadow, open only: at rest the ears merge with the notch, and a margin
         // around them would take clicks from the menu bar next to them.
         .background(OutlineShadow(outline: shape).opacity(model.isOpen ? 1 : 0))
@@ -76,41 +77,9 @@ struct NotchView: View {
         })
     }
 
-    /// Width of the notch's black, carried round the island as a thin inner frame: the notch
-    /// seems to open onto the glass, instead of the glass meeting it edge to edge.
-    private static let frameWidth: CGFloat = 4
-    /// The glass pane's top corners, inside the frame.
-    private static let paneTopRadius: CGFloat = 6
-    /// Room around the pane: the frame, plus the shoulders on the sides.
-    private static let paneInsets = EdgeInsets(
-        top: frameWidth,
-        leading: NotchLayout.shoulder + frameWidth,
-        bottom: frameWidth,
-        trailing: NotchLayout.shoulder + frameWidth
-    )
-
-    private var pane: IslandPane {
-        IslandPane(topRadius: Self.paneTopRadius,
-                   bottomRadius: max((model.isOpen ? Self.openRadius : Self.restingRadius) - Self.frameWidth, 2))
-    }
-
-    /// The card's glass, glow and hairline, set in the notch's black. On a transparent menu bar a
-    /// fully black island read as a block on the wallpaper; fully glass, it met the notch with no
-    /// transition. The frame joins the two.
-    private var framedGlass: some View {
-        ZStack {
-            Color.black
-            glass
-                .clipShape(pane)
-                .overlay(
-                    pane.stroke(LinearGradient(colors: [.white.opacity(0.18), .white.opacity(0.05)],
-                                               startPoint: .topLeading, endPoint: .bottomTrailing),
-                                lineWidth: 1)
-                )
-                .padding(Self.paneInsets)
-        }
-    }
-
+    /// The card's glass, from the notch down, at rest as open: on a transparent menu bar, black
+    /// ears and a black band read as blocks set on the wallpaper. Only the notch itself stays
+    /// black, and the hardware draws it.
     private var glass: some View {
         ZStack {
             VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
@@ -119,6 +88,16 @@ struct NotchView: View {
             RadialGradient(colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
                            center: .topLeading, startRadius: 0, endRadius: 240)
         }
+    }
+
+    /// The card's hairline, faded out towards the top: the island's top edge is the screen's,
+    /// where a line would show against the menu bar.
+    private var rim: some View {
+        shape
+            .stroke(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.16)],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 1)
+            .allowsHitTesting(false)
     }
 
     /// Room for the shadow on the sides and below. The top is the screen's edge.
@@ -249,35 +228,6 @@ struct NotchShape: Shape {
         if flare > 0 {
             path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY), control: CGPoint(x: left, y: rect.minY))
         }
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// The glass pane inside the island's frame: a rectangle with its own top and bottom corner
-/// radii. The bottom one animates with the island's.
-struct IslandPane: Shape {
-    var topRadius: CGFloat
-    var bottomRadius: CGFloat
-
-    var animatableData: CGFloat {
-        get { bottomRadius }
-        set { bottomRadius = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        let top = min(topRadius, rect.width / 2, rect.height / 2)
-        let bottom = min(bottomRadius, rect.width / 2, rect.height / 2)
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX + top, y: rect.minY))
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.minY),
-                    tangent2End: CGPoint(x: rect.maxX, y: rect.maxY), radius: top)
-        path.addArc(tangent1End: CGPoint(x: rect.maxX, y: rect.maxY),
-                    tangent2End: CGPoint(x: rect.minX, y: rect.maxY), radius: bottom)
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.maxY),
-                    tangent2End: CGPoint(x: rect.minX, y: rect.minY), radius: bottom)
-        path.addArc(tangent1End: CGPoint(x: rect.minX, y: rect.minY),
-                    tangent2End: CGPoint(x: rect.maxX, y: rect.minY), radius: top)
         path.closeSubpath()
         return path
     }
