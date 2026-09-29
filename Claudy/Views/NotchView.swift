@@ -48,13 +48,15 @@ struct NotchView: View {
     }
 
     private var island: some View {
-        VStack(spacing: 0) {
-            ears
+        // Open, the island's view lays itself out round the notch, beside the ears: the top band
+        // is used rather than left empty once the mascot and the figure have flown.
+        ZStack(alignment: .top) {
             if model.isOpen {
-                NotchActivityView()
+                NotchActivityView(notch: model.notchSize)
                     .environment(\.notchFlight, flight)
                     .transition(contentTransition)
             }
+            ears
         }
         // Room for the shoulders: the glass flares out beside the ears, along the top edge only.
         .padding(.horizontal, NotchLayout.shoulder)

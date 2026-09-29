@@ -190,10 +190,11 @@ external display is available. Then `./Scripts/preflight.sh` in full.
 After trying the popover inside the island, the open state gets a view of its own,
 `NotchActivityView`, laid out for the notch: wide and low (440 points), like a Live Activity.
 
-- Left: the mascot and the session percentage, flown from the ears and grown into place.
-- Right: the active model, then the weekly and per-model quotas as small bars; on a plan billed
-  on usage, the money spent instead.
-- Below: the session's bar with its pace marker, then the distance from the pace and the reset.
+- Round the notch, as the Dynamic Island round the camera: the mascot on its left and the session
+  percentage on its right, each a short flight from its ear; the active model just below it.
+- Across the full width: the session's bar with its pace marker, the distance from the pace and
+  the reset, then the weekly and per-model quotas side by side; on a plan billed on usage, the
+  money spent instead.
 - When relevant: the update row, the error line, or the sign-in controls.
 
 The menu bar item's popover is unchanged. The open state casts the card's shadow on its sides and
