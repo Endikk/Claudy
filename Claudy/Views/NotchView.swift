@@ -58,7 +58,12 @@ struct NotchView: View {
         }
         // Room for the shoulders: the glass flares out beside the ears, along the top edge only.
         .padding(.horizontal, NotchLayout.shoulder)
-        .background(glass)
+        .background(alignment: .top) {
+            ZStack(alignment: .top) {
+                glass
+                collar
+            }
+        }
         .clipShape(shape)
         .overlay(rim)
         // The card's shadow, open only: at rest the ears merge with the notch, and a margin
@@ -88,6 +93,27 @@ struct NotchView: View {
             RadialGradient(colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
                            center: .topLeading, startRadius: 0, endRadius: 240)
         }
+    }
+
+    /// How far the collar reaches past the notch on each side, and below it once open.
+    private static let collarMargin: CGFloat = 4
+    private static let collarRadius: CGFloat = 10
+
+    /// A black collar round the notch, inside the island: the notch runs into the glass through
+    /// a rounded edge and a hairline, instead of the glass stopping dead against its sides. Under
+    /// the flying mascot and figure, which cross it on their way.
+    private var collar: some View {
+        let outline = NotchShape(bottomRadius: Self.collarRadius, shoulder: Self.collarMargin)
+        return outline
+            .fill(Color.black)
+            .overlay(
+                outline.stroke(LinearGradient(colors: [.white.opacity(0), .white.opacity(0.18)],
+                                              startPoint: .top, endPoint: .bottom),
+                               lineWidth: 1)
+            )
+            .frame(width: model.notchSize.width + 4 * Self.collarMargin,
+                   height: model.notchSize.height + (model.isOpen ? Self.collarMargin : 0))
+            .allowsHitTesting(false)
     }
 
     /// The card's hairline, faded out towards the top: the island's top edge is the screen's,
