@@ -9,6 +9,7 @@ on:
     branches: [develop, main]
     paths:
       - 'Claudy/Theme/**'
+      - 'Claudy/Assets.xcassets/AppIcon.appiconset/**'
       - 'Claudy/Views/Components/Claudy*.swift'
       - 'Design/**'
       - 'Scripts/export-design.py'

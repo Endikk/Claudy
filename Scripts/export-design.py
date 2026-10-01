@@ -3,7 +3,7 @@
 
 The Swift sources stay the source of truth: this script reads the colours, metrics and motion of
 `Theme.swift` and the mascot's frames from `ClaudyTyping.swift`, `ClaudyOverload.swift` and
-`ClaudyWave.swift`, and writes them as JSON any tool can read.
+`ClaudyWave.swift`, and writes them as JSON any tool can read, with the app icon as PNGs.
 
     python3 Scripts/export-design.py           rewrites Design/
     python3 Scripts/export-design.py --check   exits 1 when Design/ is out of date
@@ -210,31 +210,41 @@ def palette(inks):
 
 # ---------------------------------------------------------------------------------------------
 
+# The app icon, as the asset catalogue holds it, one PNG per pixel size.
+ICONS = os.path.join(SOURCES, 'Assets.xcassets', 'AppIcon.appiconset')
+ICON_SIZES = {16: 'icon_16x16.png', 32: 'icon_32x32.png', 64: 'icon_32x32@2x.png',
+              128: 'icon_128x128.png', 256: 'icon_256x256.png', 512: 'icon_512x512.png'}
+
+
 def outputs():
     typing_frames, inks = typing()
-    return {
-        'claudy.tokens.json': theme_tokens(),
-        'mascot/palette.json': palette(inks),
-        'mascot/typing.json': typing_frames,
-        'mascot/overload.json': overload(),
-        'mascot/wave.json': wave(),
+    files = {
+        'claudy.tokens.json': json.dumps(theme_tokens(), indent=2, ensure_ascii=False) + '\n',
+        'mascot/palette.json': json.dumps(palette(inks), indent=2, ensure_ascii=False) + '\n',
+        'mascot/typing.json': json.dumps(typing_frames, indent=2, ensure_ascii=False) + '\n',
+        'mascot/overload.json': json.dumps(overload(), indent=2, ensure_ascii=False) + '\n',
+        'mascot/wave.json': json.dumps(wave(), indent=2, ensure_ascii=False) + '\n',
     }
+    for size, name in ICON_SIZES.items():
+        with open(os.path.join(ICONS, name), 'rb') as handle:
+            files[f'icon/icon-{size}.png'] = handle.read()
+    return files
 
 
 def main():
     check = '--check' in sys.argv
     stale = []
-    for relative, data in outputs().items():
+    for relative, content in outputs().items():
         path = os.path.join(OUT, relative)
-        text = json.dumps(data, indent=2, ensure_ascii=False) + '\n'
-        current = open(path, encoding='utf-8').read() if os.path.exists(path) else None
-        if current == text:
+        data = content.encode('utf-8') if isinstance(content, str) else content
+        current = open(path, 'rb').read() if os.path.exists(path) else None
+        if current == data:
             continue
         stale.append(relative)
         if not check:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as handle:
-                handle.write(text)
+            with open(path, 'wb') as handle:
+                handle.write(data)
     if check and stale:
         print('Design/ is out of date: ' + ', '.join(stale) + '. Run python3 Scripts/export-design.py')
         sys.exit(1)
