@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## Unreleased
+
+### Changed
+
+- **The app icon is Claudy.** Spotlight, the Dock and Finder show the pixel mascot at its desk, on
+  the card's dark glass, in place of the old sunburst. The icon is drawn from the mascot's own
+  frames by `Scripts/generate-icon.py`, so it always matches the sprite in the app.
+
 ## 1.5.7 (29 September 2026)
 
 ### Added
