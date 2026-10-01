@@ -1,0 +1,15 @@
+{
+  "about": "Display label and accent of a model identifier, worked out without any table.",
+  "cases": [
+    {
+      "identifier": "claude-opus-4-8",
+      "display": "Opus 4.8",
+      "accent": "coral"
+    },
+    {
+      "identifier": "claude-3-5-haiku-20241022",
+      "display": "Haiku 3.5",
+      "accent": "sky"
+    }
+  ]
+}

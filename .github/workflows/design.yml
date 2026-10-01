@@ -1,0 +1,27 @@
+# Checks that Design/ still matches the Swift sources it is exported from. Seconds on Linux, no Mac
+# needed.
+name: Design
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'Claudy/Theme/**'
+      - 'Claudy/Views/Components/Claudy*.swift'
+      - 'Design/**'
+      - 'Scripts/export-design.py'
+      - '.github/workflows/design.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  design:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Design/ is up to date
+        run: python3 Scripts/export-design.py --check

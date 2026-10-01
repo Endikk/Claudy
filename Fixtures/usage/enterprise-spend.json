@@ -1,0 +1,6 @@
+{
+  "five_hour": null,
+  "seven_day": null,
+  "extra_usage": {"is_enabled": true, "monthly_limit": 50000, "used_credits": 4631, "utilization": 9.261999999999999, "currency": "USD", "decimal_places": 2, "disabled_reason": null, "user_disabled": false, "spend_limit_reached": false},
+  "spend": {"used": {"amount_minor": 4631, "currency": "USD", "exponent": 2}, "limit": {"amount_minor": 50000, "currency": "USD", "exponent": 2}, "percent": 9, "severity": "normal", "enabled": true, "disabled_reason": null}
+}

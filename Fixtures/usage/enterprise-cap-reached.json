@@ -1,0 +1,5 @@
+{
+  "five_hour": null, "seven_day": null,
+  "extra_usage": {"is_enabled": true, "monthly_limit": 40000, "used_credits": 40000, "spend_limit_reached": true},
+  "spend": {"used": {"amount_minor": 40000, "currency": "USD", "exponent": 2}, "limit": {"amount_minor": 40000, "currency": "USD", "exponent": 2}, "enabled": true}
+}

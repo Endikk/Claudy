@@ -1,0 +1,17 @@
+{
+  "about": "A usage-billed plan: no window, a monthly cap. The percentage comes from the amounts, not the rounded 'percent'; the cap resets at 00:00 UTC on the 1st.",
+  "now": "2026-09-23T10:00:00Z",
+  "reading": {
+    "session": null,
+    "weekly": null,
+    "scoped": null,
+    "spend": {
+      "used": 46.31,
+      "limit": 500,
+      "currency": "USD",
+      "isLimitReached": false,
+      "percent": 0.09262,
+      "resetsAt": "2026-10-01T00:00:00Z"
+    }
+  }
+}

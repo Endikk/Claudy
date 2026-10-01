@@ -1,0 +1,58 @@
+{
+  "about": "Plan label from the tier fields, first non-empty one, Enterprise winning wherever it appears.",
+  "cases": [
+    {
+      "candidates": [
+        "default_claude_max_5x",
+        null,
+        "claude_max",
+        "max"
+      ],
+      "label": "Max 5×"
+    },
+    {
+      "candidates": [
+        "default_claude_max_20x",
+        "claude_max"
+      ],
+      "label": "Max 20×"
+    },
+    {
+      "candidates": [
+        null,
+        "",
+        "claude_pro"
+      ],
+      "label": "Pro"
+    },
+    {
+      "candidates": [
+        null,
+        ""
+      ],
+      "label": ""
+    },
+    {
+      "candidates": [
+        "default_claude_zero",
+        "claude_enterprise"
+      ],
+      "label": "Enterprise"
+    },
+    {
+      "candidates": [
+        "default_raven_enterprise"
+      ],
+      "label": "Enterprise"
+    },
+    {
+      "candidates": [
+        "",
+        "default_claude_zero",
+        null,
+        "enterprise"
+      ],
+      "label": "Enterprise"
+    }
+  ]
+}

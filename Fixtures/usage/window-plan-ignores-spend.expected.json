@@ -1,0 +1,16 @@
+{
+  "about": "Pro and Max carry a spend block too, their extra-usage cap: with live windows it is not the quota.",
+  "now": "2026-09-23T10:00:00Z",
+  "reading": {
+    "session": {
+      "percent": 0.3,
+      "resetsAt": "2026-09-23T14:00:00Z"
+    },
+    "weekly": {
+      "percent": 0.1,
+      "resetsAt": "2026-09-27T00:00:00Z"
+    },
+    "scoped": null,
+    "spend": null
+  }
+}
