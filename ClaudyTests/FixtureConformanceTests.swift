@@ -41,6 +41,38 @@ final class FixtureConformanceTests: XCTestCase {
         }
     }
 
+    /// Each case is a `projects` folder, copied to a temporary one with `{{RECENT}}` replaced by
+    /// a timestamp ten minutes old: only the last days of history are read.
+    func testTranscripts() async throws {
+        let folder = Self.root.appendingPathComponent("transcripts", isDirectory: true)
+        let cases = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
+        XCTAssertFalse(cases.isEmpty, "no transcript case found in \(folder.path)")
+        let recent = Self.stamp.string(from: Date().addingTimeInterval(-600))
+
+        for name in cases {
+            let source = folder.appendingPathComponent("\(name)/projects", isDirectory: true)
+            let projects = FileManager.default.temporaryDirectory
+                .appendingPathComponent("claudy-fixture-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: projects) }
+
+            let walker = try XCTUnwrap(FileManager.default.enumerator(at: source, includingPropertiesForKeys: nil))
+            for case let file as URL in walker where file.pathExtension == "jsonl" {
+                let relative = file.path.replacingOccurrences(of: source.path + "/", with: "")
+                let target = projects.appendingPathComponent(relative)
+                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
+                let text = try String(contentsOf: file, encoding: .utf8)
+                try text.replacingOccurrences(of: "{{RECENT}}", with: recent)
+                    .write(to: target, atomically: true, encoding: .utf8)
+            }
+
+            let entries = try await TranscriptScanner(projectsDirectories: { [projects] }).scan()
+            let expected = try object(at: folder.appendingPathComponent("\(name)/expected.json"))
+            let tokens = try XCTUnwrap(expected["tokens"] as? [Int], name)
+            XCTAssertEqual(entries.map(\.tokens).sorted(), tokens, name)
+        }
+    }
+
     func testPlanLabels() throws {
         for item in try cases("plan-labels.json") {
             let candidates = try XCTUnwrap(item["candidates"] as? [Any]).map { $0 as? String }

@@ -1,0 +1,2 @@
+{"type":"assistant","timestamp":"{{RECENT}}","cwd":"/work/app","sessionId":"s","isSidechain":false,"requestId":"req-m1","message":{"model":"claude-opus-5","usage":{"input_tokens":0,"output_tokens":3,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"id":"m1"}}
+{"type":"assistant","timestamp":"{{RECENT}}","cwd":"/work/app","sessionId":"s","isSidechain":false,"requestId":"req-m2","message":{"model":"claude-opus-5","usage":{"input_tokens":0,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0},"id":"m2"}}

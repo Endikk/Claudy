@@ -1,0 +1,6 @@
+{
+  "about": "Only assistant responses with tokens count: a user line, a zero-token response and an unreadable line are left out.",
+  "tokens": [
+    10
+  ]
+}

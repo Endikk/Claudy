@@ -1,0 +1,6 @@
+{
+  "about": "Claude Code writes one response over several lines, one per content block; only the last carries the final output count.",
+  "tokens": [
+    36348
+  ]
+}
