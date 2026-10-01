@@ -45,7 +45,8 @@ final class FixtureConformanceTests: XCTestCase {
     /// a timestamp ten minutes old: only the last days of history are read.
     func testTranscripts() async throws {
         let folder = Self.root.appendingPathComponent("transcripts", isDirectory: true)
-        let cases = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
+        let cases = try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            .filter { !$0.hasPrefix(".") }.sorted()
         XCTAssertFalse(cases.isEmpty, "no transcript case found in \(folder.path)")
         let recent = Self.stamp.string(from: Date().addingTimeInterval(-600))
 
