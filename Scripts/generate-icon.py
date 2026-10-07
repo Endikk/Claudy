@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Generates Claudy/Assets.xcassets/AppIcon.appiconset: Claudy, the pixel mascot, on the card's
-dark glass, the same face the widget shows.
+"""Generates Claudy/Assets.xcassets/AppIcon.appiconset: Claudy, the pixel mascot, at its desk on a
+cream tile, the same face the widget shows.
 
     pip install Pillow
     python3 Scripts/generate-icon.py
@@ -22,8 +22,9 @@ CATALOG = os.path.join(ROOT, 'Claudy', 'Assets.xcassets')
 ICONSET = os.path.join(CATALOG, 'AppIcon.appiconset')
 
 CORAL = (0xD9, 0x77, 0x57, 255)
-TOP = (0x2A, 0x27, 0x25)       # background, top left
-BOTTOM = (0x12, 0x10, 0x0F)    # background, bottom right
+TOP = (0xF6, 0xF0, 0xE6)       # background, top left
+BOTTOM = (0xE6, 0xDA, 0xC8)    # background, bottom right
+HALO = (0xFF, 0xF8, 0xEE)      # light behind the mascot
 
 
 def load(name):
@@ -61,7 +62,7 @@ def inks():
 
 
 def background(side):
-    """The macOS icon grid: a 824/1024 rounded square, the card's dark gradient, a coral halo."""
+    """The macOS icon grid: a 824/1024 rounded square, a cream gradient, a paler halo."""
     inset = round(side * 100 / 1024)
     inner = side - 2 * inset
     corner = round(side * 185 / 1024)
@@ -76,8 +77,8 @@ def background(side):
             t = min(max(t, 0), 1)
             base = [TOP[i] + (BOTTOM[i] - TOP[i]) * t for i in range(3)]
             distance = ((x + 0.5 - centre) ** 2 + (y + 0.5 - centre) ** 2) ** 0.5
-            glow = max(0.0, 1 - distance / halo_radius) * 0.32
-            colour = [round(base[i] + (CORAL[i] - base[i]) * glow) for i in range(3)]
+            glow = max(0.0, 1 - distance / halo_radius) * 0.5
+            colour = [round(base[i] + (HALO[i] - base[i]) * glow) for i in range(3)]
             pixels[x, y] = tuple(colour + [255])
 
     mask = Image.new('L', (side, side), 0)
