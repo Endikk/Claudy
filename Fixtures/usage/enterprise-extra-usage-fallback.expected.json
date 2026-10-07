@@ -1,0 +1,17 @@
+{
+  "about": "Without a spend block, extra_usage is the older shape of the same budget.",
+  "now": "2026-09-23T10:00:00Z",
+  "reading": {
+    "session": null,
+    "weekly": null,
+    "scoped": null,
+    "spend": {
+      "used": 250,
+      "limit": 1000,
+      "currency": "EUR",
+      "isLimitReached": false,
+      "percent": 0.25,
+      "resetsAt": "2026-10-01T00:00:00Z"
+    }
+  }
+}

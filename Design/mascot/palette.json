@@ -1,0 +1,89 @@
+{
+  "$description": "Ink of each frame character. 'tint' is the colour of the leading gauge; any other layer is a token. Layers are painted bottom first; '.' is empty.",
+  "inks": {
+    "1": [
+      "color.pixel.flash"
+    ],
+    "2": [
+      "color.pixel.fireYellow"
+    ],
+    "3": [
+      "color.pixel.fireOrange"
+    ],
+    "4": [
+      "color.pixel.fireRed"
+    ],
+    "5": [
+      "color.pixel.smokeDark"
+    ],
+    "6": [
+      "color.pixel.smoke"
+    ],
+    "7": [
+      "color.pixel.smokeLight"
+    ],
+    "8": [
+      "color.pixel.smokePale"
+    ],
+    "C": [
+      "tint"
+    ],
+    "D": [
+      "tint",
+      "color.pixel.shade"
+    ],
+    "E": [
+      "color.pixel.eye"
+    ],
+    "G": [
+      "color.pixel.screenGlow"
+    ],
+    "K": [
+      "color.pixel.laptop"
+    ],
+    "L": [
+      "color.pixel.lid"
+    ],
+    "O": [
+      "tint"
+    ],
+    "T": [
+      "tint",
+      "color.pixel.highlight"
+    ],
+    "V": [
+      "color.pixel.deskSide"
+    ],
+    "W": [
+      "color.pixel.deskFront"
+    ],
+    "c": [
+      "color.pixel.ash"
+    ],
+    "d": [
+      "color.pixel.ashSide"
+    ],
+    "k": [
+      "color.pixel.keys"
+    ],
+    "o": [
+      "tint",
+      "color.pixel.outline"
+    ],
+    "s": [
+      "color.pixel.groundShadow"
+    ],
+    "t": [
+      "color.pixel.ashTop"
+    ],
+    "w": [
+      "color.pixel.deskTop"
+    ],
+    "x": [
+      "color.pixel.charred"
+    ],
+    "y": [
+      "color.pixel.ember"
+    ]
+  }
+}

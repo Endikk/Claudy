@@ -1,0 +1,7 @@
+{
+  "about": "Prompts, blank lines and anything without a usage block are skipped.",
+  "tokens": [
+    4,
+    6
+  ]
+}

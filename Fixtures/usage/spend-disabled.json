@@ -1,0 +1,1 @@
+{"five_hour": null, "seven_day": null, "spend": {"used": {"amount_minor": 10, "exponent": 2}, "limit": {"amount_minor": 500, "exponent": 2}, "enabled": false}, "extra_usage": {"is_enabled": false, "monthly_limit": 500, "used_credits": 10}}

@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## 1.5.8 (7 October 2026)
+
+### Fixed
+
+- **The demo keeps pace.** Without Claude Code installed, the demo card opened on "35 pts ahead of
+  pace" in red, its session window starting the moment Claudy launched, and stayed ahead all
+  along. The demo session now opens partway through its window, on pace.
+
+### Changed
+
+- **The app icon is Claudy.** Spotlight, the Dock and Finder show the pixel mascot at its desk, on
+  the card's dark glass, in place of the old sunburst. The icon is drawn from the mascot's own
+  frames by `Scripts/generate-icon.py`, so it always matches the sprite in the app.
+
 ## 1.5.7 (29 September 2026)
 
 ### Added

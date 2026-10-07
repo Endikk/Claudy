@@ -1,0 +1,338 @@
+{
+  "columns": 25,
+  "rows": 33,
+  "sequence": [
+    {
+      "frame": 0,
+      "ms": 1200
+    },
+    {
+      "frame": 1,
+      "ms": 90
+    },
+    {
+      "frame": 2,
+      "ms": 110
+    },
+    {
+      "frame": 3,
+      "ms": 140
+    },
+    {
+      "frame": 4,
+      "ms": 140
+    },
+    {
+      "frame": 5,
+      "ms": 140
+    },
+    {
+      "frame": 4,
+      "ms": 140
+    },
+    {
+      "frame": 3,
+      "ms": 140
+    },
+    {
+      "frame": 4,
+      "ms": 140
+    },
+    {
+      "frame": 5,
+      "ms": 140
+    },
+    {
+      "frame": 4,
+      "ms": 140
+    },
+    {
+      "frame": 3,
+      "ms": 140
+    },
+    {
+      "frame": 2,
+      "ms": 110
+    },
+    {
+      "frame": 1,
+      "ms": 90
+    },
+    {
+      "frame": 0,
+      "ms": 400
+    },
+    {
+      "frame": 6,
+      "ms": 110
+    }
+  ],
+  "frames": [
+    {
+      "name": "00-idle",
+      "rows": [
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        "..........oo.............",
+        "........ooTToo...........",
+        "......ooTTTTTToo.........",
+        ".....oTTTTTTTTTToo.......",
+        "....oCTTTTTTTTTTTToo.....",
+        "....oCCCTTTTTTTTTTTToo...",
+        "....oCCCCCTTTTTTTTTTTTo..",
+        "....oCCCECCCTTTTTTTTTTDo.",
+        "....oCCCECCCCCTTTTTTDDDo.",
+        "....oCCCCCCCCECCTTDDDDDo.",
+        "....oCCCCCCCCECCCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        ".........sssoooCDos......",
+        "...............oo........",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    },
+    {
+      "name": "01-raise",
+      "rows": [
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        "....oooo..oo.............",
+        "...oTTTTooTToo...........",
+        "...oCCDDTTTTTToo.........",
+        "...oCCTTTTTTTTTToo.......",
+        "...oCCTTTTTTTTTTTToo.....",
+        "...oCCCCTTTTTTTTTTTToo...",
+        "...oCCCCCCTTTTTTTTTTTTo..",
+        "....oCCCECCCTTTTTTTTTTDo.",
+        "....oCCCECCCCCTTTTTTDDDo.",
+        "....oCCCCCCCCECCTTDDDDDo.",
+        "....oCCCCCCCCECCCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        ".........sssoooCDos......",
+        "...............oo........",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    },
+    {
+      "name": "02-wave-up-hop",
+      "rows": [
+        ".........................",
+        ".........................",
+        "....oooo.................",
+        "...oTTTTo................",
+        "...oCCDDo................",
+        "...oCCDDo................",
+        "...oCCDDo................",
+        "...oCCDDo.oo.............",
+        "...oCCDDooTToo...........",
+        "...oCCDDTTTTTToo.........",
+        "...oCCTTTTTTTTTToo.......",
+        "...oCCTTTTTTTTTTTToo.....",
+        "...oCCCCTTTTTTTTTTTToo...",
+        "...oCCCCCCTTTTTTTTTTTTo..",
+        "....oCCCECCCTTTTTTTTTTDo.",
+        "....oCCECECCCCTTTTTTDDDo.",
+        "....oCCCCCCCCECCTTDDDDDo.",
+        "....oCCCCCCCECECCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        "......ssssssoooCDossss...",
+        ".........ssssssooss......",
+        ".........................",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    },
+    {
+      "name": "03-wave-left-hop",
+      "rows": [
+        ".........................",
+        ".........................",
+        ".........................",
+        "..oooo...................",
+        ".oTTTTo..................",
+        ".oCCDDo..................",
+        ".oCCDDoo.................",
+        ".oCCDDDTo.oo.............",
+        ".oCCDDDDooTToo...........",
+        "..ooCDDDTTTTTToo.........",
+        "...oCCTTTTTTTTTToo.......",
+        "...oCCTTTTTTTTTTTToo.....",
+        "...oCCCCTTTTTTTTTTTToo...",
+        "...oCCCCCCTTTTTTTTTTTTo..",
+        "....oCCCECCCTTTTTTTTTTDo.",
+        "....oCCECECCCCTTTTTTDDDo.",
+        "....oCCCCCCCCECCTTDDDDDo.",
+        "....oCCCCCCCECECCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        "......ssssssoooCDossss...",
+        ".........ssssssooss......",
+        ".........................",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    },
+    {
+      "name": "04-wave-up",
+      "rows": [
+        ".........................",
+        ".........................",
+        ".........................",
+        "....oooo.................",
+        "...oTTTTo................",
+        "...oCCDDo................",
+        "...oCCDDo................",
+        "...oCCDDo................",
+        "...oCCDDo.oo.............",
+        "...oCCDDooTToo...........",
+        "...oCCDDTTTTTToo.........",
+        "...oCCTTTTTTTTTToo.......",
+        "...oCCTTTTTTTTTTTToo.....",
+        "...oCCCCTTTTTTTTTTTToo...",
+        "...oCCCCCCTTTTTTTTTTTTo..",
+        "....oCCCECCCTTTTTTTTTTDo.",
+        "....oCCECECCCCTTTTTTDDDo.",
+        "....oCCCCCCCCECCTTDDDDDo.",
+        "....oCCCCCCCECECCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        ".........sssoooCDos......",
+        "...............oo........",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    },
+    {
+      "name": "05-wave-right",
+      "rows": [
+        ".........................",
+        ".........................",
+        ".........................",
+        "......oooo...............",
+        ".....oTTTTo..............",
+        ".....oCCDDo..............",
+        ".....oCCDDo..............",
+        "....ooCCDDo..............",
+        "...oTTTTDDoo.............",
+        "...oCCDDooTToo...........",
+        "...oCCDDTTTTTToo.........",
+        "...oCCTTTTTTTTTToo.......",
+        "...oCCTTTTTTTTTTTToo.....",
+        "...oCCCCTTTTTTTTTTTToo...",
+        "...oCCCCCCTTTTTTTTTTTTo..",
+        "....oCCCECCCTTTTTTTTTTDo.",
+        "....oCCECECCCCTTTTTTDDDo.",
+        "....oCCCCCCCCECCTTDDDDDo.",
+        "....oCCCCCCCECECCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        ".........sssoooCDos......",
+        "...............oo........",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    },
+    {
+      "name": "06-blink",
+      "rows": [
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        ".........................",
+        "..........oo.............",
+        "........ooTToo...........",
+        "......ooTTTTTToo.........",
+        ".....oTTTTTTTTTToo.......",
+        "....oCTTTTTTTTTTTToo.....",
+        "....oCCCTTTTTTTTTTTToo...",
+        "....oCCCCCTTTTTTTTTTTTo..",
+        "....oCCCCCCCTTTTTTTTTTDo.",
+        "....oCCEECCCCCTTTTTTDDDo.",
+        "....oCCCCCCCCCCCTTDDDDDo.",
+        "....oCCCCCCCEECCCDDDDDDo.",
+        "....oCCCCCCCCCCCCDDDDDDo.",
+        ".....oCCCCCCCCCCCDDDTTDo.",
+        ".....oCDCCCCCCCCCDDCDDDo.",
+        ".....oCDoCCCCCCCCDDCDDDo.",
+        ".....oCDoCDoCCCCCDDDDDo..",
+        ".....oCDoCDoCDCCCDDDCDo..",
+        "......oooCDoCDoCCDooCDo..",
+        "......sssoooCDoCDosoCDo..",
+        "......sssssoCDoCDossoo...",
+        ".........sssoooCDos......",
+        "...............oo........",
+        ".........................",
+        ".........................",
+        "........................."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,239 @@
+{
+  "$description": "Claudy's design tokens, exported from Claudy/Theme/Theme.swift by Scripts/export-design.py. Do not edit by hand.",
+  "color": {
+    "$type": "color",
+    "accent": {
+      "coral": {
+        "$value": "#d97757"
+      },
+      "amber": {
+        "$value": "#e0a34e"
+      },
+      "violet": {
+        "$value": "#8b7bd8"
+      },
+      "sage": {
+        "$value": "#6fae8f"
+      },
+      "sky": {
+        "$value": "#5e9bd1"
+      }
+    },
+    "danger": {
+      "$value": "#e05c4b"
+    },
+    "pixel": {
+      "highlight": {
+        "$value": "#ffe3b059"
+      },
+      "shade": {
+        "$value": "#3a103061"
+      },
+      "outline": {
+        "$value": "#1e0a12c7"
+      },
+      "eye": {
+        "$value": "#2a1418"
+      },
+      "keys": {
+        "$value": "#9a9ca6"
+      },
+      "laptop": {
+        "$value": "#464652"
+      },
+      "lid": {
+        "$value": "#70727e"
+      },
+      "screenGlow": {
+        "$value": "#c8e4ff"
+      },
+      "deskTop": {
+        "$value": "#b08462"
+      },
+      "deskFront": {
+        "$value": "#8c6248"
+      },
+      "deskSide": {
+        "$value": "#68463c"
+      },
+      "flash": {
+        "$value": "#fff8d6"
+      },
+      "fireYellow": {
+        "$value": "#ffd24a"
+      },
+      "fireOrange": {
+        "$value": "#ff8a2a"
+      },
+      "fireRed": {
+        "$value": "#d8402a"
+      },
+      "ember": {
+        "$value": "#ff6a20"
+      },
+      "smokeDark": {
+        "$value": "#3c3638"
+      },
+      "smoke": {
+        "$value": "#5e5658"
+      },
+      "smokeLight": {
+        "$value": "#8a8083"
+      },
+      "smokePale": {
+        "$value": "#beb6b8"
+      },
+      "charred": {
+        "$value": "#2a2426"
+      },
+      "ash": {
+        "$value": "#968682"
+      },
+      "ashTop": {
+        "$value": "#b2a49e"
+      },
+      "ashSide": {
+        "$value": "#6e6060"
+      },
+      "groundShadow": {
+        "$value": "#00000033"
+      }
+    }
+  },
+  "dimension": {
+    "$type": "dimension",
+    "fullWidth": {
+      "$value": "340px"
+    },
+    "minimalWidth": {
+      "$value": "252px"
+    },
+    "menuBarWidth": {
+      "$value": "290px"
+    },
+    "islandWidth": {
+      "$value": "440px"
+    },
+    "cardCorner": {
+      "$value": "20px"
+    },
+    "minimalCorner": {
+      "$value": "15px"
+    },
+    "screenMargin": {
+      "$value": "8px"
+    },
+    "padding": {
+      "$value": "16px"
+    },
+    "tabHeight": {
+      "$value": "22px"
+    },
+    "tabCorner": {
+      "$value": "7px"
+    },
+    "shadowInset": {
+      "$value": "28px",
+      "$description": "Transparent margin round the card where its shadow is drawn: three blur radii past the offset edge."
+    }
+  },
+  "shadow": {
+    "card": {
+      "$type": "shadow",
+      "$value": [
+        {
+          "color": "#0000004c",
+          "offsetX": "0px",
+          "offsetY": "4px",
+          "blur": "8px",
+          "spread": "0px"
+        },
+        {
+          "color": "#0000002e",
+          "offsetX": "0px",
+          "offsetY": "0px",
+          "blur": "1px",
+          "spread": "0px"
+        }
+      ]
+    }
+  },
+  "motion": {
+    "$description": "Spring animations, as SwiftUI defines them: response (seconds) and damping fraction.",
+    "gauge": {
+      "response": {
+        "$type": "duration",
+        "$value": {
+          "value": 0.55,
+          "unit": "s"
+        }
+      },
+      "dampingFraction": {
+        "$type": "number",
+        "$value": 0.85
+      }
+    },
+    "mode": {
+      "response": {
+        "$type": "duration",
+        "$value": {
+          "value": 0.38,
+          "unit": "s"
+        }
+      },
+      "dampingFraction": {
+        "$type": "number",
+        "$value": 0.86
+      }
+    },
+    "accordion": {
+      "response": {
+        "$type": "duration",
+        "$value": {
+          "value": 0.34,
+          "unit": "s"
+        }
+      },
+      "dampingFraction": {
+        "$type": "number",
+        "$value": 0.88
+      }
+    },
+    "popup": {
+      "response": {
+        "$type": "duration",
+        "$value": {
+          "value": 0.3,
+          "unit": "s"
+        }
+      },
+      "dampingFraction": {
+        "$type": "number",
+        "$value": 0.82
+      }
+    }
+  },
+  "threshold": {
+    "$type": "number",
+    "$description": "Fractions of a quota at which the gauge changes colour or the card strains.",
+    "amber": {
+      "$value": 0.75
+    },
+    "danger": {
+      "$value": 0.9
+    },
+    "strain": {
+      "$value": 0.95
+    }
+  },
+  "font": {
+    "design": {
+      "$description": "Rounded system design with monospaced digits wherever a number changes.",
+      "$type": "fontFamily",
+      "$value": [
+        "SF Pro Rounded",
+        "system-ui"
+      ]
+    }
+  }
+}
