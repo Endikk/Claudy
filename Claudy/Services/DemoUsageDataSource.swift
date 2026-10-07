@@ -6,8 +6,14 @@ import Foundation
 /// projects carry neutral names, and the snapshot is marked as demo so the UI announces it.
 actor DemoUsageDataSource: UsageDataSource {
 
+    /// The demo opens partway through a session: this share of the quota is already used and the
+    /// same share of the window is already gone, so the gauge starts on its pace marker. A window
+    /// opening at launch would show 34 % used for 0 % elapsed, "ahead of pace" in red all cycle.
+    private static let sessionShareAtStart = 0.34
+    private static let sessionElapsedAtStart = sessionShareAtStart * UsageAggregator.sessionWindow
+
     private var drift: Double = 0
-    private var start = Date()
+    private var start = Date().addingTimeInterval(-DemoUsageDataSource.sessionElapsedAtStart)
 
     func fetch() async throws -> UsageSnapshot {
         try? await Task.sleep(nanoseconds: 250_000_000)
@@ -19,9 +25,9 @@ actor DemoUsageDataSource: UsageDataSource {
             ?? DateInterval(start: today, duration: 7 * 86_400)
 
         drift += Double.random(in: 0.006...0.02)
-        if drift >= 0.62 { drift = 0; start = now }
+        if drift >= 0.62 { drift = 0; start = now.addingTimeInterval(-Self.sessionElapsedAtStart) }
 
-        let sessionPercent = min(0.34 + drift, 0.99)
+        let sessionPercent = min(Self.sessionShareAtStart + drift, 0.99)
         let weeklyLimit = 16_000_000
         let sonnetLimit = 7_000_000
 
