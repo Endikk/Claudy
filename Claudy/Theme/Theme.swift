@@ -20,6 +20,8 @@ enum Theme {
     }
 
     static let danger = Color(hex: 0xE05C4B)
+    /// An agent fallen silent: its Claudy loses its session's colour.
+    static let idle = Color(hex: 0x8F8A86)
 
     /// Effective tint of a gauge: its base accent, except in the high-load band where the
     /// "warning" meaning takes over.

@@ -10,6 +10,7 @@ final class NotchController {
 
     private let viewModel: UsageViewModel
     private let updates: UpdateChecker
+    private let agents: AgentsViewModel
     private let model = NotchModel()
     /// The island's right-click menu. Its items target it, so it lives as long as the island.
     private lazy var menu = ClaudyMenu(viewModel: viewModel)
@@ -32,9 +33,10 @@ final class NotchController {
     /// Long enough for `closing` to come to rest.
     private static let settleDelay: TimeInterval = 0.5
 
-    init(viewModel: UsageViewModel, updates: UpdateChecker) {
+    init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel) {
         self.viewModel = viewModel
         self.updates = updates
+        self.agents = agents
     }
 
     deinit {
@@ -53,6 +55,7 @@ final class NotchController {
             collapse()
             model.notchSize = geometry.notch.size
             panel.setFrame(layout.restingFrame, display: true)
+            refit()
         }
         panel.orderFrontRegardless()
         resyncPointer()
@@ -62,7 +65,14 @@ final class NotchController {
     func hide() {
         collapse()
         if let layout { panel?.setFrame(layout.restingFrame, display: false) }
+        refit()
         panel?.orderOut(nil)
+    }
+
+    /// The resting frame is the bare ears'. While agents run the ears are wider, and the shape,
+    /// whose size has not changed, would not ask again: fit the window to it now.
+    private func refit() {
+        if model.shapeSize != .zero { fit(model.shapeSize) }
     }
 
     /// The screens just changed: the notch may have moved, or gone with the lid. Hidden at once
@@ -85,7 +95,8 @@ final class NotchController {
     private func makePanel() -> NotchPanel {
         let host = NotchHostingView(rootView: NotchView(model: model)
             .environmentObject(viewModel)
-            .environmentObject(updates))
+            .environmentObject(updates)
+            .environmentObject(agents))
         // The window follows the shape through `fit`, not through SwiftUI's own sizing.
         host.sizingOptions = []
         host.onHover = { [weak self] inside in self?.hover.pointer(inside: inside) }

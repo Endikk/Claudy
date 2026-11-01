@@ -9,6 +9,7 @@ final class MenuBarController: NSObject {
 
     private let viewModel: UsageViewModel
     private let updates: UpdateChecker
+    private let agents: AgentsViewModel
     private var item: NSStatusItem?
     private let popover = NSPopover()
     /// Drops from the item once per new version, and stays until the user answers it.
@@ -26,6 +27,8 @@ final class MenuBarController: NSObject {
     private var waveFrames: [NSImage] = []
     private var framesTint: Color?
     private var framesBadged: Bool?
+    /// What the title last showed, so the agents' clock only rebuilds it when it reads otherwise.
+    private var titleKey: String?
 
     /// What the icon is doing. The explosion plays only when the quota fills while the item is
     /// up; opening Claudy on a full quota shows the dead state directly, as the widget does.
@@ -43,14 +46,16 @@ final class MenuBarController: NSObject {
     /// device pixels on Retina screens.
     private static let cell: CGFloat = 0.5
 
-    init(viewModel: UsageViewModel, updates: UpdateChecker) {
+    init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel) {
         self.viewModel = viewModel
         self.updates = updates
+        self.agents = agents
         super.init()
 
         let controller = NSHostingController(rootView: MenuBarView()
             .environmentObject(viewModel)
-            .environmentObject(updates))
+            .environmentObject(updates)
+            .environmentObject(agents))
         controller.sizingOptions = [.preferredContentSize]
         popover.contentViewController = controller
         popover.behavior = .transient
@@ -83,6 +88,26 @@ final class MenuBarController: NSObject {
             }
             .store(in: &cancellables)
 
+        // The sink runs before the published value is set: the new list goes in as is.
+        agents.$agents
+            .receive(on: RunLoop.main)
+            .sink { [weak self] list in
+                guard let self else { return }
+                self.update(with: self.viewModel.snapshot, agents: list)
+            }
+            .store(in: &cancellables)
+
+        // An agent falling silent changes no list, only the clock: its Claudy turns grey.
+        agents.$now
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.update(with: self.viewModel.snapshot)
+                }
+            }
+            .store(in: &cancellables)
+
         updates.$shouldAnnounce
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -110,6 +135,7 @@ final class MenuBarController: NSObject {
         stopAnimating()
         animation = .still
         wasOverloaded = nil
+        titleKey = nil
         cancellables.removeAll()
         if let item {
             NSStatusBar.system.removeStatusItem(item)
@@ -119,8 +145,9 @@ final class MenuBarController: NSObject {
 
     // MARK: - Content
 
-    private func update(with snapshot: UsageSnapshot) {
+    private func update(with snapshot: UsageSnapshot, agents list: [RunningAgent]? = nil) {
         guard let button = item?.button else { return }
+        let running = list ?? agents.agents
         let session = snapshot.session
         // The figure in the bar: the 5h session, or the monthly spend on a plan billed on usage.
         let lead = snapshot.primary
@@ -143,10 +170,14 @@ final class MenuBarController: NSObject {
         }
 
         let percent = lead.isMeasured ? "\(Int(lead.percent * 100))%" : "—"
-        button.attributedTitle = NSAttributedString(
-            string: " \(percent)",
-            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)]
-        )
+        let now = agents.now
+        let leadAgent = running.first { $0.status(at: now) == .working } ?? running.first
+        let agentsTint = leadAgent.map { $0.status(at: now) == .idle ? Theme.idle : $0.accent.color }
+        let key = "\(percent)|\(running.count)|\(agentsTint.map { "\($0)" } ?? "")"
+        if key != titleKey {
+            titleKey = key
+            button.attributedTitle = Self.title(percent: percent, count: running.count, tint: agentsTint)
+        }
         // The title just changed width and the bar moved the icon: keep the bubble's arrow on it.
         if bubble.isVisible {
             DispatchQueue.main.async { [weak self] in
@@ -154,9 +185,12 @@ final class MenuBarController: NSObject {
                 self.bubble.show(below: button)
             }
         }
-        button.toolTip = lead.isActive
+        let quota = lead.isActive
             ? "\(lead.title) \(percent) · reset \(UsageViewModel.resetTime(lead.resetDate))"
             : "Claudy"
+        button.toolTip = running.isEmpty
+            ? quota
+            : quota + " · " + (running.count == 1 ? "1 agent running" : "\(running.count) agents running")
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let overloaded = snapshot.isOverloaded
@@ -244,6 +278,26 @@ final class MenuBarController: NSObject {
     }
 
     /// The icon with the coral update dot in its top-right corner, where the sprite is empty.
+    /// The figure, then, while agents run, a small Claudy in the colour of the one at work and
+    /// how many there are. The card's Agents tab and the popover say which.
+    private static func title(percent: String, count: Int, tint: Color?) -> NSAttributedString {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
+        let title = NSMutableAttributedString(string: " \(percent)", attributes: [.font: font])
+        guard count > 0, let tint else { return title }
+
+        let image = ClaudyTyping.image(.resting, tint: tint, cell: cell)
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        // Centred on the digits rather than sat on the baseline.
+        attachment.bounds = CGRect(x: 0, y: (font.capHeight - image.size.height) / 2,
+                                   width: image.size.width, height: image.size.height)
+        title.append(NSAttributedString(string: "  ", attributes: [.font: font]))
+        title.append(NSAttributedString(attachment: attachment))
+        title.append(NSAttributedString(string: "\(count)",
+                                        attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)]))
+        return title
+    }
+
     private static func withUpdateDot(_ image: NSImage) -> NSImage {
         let diameter: CGFloat = 4
         return NSImage(size: image.size, flipped: true) { rect in

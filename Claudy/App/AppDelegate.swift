@@ -7,9 +7,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     let viewModel = UsageViewModel()
     let portsViewModel = PortsViewModel()
+    let agentsViewModel = AgentsViewModel()
     let updates = UpdateChecker()
-    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates)
-    private(set) lazy var notch = NotchController(viewModel: viewModel, updates: updates)
+    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates, agents: agentsViewModel)
+    private(set) lazy var notch = NotchController(viewModel: viewModel, updates: updates, agents: agentsViewModel)
     private var panel: FloatingPanel?
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
@@ -34,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let controller = NSHostingController(rootView: RootView()
             .environmentObject(viewModel)
             .environmentObject(portsViewModel)
+            .environmentObject(agentsViewModel)
             .environmentObject(updates))
         controller.sizingOptions = [.preferredContentSize]
 
@@ -46,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         anchor = homeAnchor(on: NSScreen.main)
         applyAnchor()
         portsViewModel.start()
+        agentsViewModel.start()
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,

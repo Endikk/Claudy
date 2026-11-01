@@ -2,10 +2,11 @@ import SwiftUI
 import Charts
 
 /// The popover under the menu bar item, built around charts rather than the widget's gauges:
-/// the three quotas as rings with their pace, seven days as bars, and the weekly split by
-/// model. Details and ports stay in the widget.
+/// the three quotas as rings with their pace, the agents at work in short, seven days as bars,
+/// and the weekly split by model. Details, ports and the agents' tracks stay in the widget.
 struct MenuBarView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    @EnvironmentObject private var agents: AgentsViewModel
     /// Model under the pointer, in the split bar or its legend.
     @State private var hoveredModel: String?
 
@@ -25,6 +26,10 @@ struct MenuBarView: View {
                         QuotaRing(window: snapshot.weekly, delay: 0.08)
                         QuotaRing(window: snapshot.sonnet, delay: 0.16)
                     }
+                }
+                if !agents.agents.isEmpty {
+                    hairline
+                    AgentsShortList()
                 }
                 hairline
                 WeekBarsChart(samples: snapshot.history, tint: Theme.Accent.coral.color)

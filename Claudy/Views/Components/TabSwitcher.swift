@@ -1,14 +1,16 @@
 import SwiftUI
 
 enum CardTab: String, CaseIterable {
-    case usage, ports
+    case usage, ports, agents
 }
 
-/// Two quiet segments in the card header. The badge is the only thing allowed to raise its
-/// voice, and only when something is actually left running.
+/// Quiet segments in the card header. The badges are the only things allowed to raise their
+/// voice, and only when something is actually running: ports left open in amber, agents at work
+/// in coral.
 struct TabSwitcher: View {
     @Binding var selection: CardTab
     let badge: Int
+    var agents: Int = 0
 
     @Namespace private var indicator
 
@@ -33,12 +35,10 @@ struct TabSwitcher: View {
                 .foregroundStyle(.primary.opacity(isSelected ? 0.9 : 0.45))
 
             if tab == .ports, badge > 0 {
-                Text("\(badge)")
-                    .font(Theme.Font.value(8.5, .bold))
-                    .foregroundStyle(Theme.Accent.amber.color)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Theme.Accent.amber.color.opacity(0.18)))
+                CountBadge(value: badge, tint: Theme.Accent.amber.color)
+            }
+            if tab == .agents, agents > 0 {
+                CountBadge(value: agents, tint: Theme.Accent.coral.color)
             }
         }
         .padding(.horizontal, 8)
@@ -55,5 +55,20 @@ struct TabSwitcher: View {
             withAnimation(Theme.Motion.mode) { selection = tab }
         }
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
+/// A small count in a tinted capsule.
+struct CountBadge: View {
+    let value: Int
+    let tint: Color
+
+    var body: some View {
+        Text("\(value)")
+            .font(Theme.Font.value(8.5, .bold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Capsule().fill(tint.opacity(0.18)))
     }
 }

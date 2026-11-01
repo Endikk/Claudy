@@ -30,10 +30,11 @@ struct NotchActivity {
 /// The open island, laid out round the notch like the Dynamic Island round the camera: the
 /// mascot on the notch's left and the session figure on its right, each a short flight from its
 /// ear; the model at work under the notch; then the session's bar, its pace and reset, and the
-/// other quotas across the full width. The island flies the mascot and the figure in: here they
+/// other quotas across the full width, then the agents at work in short. The island flies the mascot and the figure in: here they
 /// only mark where they land.
 struct NotchActivityView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
+    @EnvironmentObject private var agents: AgentsViewModel
     /// The notch the top row is laid out round.
     let notch: CGSize
 
@@ -61,6 +62,10 @@ struct NotchActivityView: View {
                 others
             } else if viewModel.hasLoaded {
                 signedOut
+            }
+            // Agents do not depend on the account: Claude Code's own files say what runs.
+            if !agents.agents.isEmpty {
+                AgentsShortList()
             }
             if let message = viewModel.errorMessage {
                 errorLine(message)

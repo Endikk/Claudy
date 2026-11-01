@@ -7,6 +7,7 @@ struct FullView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
     @EnvironmentObject private var portsViewModel: PortsViewModel
+    @EnvironmentObject private var agentsViewModel: AgentsViewModel
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
     private var lead: UsageWindow { snapshot.primary }
@@ -18,11 +19,13 @@ struct FullView: View {
                 .contentShape(Rectangle())
                 .onTapGesture { viewModel.toggleMode() }
 
-            TabSwitcher(selection: $viewModel.tab, badge: portsViewModel.orphanCount)
+            TabSwitcher(selection: $viewModel.tab, badge: portsViewModel.orphanCount,
+                        agents: agentsViewModel.agents.count)
 
             switch viewModel.tab {
             case .usage: usageTab
             case .ports: PortsView()
+            case .agents: AgentsView()
             }
         }
         .padding(.horizontal, Theme.Metric.padding)

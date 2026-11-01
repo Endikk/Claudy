@@ -12,11 +12,13 @@ final class NotchModel: ObservableObject {
 }
 
 /// Claudy around the notch. At rest a band the notch's height extends it on both sides, in the
-/// card's glass: the mascot in the left ear, the lead percentage in the right one. Open, the
-/// island's own view (`NotchActivityView`) hangs underneath on the same glass.
+/// card's glass: the mascot in the left ear, the lead percentage in the right one, and while
+/// agents run, their count beside it. Open, the island's own view (`NotchActivityView`) hangs
+/// underneath on the same glass.
 struct NotchView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
+    @EnvironmentObject private var agents: AgentsViewModel
     @ObservedObject var model: NotchModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The mascot and the percentage fly between the ears and the popover in this namespace.
@@ -161,6 +163,10 @@ struct NotchView: View {
     /// content.
     private var ears: some View {
         HStack(spacing: 0) {
+            if showsAgents {
+                Color.clear
+                    .frame(width: NotchLayout.agentsWidth)
+            }
             mascot
                 .scaleEffect(model.isOpen ? 1 : Self.mascotRestScale)
                 .matchedGeometryEffect(id: NotchFlight.mascot, in: flight,
@@ -169,12 +175,23 @@ struct NotchView: View {
             Color.clear
                 .frame(width: model.notchSize.width)
             reading
+            if showsAgents {
+                AgentsEarBadge()
+                    .frame(width: NotchLayout.agentsWidth)
+                    .transition(.opacity)
+            }
         }
         .frame(height: model.notchSize.height)
+        // Keyed on the agents alone: opening and closing flip `showsAgents` too, and must keep the
+        // island's own spring for the mascot's flight.
+        .animation(reduceMotion ? nil : Theme.Motion.mode, value: agents.agents.isEmpty)
         .zIndex(1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Claudy, \(lead.title) \(percent)")
     }
+
+    /// At rest only: open, the island lists the agents itself, and the ears stay the notch's.
+    private var showsAgents: Bool { !model.isOpen && !agents.agents.isEmpty }
 
     private var mascot: some View {
         Group {
