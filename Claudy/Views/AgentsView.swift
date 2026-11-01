@@ -83,16 +83,17 @@ struct AgentShortRow: View {
     }
 }
 
-/// At rest, in the island's right ear: the lead agent's Claudy and how many agents are running.
+/// At rest, in the island's left ear beside Claudy: the lead agent's Claudy and how many agents are
+/// running.
 struct AgentsEarBadge: View {
     @EnvironmentObject private var viewModel: AgentsViewModel
 
     var body: some View {
         if let lead = viewModel.lead {
-            HStack(spacing: 2) {
+            HStack(spacing: 1) {
                 AgentClaudy(agent: lead, status: lead.status(at: viewModel.now), height: AgentShortRow.claudyHeight)
                 Text("\(viewModel.agents.count)")
-                    .font(Theme.Font.value(11, .bold))
+                    .font(Theme.Font.value(10, .bold))
                     .foregroundStyle(.primary.opacity(0.85))
             }
             .help(viewModel.agents.count == 1 ? "1 agent running" : "\(viewModel.agents.count) agents running")

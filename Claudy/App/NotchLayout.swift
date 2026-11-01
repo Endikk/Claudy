@@ -10,9 +10,6 @@ struct NotchLayout: Equatable {
     /// Width of the curve on each side where the island flares into the screen's top edge, as
     /// the notch itself does, instead of meeting it square.
     static let shoulder: CGFloat = 8
-    /// What each ear gains at rest while agents run: room in the right one for the lead agent's
-    /// Claudy and their count, the same on the left so the island stays centred on the notch.
-    static let agentsWidth: CGFloat = 26
 
     /// The notch plus an ear and a shoulder on each side, the notch's height.
     var restingSize: CGSize {
