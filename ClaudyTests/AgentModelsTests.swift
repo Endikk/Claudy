@@ -56,14 +56,4 @@ final class AgentModelsTests: XCTestCase {
         XCTAssertEqual(track[track.count - 2], AgentTrackSlot(edits: 0, others: 1))
         XCTAssertEqual(track.dropLast(2).reduce(0) { $0 + $1.edits + $1.others }, 0)
     }
-
-    /// A session keeps its colour from one pass to the next, and never takes the main Claudy's.
-    func testSessionColourIsStableAndNeverCoral() {
-        for session in ["8b7d208e", "f44c7e6b", "9ec3715d", "a", "b", "c"] {
-            let accent = agent(session: session, last: nil).accent
-            XCTAssertEqual(accent, agent(session: session, last: nil).accent)
-            XCTAssertNotEqual(accent, .coral)
-            XCTAssertNotEqual(accent, .amber)
-        }
-    }
 }

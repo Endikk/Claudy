@@ -6,6 +6,13 @@ private struct StubAgents: AgentScanning {
     func scan() async -> [RunningAgent] { result }
 }
 
+/// One list per pass, then the last one again.
+private final class SequenceAgents: AgentScanning, @unchecked Sendable {
+    private var passes: [[RunningAgent]]
+    init(_ passes: [[RunningAgent]]) { self.passes = passes }
+    func scan() async -> [RunningAgent] { passes.count > 1 ? passes.removeFirst() : passes[0] }
+}
+
 @MainActor
 final class AgentsViewModelTests: XCTestCase {
 
@@ -37,6 +44,31 @@ final class AgentsViewModelTests: XCTestCase {
         let before = model.now
         await model.refresh()
         XCTAssertEqual(model.now, before)
+    }
+
+    /// Each agent has its own colour and keeps it while it runs; a colour freed by an agent that
+    /// left goes to the next one launched.
+    func testEachAgentKeepsItsOwnColour() async {
+        let a1 = agent("a1", lastActivity: Date()), a2 = agent("a2", lastActivity: Date())
+        let a3 = agent("a3", lastActivity: Date())
+        let scanner = SequenceAgents([[a1, a2], [a2, a3]])
+        let model = AgentsViewModel(scanner: scanner)
+
+        await model.refresh()
+        let first = model.colourIndex(of: a1), second = model.colourIndex(of: a2)
+        await model.refresh()
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(model.colourIndex(of: a2), second)
+        XCTAssertEqual(model.colourIndex(of: a3), first)
+    }
+
+    /// Never the main Claudy's coral, nor the amber that warns.
+    func testAgentColoursLeaveCoralAndAmberToClaudy() {
+        for colour in Theme.agentTints {
+            XCTAssertNotEqual(colour, Theme.Accent.coral.color)
+            XCTAssertNotEqual(colour, Theme.Accent.amber.color)
+        }
     }
 
     func testDetailsNameTheSessionAndEveryEditedFile() async {

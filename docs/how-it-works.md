@@ -138,11 +138,12 @@ installed in Claude Code for it:
 
 Each row shows what the agent was asked, for how long it has run, the file it is touching (in coral
 while it writes it) and its track: its tool calls over the last ten minutes, one bar per fifteen
-seconds, writes in coral. Its Claudy takes its session's colour, types while the agent works and
-turns grey after a minute of silence. A finished agent stays a minute, marked done; an unfinished
+seconds, writes in coral. Each agent's Claudy has its own colour, kept while it runs; it types
+while the agent works and turns grey after a minute of silence. A finished agent stays a minute, marked done; an unfinished
 one silent for thirty minutes is taken as interrupted. No file says how far along an agent is, so
-no percentage is shown. The menu bar and the notch show the same list in short: one line per
-agent, and the count beside the figure.
+no percentage is shown. The menu bar and the open island show the same list in short, one line per
+agent. The menu bar item adds the lead agent's Claudy and the count after the figure; the notch at
+rest puts them in the left ear, beside Claudy.
 
 ### Status-line bridge (optional)
 

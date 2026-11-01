@@ -87,15 +87,6 @@ struct RunningAgent: Identifiable, Equatable, Sendable {
     /// Its last call wrote a file: the file is shown in the accent.
     var isWriting: Bool { lastAction?.kind == .edit && lastAction?.file != nil }
 
-    /// Its session's colour, so agents launched together read as a team. Stable from one pass to
-    /// the next, and never coral, the main Claudy's, nor amber, which warns.
-    var accent: Theme.Accent {
-        let palette: [Theme.Accent] = [.sky, .violet, .sage]
-        // djb2: `hashValue` changes on every launch.
-        let hash = sessionID.utf8.reduce(UInt64(5381)) { ($0 &* 33) &+ UInt64($1) }
-        return palette[Int(hash % UInt64(palette.count))]
-    }
-
     /// The last `trackSpan` in slots, newest last: writes apart from the rest, so a burst of
     /// edits stands out.
     func track(at now: Date) -> [AgentTrackSlot] {

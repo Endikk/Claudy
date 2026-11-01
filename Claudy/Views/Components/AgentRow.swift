@@ -39,15 +39,16 @@ struct AgentRow: View {
     }
 }
 
-/// An agent's own Claudy: its session's colour, typing while it works, grey and still once it
-/// falls silent, faded when it is done.
+/// An agent's own Claudy: its own colour, typing while it works, grey and still once it falls
+/// silent, faded when it is done.
 struct AgentClaudy: View {
     let agent: RunningAgent
     let status: RunningAgent.Status
     let height: CGFloat
+    @EnvironmentObject private var viewModel: AgentsViewModel
 
     var body: some View {
-        ClaudyTyping(tint: status == .idle ? Theme.idle : agent.accent.color, isTyping: status == .working)
+        ClaudyTyping(tint: viewModel.tint(of: agent), isTyping: status == .working)
             .frame(width: height * ClaudyTyping.aspectRatio, height: height)
             .opacity(status == .done ? 0.6 : 1)
     }

@@ -20,8 +20,17 @@ enum Theme {
     }
 
     static let danger = Color(hex: 0xE05C4B)
-    /// An agent fallen silent: its Claudy loses its session's colour.
+    /// An agent fallen silent: its Claudy loses its colour.
     static let idle = Color(hex: 0x8F8A86)
+
+    /// The agents' Claudys, one colour each in launch order. Never coral, the main Claudy's, nor
+    /// amber, which warns: an agent's Claudy must not pass for the quota's.
+    static let agentTints: [Color] = [
+        Accent.sky.color,
+        Accent.violet.color,
+        Color(hex: 0xD9779B),   // rose
+        Accent.sage.color,
+    ]
 
     /// Effective tint of a gauge: its base accent, except in the high-load band where the
     /// "warning" meaning takes over.

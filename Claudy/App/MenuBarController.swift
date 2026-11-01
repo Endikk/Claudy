@@ -172,7 +172,7 @@ final class MenuBarController: NSObject {
         let percent = lead.isMeasured ? "\(Int(lead.percent * 100))%" : "—"
         let now = agents.now
         let leadAgent = running.first { $0.status(at: now) == .working } ?? running.first
-        let agentsTint = leadAgent.map { $0.status(at: now) == .idle ? Theme.idle : $0.accent.color }
+        let agentsTint = leadAgent.map { agents.tint(of: $0) }
         let key = "\(percent)|\(running.count)|\(agentsTint.map { "\($0)" } ?? "")"
         if key != titleKey {
             titleKey = key
