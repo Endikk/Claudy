@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## Unreleased
+
+### Added
+
+- **Agents.** A third tab lists the subagents Claude Code is running in its open sessions: what
+  each was asked, for how long, the file it is touching and its last ten minutes as a track, with
+  its own Claudy in its session's colour. The menu bar popover and the open island list them in
+  short, and the menu bar item and the notch at rest show how many are running. Read from Claude
+  Code's own files, nothing to install.
+
 ## 1.5.8 (7 October 2026)
 
 ### Fixed

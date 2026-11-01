@@ -124,6 +124,26 @@ windows are absent, so it never hides a live session.
 An account with no cap, or with spending turned off, has no quota at all. The gauges then show
 "—", as for any missing measurement.
 
+### Agents
+
+The Agents tab lists the subagents Claude Code is running, from files it keeps anyway; nothing is
+installed in Claude Code for it:
+
+- `~/.claude/sessions/<pid>.json`, one per open Claude Code process, gives each session its id and
+  name. A file whose process is gone belongs to a closed session and is ignored.
+- `<projects>/<folder>/<session>/subagents/agent-<id>.meta.json` holds what the agent was asked
+  and, once it is over, `finished`.
+- `agent-<id>.jsonl` beside it is the agent's transcript. Claudy reads only its tool calls (the
+  tool and the file it names), from a cursor per file, as it does for usage.
+
+Each row shows what the agent was asked, for how long it has run, the file it is touching (in coral
+while it writes it) and its track: its tool calls over the last ten minutes, one bar per fifteen
+seconds, writes in coral. Its Claudy takes its session's colour, types while the agent works and
+turns grey after a minute of silence. A finished agent stays a minute, marked done; an unfinished
+one silent for thirty minutes is taken as interrupted. No file says how far along an agent is, so
+no percentage is shown. The menu bar and the notch show the same list in short: one line per
+agent, and the count beside the figure.
+
 ### Status-line bridge (optional)
 
 On every API response Claude Code reads its quota headers and passes them to the status line. One
