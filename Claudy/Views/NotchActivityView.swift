@@ -65,7 +65,7 @@ struct NotchActivityView: View {
             }
             // Agents do not depend on the account: Claude Code's own files say what runs.
             if !agents.agents.isEmpty {
-                AgentsShortList()
+                AgentsShortList(showsElapsed: true)
             }
             if let message = viewModel.errorMessage {
                 errorLine(message)

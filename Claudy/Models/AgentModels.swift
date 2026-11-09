@@ -44,6 +44,9 @@ struct AgentTrackSlot: Equatable, Sendable {
 struct RunningAgent: Identifiable, Equatable, Sendable {
     let id: String
     let sessionID: String
+    /// The Claude Code process that launched it. Agents have no process of their own: stopping
+    /// one means interrupting its session, as Ctrl+C would.
+    let sessionPID: Int32
     /// `claire-bb`, or the working folder's name when the session has none.
     let sessionName: String
     /// What it was asked, as written when it was launched.
@@ -59,17 +62,30 @@ struct RunningAgent: Identifiable, Equatable, Sendable {
     /// Files it wrote, in the order it first touched them.
     let editedFiles: [String]
 
-    enum Status: Equatable, Sendable { case working, idle, done }
+    /// `idle` is a pause: a long command, a wait on the parent. `stalled` is a pause long enough
+    /// to go and look: a permission nobody answered, a hung tool.
+    enum Status: Equatable, Sendable { case working, idle, stalled, done }
 
     /// Past this, a silent agent is shown at rest: waiting on a long command, or on its parent.
     static let idleAfter: TimeInterval = 60
+    /// Past this, its silence is called out.
+    static let stalledAfter: TimeInterval = 180
     /// The track's reach, cut in `trackSlots` slots.
     static let trackSpan: TimeInterval = 600
     static let trackSlots = 40
 
     func status(at now: Date) -> Status {
         if isFinished { return .done }
-        return now.timeIntervalSince(lastActivity) < Self.idleAfter ? .working : .idle
+        switch silence(at: now) {
+        case ..<Self.idleAfter: return .working
+        case ..<Self.stalledAfter: return .idle
+        default: return .stalled
+        }
+    }
+
+    /// How long since it last wrote anything.
+    func silence(at now: Date) -> TimeInterval {
+        max(0, now.timeIntervalSince(lastActivity))
     }
 
     /// What it is touching now: the file of its last call, or the kind of work in one word.

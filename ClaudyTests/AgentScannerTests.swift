@@ -102,6 +102,7 @@ final class AgentScannerTests: XCTestCase {
         XCTAssertEqual(agent.id, "a1")
         XCTAssertEqual(agent.title, "Make prescription file reading reliable")
         XCTAssertEqual(agent.sessionName, "claire-bb")
+        XCTAssertEqual(agent.sessionPID, livePID)
         XCTAssertEqual(agent.startedAt.timeIntervalSince1970, now.addingTimeInterval(-600).timeIntervalSince1970,
                        accuracy: 0.01)
         XCTAssertEqual(agent.actionCount, 2)
@@ -120,15 +121,15 @@ final class AgentScannerTests: XCTestCase {
         XCTAssertTrue(agents.isEmpty)
     }
 
-    /// A finished agent stays a minute, marked done, then leaves the list.
-    func testFinishedAgentLingersAMinuteThenLeaves() async throws {
+    /// A finished agent stays ten minutes, marked done, then leaves the list.
+    func testFinishedAgentLingersTenMinutesThenLeaves() async throws {
         var finished = running
         finished["finished"] = true
         try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire")
-        try writeAgent(session: "s1", id: "recent", meta: finished, lines: [prompt(at: now.addingTimeInterval(-300))],
-                       modified: now.addingTimeInterval(-30))
-        try writeAgent(session: "s1", id: "old", meta: finished, lines: [prompt(at: now.addingTimeInterval(-900))],
-                       modified: now.addingTimeInterval(-120))
+        try writeAgent(session: "s1", id: "recent", meta: finished, lines: [prompt(at: now.addingTimeInterval(-900))],
+                       modified: now.addingTimeInterval(-9 * 60))
+        try writeAgent(session: "s1", id: "old", meta: finished, lines: [prompt(at: now.addingTimeInterval(-1800))],
+                       modified: now.addingTimeInterval(-11 * 60))
 
         let agents = await scanner().scan()
 

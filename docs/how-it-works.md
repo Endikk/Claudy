@@ -136,14 +136,25 @@ installed in Claude Code for it:
 - `agent-<id>.jsonl` beside it is the agent's transcript. Claudy reads only its tool calls (the
   tool and the file it names), from a cursor per file, as it does for usage.
 
-Each row shows what the agent was asked, for how long it has run, the file it is touching (in coral
-while it writes it) and its track: its tool calls over the last ten minutes, one bar per fifteen
-seconds, writes in coral. Each agent's Claudy has its own colour, kept while it runs; it types
-while the agent works and turns grey after a minute of silence. A finished agent stays a minute, marked done; an unfinished
-one silent for thirty minutes is taken as interrupted. No file says how far along an agent is, so
-no percentage is shown. The menu bar and the open island show the same list in short, one line per
-agent. The menu bar item adds the lead agent's Claudy and the count after the figure; the notch at
-rest puts them in the left ear, beside Claudy.
+Each row shows what the agent was asked, for how long it has run, where it is and its track: its
+tool calls over the last ten minutes, one bar per fifteen seconds, writes in coral (the header
+carries the legend). Each agent's Claudy has its own colour, kept while it runs; it types while
+the agent works and turns grey after a minute of silence. Three minutes of silence are called out
+on the right, in amber ("silent 4 min"): a permission nobody answered, a hung tool. A finished
+agent stays ten minutes, marked done with the number of files it wrote; an unfinished one silent
+for thirty minutes is taken as interrupted. No file says how far along an agent is, so no
+percentage is shown. When agents of several sessions are listed, each row names its session.
+
+A click unfolds a row: its session, its number of calls and start time, the files it wrote, its
+last three calls, and an "Interrupt session" button. Agents have no process of their own, so
+there is nothing narrower to stop: after a confirmation that names the session, Claudy sends the
+session's Claude Code process the signal Ctrl+C sends in its terminal (`SIGINT`). Mid-turn, the
+turn stops and every agent of that session with it; a session sitting at its prompt quits on it,
+which the confirmation says.
+
+The menu bar popover and the open island show the same list in short, four lines, with the way
+to the widget past that. The menu bar item adds the lead agent's Claudy and the count after the
+figure; the notch at rest puts the count alone in the left ear, in the lead agent's colour.
 
 ### Status-line bridge (optional)
 

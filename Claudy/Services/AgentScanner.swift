@@ -18,14 +18,16 @@ protocol AgentScanning: Sendable {
 /// transcript passes ten megabytes on a long task.
 actor AgentScanner: AgentScanning {
 
-    /// A finished agent keeps its row this long, marked done, so its end is seen.
-    static let doneLinger: TimeInterval = 60
+    /// A finished agent keeps its row this long, marked done, so its end and what it wrote are
+    /// seen even by someone who looks at the card now and then.
+    static let doneLinger: TimeInterval = 10 * 60
     /// An unfinished agent silent this long was interrupted: its session lives on, it does not.
     static let silenceLimit: TimeInterval = 30 * 60
 
     private struct Session {
         let id: String
         let name: String
+        let pid: Int32
     }
 
     private struct SessionFile: Decodable {
@@ -121,7 +123,7 @@ actor AgentScanner: AgentScanning {
                   isAlive(file.pid) else { return nil }
             let folderName = file.cwd.map { URL(fileURLWithPath: $0).lastPathComponent }
             let name = [file.name, folderName].compactMap { $0 }.first { !$0.isEmpty } ?? "session"
-            return Session(id: file.sessionId, name: name)
+            return Session(id: file.sessionId, name: name, pid: file.pid)
         }
     }
 
@@ -169,7 +171,7 @@ actor AgentScanner: AgentScanning {
         let state = read(url, now: now)
         let id = String(url.deletingPathExtension().lastPathComponent.dropFirst("agent-".count))
         let title = [meta?.description, meta?.agentType].compactMap { $0 }.first { !$0.isEmpty } ?? "Agent"
-        return RunningAgent(id: id, sessionID: session.id, sessionName: session.name, title: title,
+        return RunningAgent(id: id, sessionID: session.id, sessionPID: session.pid, sessionName: session.name, title: title,
                             startedAt: state.startedAt ?? modified, lastActivity: modified,
                             isFinished: isFinished, actionCount: state.count, recent: state.recent,
                             lastAction: state.last, editedFiles: state.edited)

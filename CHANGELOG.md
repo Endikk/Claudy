@@ -11,6 +11,16 @@ All notable changes to this project are documented here. Dates are release dates
   its own Claudy in its own colour. The menu bar popover and the open island list them in short,
   and the menu bar item and the notch at rest show how many are running. Read from Claude
   Code's own files, nothing to install.
+- **Agents that stall, agents that are done.** Three minutes without a word and the row says so,
+  in amber: "silent 4 min". A finished agent stays ten minutes with the number of files it
+  wrote, instead of leaving after one.
+- **Interrupt a session from the card.** A click unfolds an agent: its session, what it wrote,
+  its last calls, and an "Interrupt session" button. After a confirmation that names the
+  session, Claudy sends its Claude Code process Ctrl+C's signal, which stops every agent of
+  that session. Agents have no process of their own, so nothing narrower can be stopped.
+- **The short lists say more.** The popover and the island list four agents with their state in
+  colour, and "+N more" opens the widget. The notch at rest shows the count alone, in the lead
+  agent's colour: a second mascot did not read at 13 points.
 
 ## 1.5.8 (7 October 2026)
 
