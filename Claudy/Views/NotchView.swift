@@ -184,7 +184,7 @@ struct NotchView: View {
         .frame(height: model.notchSize.height)
         // Keyed on the agents alone: opening and closing flip `showsAgents` too, and must keep the
         // island's own spring for the mascot's flight.
-        .animation(reduceMotion ? nil : Theme.Motion.mode, value: agents.agents.isEmpty)
+        .animation(reduceMotion ? nil : Theme.Motion.mode, value: agents.runningCount > 0)
         .zIndex(1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Claudy, \(lead.title) \(percent)")
@@ -194,7 +194,7 @@ struct NotchView: View {
     ///
     /// The agents' Claudy and count share the left ear with Claudy rather than widening the ears:
     /// wider, the island ran over the app's menus on the left of the notch.
-    private var showsAgents: Bool { !model.isOpen && !agents.agents.isEmpty }
+    private var showsAgents: Bool { !model.isOpen && agents.runningCount > 0 }
 
     /// How far the resting mascot moves out to share its ear: from the centre to one point off the
     /// outer edge.

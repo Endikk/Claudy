@@ -27,14 +27,15 @@ final class AgentScannerTests: XCTestCase {
         return AgentScanner(
             sessionsDirectory: { root.appendingPathComponent("sessions", isDirectory: true) },
             projectsDirectories: { [root.appendingPathComponent("projects", isDirectory: true)] },
-            isAlive: { $0 == livePID },
+            isLive: { pid, _ in pid == livePID },
             now: { now }
         )
     }
 
-    private func writeSession(pid: Int32, id: String, name: String?, cwd: String) throws {
+    private func writeSession(pid: Int32, id: String, name: String?, cwd: String, procStart: String? = nil) throws {
         var session: [String: Any] = ["pid": pid, "sessionId": id, "cwd": cwd, "status": "busy"]
         session["name"] = name
+        session["procStart"] = procStart
         let folder = root.appendingPathComponent("sessions", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try JSONSerialization.data(withJSONObject: session).write(to: folder.appendingPathComponent("\(pid).json"))
@@ -110,6 +111,29 @@ final class AgentScannerTests: XCTestCase {
         XCTAssertEqual(agent.lastAction?.file, "banc.ts")
         XCTAssertEqual(agent.lastAction?.kind, .edit)
         XCTAssertEqual(agent.status(at: now), .working)
+    }
+
+    /// The session file's start time reaches the liveness check, so a reused pid is told apart
+    /// from the process that wrote the file.
+    func testSessionStartTimeReachesTheLivenessCheck() async throws {
+        try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire",
+                         procStart: "Mon Nov  9 22:26:03 2026")
+        try writeAgent(session: "s1", id: "a1", meta: running, lines: [prompt(at: now)], modified: now)
+        let root = self.root!, now = self.now, livePID = self.livePID
+        let seen = Seen()
+        let scanner = AgentScanner(
+            sessionsDirectory: { root.appendingPathComponent("sessions", isDirectory: true) },
+            projectsDirectories: { [root.appendingPathComponent("projects", isDirectory: true)] },
+            isLive: { pid, start in seen.record(start); return pid == livePID },
+            now: { now }
+        )
+
+        let agents = await scanner.scan()
+
+        let expected = ProcessIdentity.date(fromProcStart: "Mon Nov  9 22:26:03 2026")
+        XCTAssertNotNil(expected)
+        XCTAssertEqual(seen.dates, [expected])
+        XCTAssertEqual(agents.first?.sessionStartedAt, expected)
     }
 
     func testIgnoresTheAgentsOfAClosedSession() async throws {
@@ -189,7 +213,7 @@ final class AgentScannerTests: XCTestCase {
         let scanner = AgentScanner(
             sessionsDirectory: { root.appendingPathComponent("sessions", isDirectory: true) },
             projectsDirectories: { [root.appendingPathComponent("projects", isDirectory: true)] },
-            isAlive: { $0 == livePID || $0 == livePID + 1 },
+            isLive: { pid, _ in pid == livePID || pid == livePID + 1 },
             now: { now }
         )
 
@@ -218,4 +242,12 @@ final class AgentScannerTests: XCTestCase {
 
         XCTAssertEqual(agents.map(\.id), ["early", "late"])
     }
+}
+
+/// Records the start dates handed to the liveness check.
+private final class Seen: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _dates: [Date?] = []
+    var dates: [Date?] { lock.withLock { _dates } }
+    func record(_ date: Date?) { lock.withLock { _dates.append(date) } }
 }

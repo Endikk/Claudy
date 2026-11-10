@@ -22,8 +22,13 @@ final class AgentsViewModel: ObservableObject {
     @Published private(set) var notice: String?
 
     private let scanner: AgentScanning
-    /// Sends a signal to a process. Injected so the tests send none.
-    private let signal: @Sendable (Int32, Int32) -> Bool
+    /// Whether a session's process is still that session, checked again the moment a signal is
+    /// about to go out: the list may be seconds old and a pid is reused. Injected for the tests.
+    private let isLive: @Sendable (Int32, Date?) -> Bool
+    /// Sends a signal to a process: 0, or `errno`. Injected so the tests send none.
+    private let signal: @Sendable (Int32, Int32) -> Int32
+    /// Each pass is numbered: a pass that finishes after a newer one changes nothing.
+    private var generation = 0
     /// Each running agent's place in `Theme.agentTints`, kept for as long as it is listed.
     private var colours: [String: Int] = [:]
     private var timer: Timer?
@@ -35,8 +40,10 @@ final class AgentsViewModel: ObservableObject {
     static let noticeDuration: TimeInterval = 5
 
     init(scanner: AgentScanning = AgentScanner(),
-         signal: @escaping @Sendable (Int32, Int32) -> Bool = { kill($0, $1) == 0 }) {
+         isLive: @escaping @Sendable (Int32, Date?) -> Bool = { ProcessIdentity.isSession(pid: $0, startedAt: $1) },
+         signal: @escaping @Sendable (Int32, Int32) -> Int32 = { ProcessIdentity.send($1, to: $0) }) {
         self.scanner = scanner
+        self.isLive = isLive
         self.signal = signal
     }
 
@@ -45,22 +52,32 @@ final class AgentsViewModel: ObservableObject {
     }
 
     func refresh() async {
+        generation += 1
+        let pass = generation
         let found = await scanner.scan()
+        guard pass == generation else { return }
         // Nothing running, nothing to move: the views that read `now` are not redrawn for it.
         if !found.isEmpty || !agents.isEmpty { now = Date() }
         assignColours(to: found)
         if found != agents { agents = found }
         if let expandedID, !found.contains(where: { $0.id == expandedID }) { self.expandedID = nil }
-        if let interruptPending, !found.contains(where: { $0.sessionID == interruptPending }) {
+        // The confirmation goes with the last agent of its session that could still be stopped.
+        if let interruptPending, !found.contains(where: { $0.sessionID == interruptPending && !$0.isFinished }) {
             self.interruptPending = nil
         }
         schedule(found.isEmpty ? Self.quietInterval : Self.busyInterval)
     }
 
+    /// How many are not done: what the badges count. Finished agents stay listed a while, but
+    /// they are not running.
+    var runningCount: Int {
+        agents.filter { !$0.isFinished }.count
+    }
+
     /// The agent whose small Claudy speaks for the group in the menu bar and the notch: one at
-    /// work, else the oldest.
+    /// work, else the oldest still running.
     var lead: RunningAgent? {
-        agents.first { $0.status(at: now) == .working } ?? agents.first
+        agents.first { $0.status(at: now) == .working } ?? agents.first { !$0.isFinished }
     }
 
     /// Agents of more than one Claude Code session are listed: each row says whose it is.
@@ -140,9 +157,11 @@ final class AgentsViewModel: ObservableObject {
 
     // MARK: - Actions
 
+    /// Folding or unfolding any row drops a pending confirmation: it was asked for the row it
+    /// showed in, and must not greet the next one armed.
     func toggleExpanded(_ agent: RunningAgent) {
         expandedID = expandedID == agent.id ? nil : agent.id
-        if expandedID != agent.id { interruptPending = nil }
+        interruptPending = nil
     }
 
     /// Asks before interrupting: the signal reaches the whole session, every agent of it.
@@ -155,14 +174,22 @@ final class AgentsViewModel: ObservableObject {
     }
 
     /// Interrupts the agent's Claude Code session with the signal Ctrl+C sends in its terminal:
-    /// mid-turn, the turn stops and every agent the session runs with it. Agents have no process
-    /// of their own, so there is nothing narrower to stop. Claude Code at a prompt, with nothing
-    /// to interrupt, quits on it: the confirmation says so.
+    /// the turn stops and every agent the session runs with it, and the session stays open, at
+    /// its prompt or mid-turn alike (checked on real sessions: five signals, five survivors).
+    /// Agents have no process of their own, so there is nothing narrower to stop. A command an
+    /// agent had already started, a long `sleep` say, runs to its end on its own.
     func interrupt(_ agent: RunningAgent) {
         interruptPending = nil
-        let sent = signal(agent.sessionPID, SIGINT)
-        show(sent ? "Ctrl+C sent to \(agent.sessionName)."
-                  : "Could not reach \(agent.sessionName): the session may have closed.")
+        // Checked again now, not when the list was last read: the pid may belong to someone else.
+        guard agent.sessionPID > 1, isLive(agent.sessionPID, agent.sessionStartedAt) else {
+            show("Not sent: \(agent.sessionName) has closed.")
+            return
+        }
+        switch signal(agent.sessionPID, SIGINT) {
+        case 0: show("Ctrl+C sent to \(agent.sessionName).")
+        case EPERM: show("Not sent: \(agent.sessionName) runs under another user.")
+        default: show("Not sent: \(agent.sessionName) has closed.")
+        }
     }
 
     private func show(_ text: String) {

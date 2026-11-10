@@ -147,7 +147,8 @@ final class MenuBarController: NSObject {
 
     private func update(with snapshot: UsageSnapshot, agents list: [RunningAgent]? = nil) {
         guard let button = item?.button else { return }
-        let running = list ?? agents.agents
+        // Finished agents stay listed a while; the bar counts the ones still at it.
+        let running = (list ?? agents.agents).filter { !$0.isFinished }
         let session = snapshot.session
         // The figure in the bar: the 5h session, or the monthly spend on a plan billed on usage.
         let lead = snapshot.primary

@@ -17,9 +17,9 @@ private final class SequenceAgents: AgentScanning, @unchecked Sendable {
 final class AgentsViewModelTests: XCTestCase {
 
     private func agent(_ id: String, lastActivity: Date, startedAt: Date = Date(), session: String = "s1",
-                       isFinished: Bool = false, last: AgentAction? = nil, recent: [AgentAction] = [],
-                       edited: [String] = ["a.ts", "b.ts"]) -> RunningAgent {
-        RunningAgent(id: id, sessionID: session, sessionPID: 4242, sessionName: "claire-bb", title: "Benchmark",
+                       pid: Int32 = 4242, isFinished: Bool = false, last: AgentAction? = nil,
+                       recent: [AgentAction] = [], edited: [String] = ["a.ts", "b.ts"]) -> RunningAgent {
+        RunningAgent(id: id, sessionID: session, sessionPID: pid, sessionStartedAt: nil, sessionName: "claire-bb", title: "Benchmark",
                      startedAt: startedAt, lastActivity: lastActivity, isFinished: isFinished, actionCount: 3,
                      recent: recent, lastAction: last, editedFiles: edited)
     }
@@ -142,11 +142,10 @@ final class AgentsViewModelTests: XCTestCase {
 
     /// The interrupt is asked first, then sends Ctrl+C's signal to the agent's session.
     func testInterruptSendsSIGINTToTheSessionAfterConfirmation() async {
-        final class Sent: @unchecked Sendable { var calls: [(Int32, Int32)] = [] }
         let sent = Sent()
         let a = agent("a", lastActivity: Date())
-        let model = AgentsViewModel(scanner: StubAgents(result: [a]),
-                                    signal: { pid, signal in sent.calls.append((pid, signal)); return true })
+        let model = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in true },
+                                    signal: { pid, signal in sent.record(pid, signal); return 0 })
         await model.refresh()
 
         model.askToInterrupt(a)
@@ -164,11 +163,107 @@ final class AgentsViewModelTests: XCTestCase {
         XCTAssertEqual(model.notice, "Ctrl+C sent to claire-bb.")
     }
 
-    func testFailedInterruptSaysSo() async {
+    /// `kill` failing names the reason it can: gone, or someone else's.
+    func testFailedInterruptSaysWhy() async {
         let a = agent("a", lastActivity: Date())
-        let model = AgentsViewModel(scanner: StubAgents(result: [a]), signal: { _, _ in false })
+        let gone = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in true }, signal: { _, _ in ESRCH })
+        gone.interrupt(a)
+        XCTAssertEqual(gone.notice, "Not sent: claire-bb has closed.")
+        let other = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in true }, signal: { _, _ in EPERM })
+        other.interrupt(a)
+        XCTAssertEqual(other.notice, "Not sent: claire-bb runs under another user.")
+    }
+
+    /// The pid is checked again as the signal goes out: never pid 0 or 1, never a pid that no
+    /// longer belongs to the session, even if the list still shows it.
+    func testInterruptNeverSignalsAPidThatIsNotTheSession() async {
+        let sent = Sent()
+        let a = agent("a", lastActivity: Date())
+        let dead = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in false },
+                                   signal: { pid, signal in sent.record(pid, signal); return 0 })
+        dead.interrupt(a)
+        XCTAssertEqual(dead.notice, "Not sent: claire-bb has closed.")
+
+        for pid: Int32 in [0, 1, -1] {
+            let model = AgentsViewModel(scanner: StubAgents(result: []), isLive: { _, _ in true },
+                                        signal: { pid, signal in sent.record(pid, signal); return 0 })
+            model.interrupt(agent("a", lastActivity: Date(), pid: pid))
+            XCTAssertEqual(model.notice, "Not sent: claire-bb has closed.")
+        }
+        XCTAssertTrue(sent.calls.isEmpty)
+    }
+
+    /// Unfolding another row, or the session's last running agent finishing, drops the
+    /// confirmation: it must never greet the next row armed.
+    func testPendingInterruptIsDroppedWhenTheRowOrTheAgentChanges() async {
+        let a = agent("a", lastActivity: Date()), b = agent("b", lastActivity: Date())
+        let aDone = agent("a", lastActivity: Date(), isFinished: true)
+        let model = AgentsViewModel(scanner: SequenceAgents([[a, b], [aDone]]), isLive: { _, _ in true },
+                                    signal: { _, _ in 0 })
         await model.refresh()
-        model.interrupt(a)
-        XCTAssertEqual(model.notice, "Could not reach claire-bb: the session may have closed.")
+
+        model.toggleExpanded(a)
+        model.askToInterrupt(a)
+        model.toggleExpanded(b)
+        XCTAssertNil(model.interruptPending)
+
+        model.askToInterrupt(a)
+        await model.refresh()
+        XCTAssertEqual(model.agents.map(\.id), ["a"])
+        XCTAssertNil(model.interruptPending)
+    }
+
+    /// Finished agents stay listed but are not counted as running, nor made the lead.
+    func testRunningCountLeavesFinishedAgentsOut() async {
+        let done = agent("d", lastActivity: Date(), startedAt: Date().addingTimeInterval(-900), isFinished: true)
+        let working = agent("w", lastActivity: Date())
+        let model = AgentsViewModel(scanner: StubAgents(result: [done, working]), isLive: { _, _ in true },
+                                    signal: { _, _ in 0 })
+        await model.refresh()
+        XCTAssertEqual(model.agents.count, 2)
+        XCTAssertEqual(model.runningCount, 1)
+        XCTAssertEqual(model.lead?.id, "w")
+
+        let onlyDone = AgentsViewModel(scanner: StubAgents(result: [done]))
+        await onlyDone.refresh()
+        XCTAssertEqual(onlyDone.runningCount, 0)
+        XCTAssertNil(onlyDone.lead)
+    }
+
+    /// A pass that finishes after a newer one changes nothing.
+    func testStalePassDoesNotOverwriteANewerOne() async {
+        let slow = SlowAgents()
+        let model = AgentsViewModel(scanner: slow)
+        async let first: Void = model.refresh()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        await slow.release(with: [agent("new", lastActivity: Date())])
+        _ = await first
+        XCTAssertEqual(model.agents.map(\.id), ["new"])
+    }
+}
+
+/// Records the signals a view model sends.
+@MainActor
+private final class Sent {
+    private(set) var calls: [(Int32, Int32)] = []
+    nonisolated func record(_ pid: Int32, _ signal: Int32) {
+        MainActor.assumeIsolated { calls.append((pid, signal)) }
+    }
+}
+
+/// Two passes: the first waits until released, the second answers at once with the released list.
+private actor SlowAgents: AgentScanning {
+    private var released: [RunningAgent]?
+    private var waiters: [CheckedContinuation<[RunningAgent], Never>] = []
+
+    func release(with agents: [RunningAgent]) {
+        released = agents
+        for waiter in waiters { waiter.resume(returning: agents) }
+        waiters = []
+    }
+
+    func scan() async -> [RunningAgent] {
+        if let released { return released }
+        return await withCheckedContinuation { waiters.append($0) }
     }
 }

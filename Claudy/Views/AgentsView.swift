@@ -66,7 +66,7 @@ struct AgentsShortList: View {
             HStack(spacing: 6) {
                 Text("Agents")
                     .microLabel(0.55)
-                CountBadge(value: viewModel.agents.count, tint: Theme.Accent.coral.color)
+                CountBadge(value: viewModel.runningCount, tint: Theme.Accent.coral.color)
             }
             ForEach(viewModel.agents.prefix(limit)) { agent in
                 AgentShortRow(agent: agent, showsElapsed: showsElapsed)
@@ -128,13 +128,14 @@ struct AgentsEarBadge: View {
     @EnvironmentObject private var viewModel: AgentsViewModel
 
     var body: some View {
-        if let lead = viewModel.lead {
-            Text("\(viewModel.agents.count)")
+        let count = viewModel.runningCount
+        if count > 0, let lead = viewModel.lead {
+            Text("\(count)")
                 .font(Theme.Font.value(11, .bold))
                 .foregroundStyle(viewModel.tint(of: lead))
-                .help(viewModel.agents.count == 1 ? "1 agent running" : "\(viewModel.agents.count) agents running")
+                .help(count == 1 ? "1 agent running" : "\(count) agents running")
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(viewModel.agents.count == 1 ? "1 agent running" : "\(viewModel.agents.count) agents running")
+                .accessibilityLabel(count == 1 ? "1 agent running" : "\(count) agents running")
         }
     }
 }

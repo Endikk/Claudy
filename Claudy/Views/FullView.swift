@@ -20,7 +20,7 @@ struct FullView: View {
                 .onTapGesture { viewModel.toggleMode() }
 
             TabSwitcher(selection: $viewModel.tab, badge: portsViewModel.orphanCount,
-                        agents: agentsViewModel.agents.count)
+                        agents: agentsViewModel.runningCount)
 
             switch viewModel.tab {
             case .usage: usageTab

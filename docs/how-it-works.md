@@ -148,9 +148,12 @@ percentage is shown. When agents of several sessions are listed, each row names 
 A click unfolds a row: its session, its number of calls and start time, the files it wrote, its
 last three calls, and an "Interrupt session" button. Agents have no process of their own, so
 there is nothing narrower to stop: after a confirmation that names the session, Claudy sends the
-session's Claude Code process the signal Ctrl+C sends in its terminal (`SIGINT`). Mid-turn, the
-turn stops and every agent of that session with it; a session sitting at its prompt quits on it,
-which the confirmation says.
+session's Claude Code process the signal Ctrl+C sends in its terminal (`SIGINT`). The turn stops
+and every agent of that session with it; the session itself stays open, at its prompt or
+mid-turn. Claude Code then marks the agents finished, so they show as done. A command an agent
+had already started runs to its end on its own. Before the signal goes out, the pid is checked
+again against the start time the session file records: a pid reused by another process after a
+crash is never signalled.
 
 The menu bar popover and the open island show the same list in short, four lines, with the way
 to the widget past that. The menu bar item adds the lead agent's Claudy and the count after the

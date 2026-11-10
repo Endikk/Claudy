@@ -11,12 +11,16 @@ struct AgentRow: View {
 
     private var status: RunningAgent.Status { agent.status(at: viewModel.now) }
 
+    /// The row's Claudy, and the indent of the details under it.
+    static let claudyHeight: CGFloat = 27
+    static let spacing: CGFloat = 8
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             summary
             if isExpanded {
                 AgentDetails(agent: agent, status: status)
-                    .padding(.leading, 27 * ClaudyTyping.aspectRatio + 8)
+                    .padding(.leading, Self.claudyHeight * ClaudyTyping.aspectRatio + Self.spacing)
                     .padding(.top, 2)
                     .padding(.bottom, 6)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -33,8 +37,8 @@ struct AgentRow: View {
     }
 
     private var summary: some View {
-        HStack(alignment: .center, spacing: 8) {
-            AgentClaudy(agent: agent, status: status, height: 27)
+        HStack(alignment: .center, spacing: Self.spacing) {
+            AgentClaudy(agent: agent, status: status, height: Self.claudyHeight)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 8) {
@@ -71,6 +75,7 @@ struct AgentRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(AgentClaudy.spoken(agent, status: status))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction { viewModel.toggleExpanded(agent) }
         .accessibilityHint(isExpanded ? "Folds the agent" : "Unfolds the agent: session, files written, interrupt")
     }
 }
@@ -116,7 +121,7 @@ struct AgentDetails: View {
     private var interruptRow: some View {
         if isConfirming {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Sends Ctrl+C to \(agent.sessionName): every agent of that session stops. A session sitting at its prompt closes instead.")
+                Text("Sends Ctrl+C to \(agent.sessionName): its turn and every agent of it stop. The session stays open.")
                     .foregroundStyle(.primary.opacity(0.65))
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -125,9 +130,9 @@ struct AgentDetails: View {
                     Button("Cancel", action: viewModel.cancelInterrupt)
                         .buttonStyle(QuietButtonStyle())
                         .keyboardShortcut(.cancelAction)
+                    // No Return shortcut: the destructive choice takes a click.
                     Button("Interrupt \(agent.sessionName)") { viewModel.interrupt(agent) }
                         .buttonStyle(QuietButtonStyle(tint: Theme.danger))
-                        .keyboardShortcut(.defaultAction)
                 }
             }
         } else {

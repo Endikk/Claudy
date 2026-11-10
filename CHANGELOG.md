@@ -17,7 +17,9 @@ All notable changes to this project are documented here. Dates are release dates
 - **Interrupt a session from the card.** A click unfolds an agent: its session, what it wrote,
   its last calls, and an "Interrupt session" button. After a confirmation that names the
   session, Claudy sends its Claude Code process Ctrl+C's signal, which stops every agent of
-  that session. Agents have no process of their own, so nothing narrower can be stopped.
+  that session and leaves the session open. Agents have no process of their own, so nothing
+  narrower can be stopped. The pid is checked against the session's recorded start time first,
+  so a pid reused by another process is never signalled.
 - **The short lists say more.** The popover and the island list four agents with their state in
   colour, and "+N more" opens the widget. The notch at rest shows the count alone, in the lead
   agent's colour: a second mascot did not read at 13 points.

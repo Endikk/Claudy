@@ -11,7 +11,7 @@ final class AgentModelsTests: XCTestCase {
 
     private func agent(session: String = "s1", last: AgentAction?, recent: [AgentAction] = [],
                        lastActivity: TimeInterval = 0, isFinished: Bool = false) -> RunningAgent {
-        RunningAgent(id: "a1", sessionID: session, sessionPID: 4242, sessionName: "claire-bb", title: "Benchmark",
+        RunningAgent(id: "a1", sessionID: session, sessionPID: 4242, sessionStartedAt: nil, sessionName: "claire-bb", title: "Benchmark",
                      startedAt: now.addingTimeInterval(-600), lastActivity: now.addingTimeInterval(-lastActivity),
                      isFinished: isFinished, actionCount: recent.count, recent: recent, lastAction: last,
                      editedFiles: [])
@@ -42,7 +42,11 @@ final class AgentModelsTests: XCTestCase {
     /// A minute of silence is a pause; three minutes are worth a look; finished is finished.
     func testStatusFollowsTheLastActivity() {
         XCTAssertEqual(agent(last: nil, lastActivity: 10).status(at: now), .working)
+        XCTAssertEqual(agent(last: nil, lastActivity: 59).status(at: now), .working)
+        XCTAssertEqual(agent(last: nil, lastActivity: 60).status(at: now), .idle)
         XCTAssertEqual(agent(last: nil, lastActivity: 90).status(at: now), .idle)
+        XCTAssertEqual(agent(last: nil, lastActivity: 179).status(at: now), .idle)
+        XCTAssertEqual(agent(last: nil, lastActivity: 180).status(at: now), .stalled)
         XCTAssertEqual(agent(last: nil, lastActivity: 200).status(at: now), .stalled)
         XCTAssertEqual(agent(last: nil, lastActivity: 10, isFinished: true).status(at: now), .done)
         XCTAssertEqual(agent(last: nil, lastActivity: 200, isFinished: true).status(at: now), .done)

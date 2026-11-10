@@ -47,6 +47,9 @@ struct RunningAgent: Identifiable, Equatable, Sendable {
     /// The Claude Code process that launched it. Agents have no process of their own: stopping
     /// one means interrupting its session, as Ctrl+C would.
     let sessionPID: Int32
+    /// When that process started, as its session file records it: a pid is reused once its
+    /// process exits, the start time is not.
+    let sessionStartedAt: Date?
     /// `claire-bb`, or the working folder's name when the session has none.
     let sessionName: String
     /// What it was asked, as written when it was launched.

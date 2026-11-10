@@ -28,6 +28,7 @@ actor AgentScanner: AgentScanning {
         let id: String
         let name: String
         let pid: Int32
+        let startedAt: Date?
     }
 
     private struct SessionFile: Decodable {
@@ -35,6 +36,8 @@ actor AgentScanner: AgentScanning {
         let sessionId: String
         let cwd: String?
         let name: String?
+        /// "Mon Nov  9 22:26:03 2026": when the process started, which tells a reused pid apart.
+        let procStart: String?
     }
 
     private struct Meta: Decodable {
@@ -63,7 +66,9 @@ actor AgentScanner: AgentScanning {
 
     private let sessionsDirectory: @Sendable () -> URL
     private let projectsDirectories: @Sendable () -> [URL]
-    private let isAlive: @Sendable (Int32) -> Bool
+    /// Whether the process a session file names is still that session: its pid, and the start
+    /// time the file records when it does.
+    private let isLive: @Sendable (Int32, Date?) -> Bool
     private let now: @Sendable () -> Date
 
     private let withFraction: ISO8601DateFormatter = {
@@ -77,11 +82,11 @@ actor AgentScanner: AgentScanning {
              ClaudeHome.configDirectory.appendingPathComponent("sessions", isDirectory: true)
          },
          projectsDirectories: @escaping @Sendable () -> [URL] = { ClaudeHome.projectsDirectories },
-         isAlive: @escaping @Sendable (Int32) -> Bool = { AgentScanner.processIsAlive($0) },
+         isLive: @escaping @Sendable (Int32, Date?) -> Bool = { ProcessIdentity.isSession(pid: $0, startedAt: $1) },
          now: @escaping @Sendable () -> Date = { Date() }) {
         self.sessionsDirectory = sessionsDirectory
         self.projectsDirectories = projectsDirectories
-        self.isAlive = isAlive
+        self.isLive = isLive
         self.now = now
     }
 
@@ -104,13 +109,6 @@ actor AgentScanner: AgentScanning {
         return agents.sorted { ($0.startedAt, $0.id) < ($1.startedAt, $1.id) }
     }
 
-    /// `kill` with no signal only asks whether the process exists. `EPERM` means it does, under
-    /// another user.
-    static func processIsAlive(_ pid: Int32) -> Bool {
-        guard pid > 0 else { return false }
-        return kill(pid, 0) == 0 || errno == EPERM
-    }
-
     // MARK: - Sessions
 
     private func liveSessions() -> [Session] {
@@ -119,11 +117,12 @@ actor AgentScanner: AgentScanning {
         else { return [] }
         return files.filter { $0.pathExtension == "json" }.compactMap { url in
             guard let data = try? Data(contentsOf: url),
-                  let file = try? JSONDecoder().decode(SessionFile.self, from: data),
-                  isAlive(file.pid) else { return nil }
+                  let file = try? JSONDecoder().decode(SessionFile.self, from: data) else { return nil }
+            let startedAt = file.procStart.flatMap(ProcessIdentity.date(fromProcStart:))
+            guard isLive(file.pid, startedAt) else { return nil }
             let folderName = file.cwd.map { URL(fileURLWithPath: $0).lastPathComponent }
             let name = [file.name, folderName].compactMap { $0 }.first { !$0.isEmpty } ?? "session"
-            return Session(id: file.sessionId, name: name, pid: file.pid)
+            return Session(id: file.sessionId, name: name, pid: file.pid, startedAt: startedAt)
         }
     }
 
@@ -171,7 +170,8 @@ actor AgentScanner: AgentScanning {
         let state = read(url, now: now)
         let id = String(url.deletingPathExtension().lastPathComponent.dropFirst("agent-".count))
         let title = [meta?.description, meta?.agentType].compactMap { $0 }.first { !$0.isEmpty } ?? "Agent"
-        return RunningAgent(id: id, sessionID: session.id, sessionPID: session.pid, sessionName: session.name, title: title,
+        return RunningAgent(id: id, sessionID: session.id, sessionPID: session.pid,
+                            sessionStartedAt: session.startedAt, sessionName: session.name, title: title,
                             startedAt: state.startedAt ?? modified, lastActivity: modified,
                             isFinished: isFinished, actionCount: state.count, recent: state.recent,
                             lastAction: state.last, editedFiles: state.edited)
