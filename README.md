@@ -14,7 +14,7 @@
 
 <p align="center"><img src="docs/claudy-typing.gif" width="132" alt="Claudy, the pixel mascot, typing at its laptop"></p>
 
-<p align="center"><img src="docs/video-readme.gif" width="620" alt="The Claudy widget: 5h session, weekly quotas, daily totals, 7-day sparkline"></p>
+<p align="center"><img src="docs/video-readme.gif" width="620" alt="Claudy in 45 seconds: the compact strip, the usage card and its details, the Sessions and Ports tabs, the island around the notch, and the mascot at 100 %"></p>
 
 </div>
 
