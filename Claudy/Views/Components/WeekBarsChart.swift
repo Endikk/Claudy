@@ -16,7 +16,7 @@ struct WeekBarsChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 10) {
             header
             Chart {
                 ForEach(samples) { sample in
@@ -25,14 +25,14 @@ struct WeekBarsChart: View {
                         y: .value("Tokens", grown ? sample.tokens : 0),
                         width: .ratio(0.62)
                     )
-                    .cornerRadius(3)
+                    .cornerRadius(5)
                     .foregroundStyle(tint.opacity(opacity(for: sample)))
                 }
 
                 if average > 0 {
                     RuleMark(y: .value("Average", grown ? average : 0))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .foregroundStyle(.primary.opacity(0.25))
+                        .foregroundStyle(.tertiary)
                 }
             }
             .chartXAxis {
@@ -40,7 +40,7 @@ struct WeekBarsChart: View {
                     AxisValueLabel(centered: true) {
                         if let date = value.as(Date.self) {
                             Text(UsageViewModel.dayInitial(date))
-                                .font(Theme.Font.label(8.5, .semibold))
+                                .font(Theme.Font.label(11, .medium))
                         }
                     }
                 }
@@ -63,7 +63,7 @@ struct WeekBarsChart: View {
                         }
                 }
             }
-            .frame(height: 70)
+            .frame(height: 76)
         }
         .onAppear {
             withAnimation(Theme.Motion.gauge.delay(0.15)) { grown = true }
@@ -74,19 +74,18 @@ struct WeekBarsChart: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("Last 7 days")
-                .microLabel(0.55)
+                .sectionLabel()
             Spacer(minLength: 4)
             if let hovered {
                 Text(UsageViewModel.dayName(hovered.date))
-                    .font(Theme.Font.label(10.5, .semibold))
-                    .foregroundStyle(.primary.opacity(0.6))
+                    .font(Theme.Font.label(11, .semibold))
+                    .foregroundStyle(.secondary)
                 Text(UsageViewModel.tokens(hovered.tokens))
-                    .font(Theme.Font.value(10.5, .semibold))
+                    .font(Theme.Font.value(11, .semibold))
                     .foregroundStyle(tint)
             } else if average > 0 {
-                Text("avg \(UsageViewModel.tokens(Int(average))) / day")
-                    .font(Theme.Font.value(10.5, .medium))
-                    .foregroundStyle(.primary.opacity(0.4))
+                Text("avg \(UsageViewModel.tokens(Int(average))) a day")
+                    .meta()
             }
         }
         .frame(height: 12)
@@ -94,7 +93,7 @@ struct WeekBarsChart: View {
 
     private func opacity(for sample: TokenSample) -> Double {
         if let hovered { return sample.id == hovered.id ? 1 : 0.3 }
-        return sample.id == samples.last?.id ? 1 : 0.45
+        return sample.id == samples.last?.id ? 1 : 0.35
     }
 
     private func nearestSample(atX x: CGFloat, proxy: ChartProxy) -> TokenSample? {

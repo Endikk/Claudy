@@ -9,22 +9,13 @@ struct AvatarButton: View {
     var body: some View {
         Button(action: action) {
             Text(account.initial)
-                .font(Theme.Font.label(11, .bold))
-                .foregroundStyle(.white)
-                .frame(width: 24, height: 24)
-                .background(
-                    Circle().fill(
-                        LinearGradient(
-                            colors: [Theme.Accent.coral.color, Theme.Accent.coral.color.opacity(0.65)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                )
+                .font(Theme.Font.label(12, .semibold))
+                .foregroundStyle(Theme.onAccent)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Theme.Accent.coral.color))
                 .overlay(
-                    Circle().stroke(.white.opacity(isActive ? 0.85 : 0.22), lineWidth: 1)
+                    Circle().strokeBorder(.white.opacity(isActive ? 0.85 : 0.3), lineWidth: isActive ? 1.5 : 0.5)
                 )
-                .shadow(color: Theme.Accent.coral.color.opacity(0.4), radius: 5, y: 1)
         }
         .buttonStyle(.plain)
         .help("Account")
@@ -43,18 +34,10 @@ struct ProfilePopup: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 10) {
                 Text(account.initial)
-                    .font(Theme.Font.label(15, .bold))
-                    .foregroundStyle(.white)
+                    .font(Theme.Font.label(15, .semibold))
+                    .foregroundStyle(Theme.onAccent)
                     .frame(width: 36, height: 36)
-                    .background(
-                        Circle().fill(
-                            LinearGradient(
-                                colors: [Theme.Accent.coral.color, Theme.Accent.coral.color.opacity(0.6)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                    )
+                    .background(Circle().fill(Theme.Accent.coral.color))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(account.name)
@@ -62,8 +45,8 @@ struct ProfilePopup: View {
                         .foregroundStyle(.primary)
                     if !account.email.isEmpty {
                         Text(account.email)
-                            .font(Theme.Font.label(10.5, .regular))
-                            .foregroundStyle(.primary.opacity(0.5))
+                            .font(Theme.Font.label(11, .regular))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -74,7 +57,7 @@ struct ProfilePopup: View {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.primary.opacity(0.4))
+                        .foregroundStyle(.secondary)
                         .frame(width: 18, height: 18)
                         .contentShape(Rectangle())
                 }
@@ -90,8 +73,8 @@ struct ProfilePopup: View {
 
             if badges.isEmpty {
                 Text("No Claude account signed in on this machine")
-                    .font(Theme.Font.label(10, .regular))
-                    .foregroundStyle(.primary.opacity(0.4))
+                    .font(Theme.Font.label(11, .regular))
+                    .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 6) {
                     ForEach(badges, id: \.0) { text, tint in
@@ -107,26 +90,26 @@ struct ProfilePopup: View {
                          tint: Theme.danger, action: onSignOut)
             }
         }
-        .padding(14)
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(.thickMaterial)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(.white.opacity(0.14), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.35), radius: 22, y: 10)
+        .shadow(color: .black.opacity(0.25), radius: 16, y: 8)
     }
 
     private func badge(_ text: String, tint: Color) -> some View {
-        Text(text)
-            .font(Theme.Font.label(9.5, .semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(tint.opacity(0.16)))
-            .lineLimit(1)
+        HStack(spacing: 4) {
+            Circle().fill(tint).frame(width: 6, height: 6)
+            Text(text)
+                .font(Theme.Font.label(12, .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 }
 
@@ -146,7 +129,7 @@ private struct PopupRow: View {
                     .font(.system(size: 10, weight: .semibold))
                     .frame(width: 14)
                 Text(title)
-                    .font(Theme.Font.label(11.5, .medium))
+                    .font(Theme.Font.label(12, .medium))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(tint.opacity(0.85))

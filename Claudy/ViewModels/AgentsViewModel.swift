@@ -1,25 +1,32 @@
-import Foundation
+import AppKit
 import SwiftUI
 
-/// Drives every face of the agents list: the card's Agents tab, the popover's and the island's
-/// short list, the menu bar item's count.
+/// Drives every face of the sessions and their agents: the card's Sessions tab, the popover's and
+/// the island's short lists and waiting rows, the menu bar item's count.
 ///
 /// The scan is cheap once each transcript has been read through (a few file sizes, a few appended
-/// lines), so it runs every few seconds while agents are listed, the track moving with them, and
-/// slows down when none is.
+/// lines), so it runs every few seconds while a session works or agents are listed, the tracks
+/// moving with them, and slows down when everything rests.
 @MainActor
 final class AgentsViewModel: ObservableObject {
 
     @Published private(set) var agents: [RunningAgent] = []
+    /// Every Claude Code session open on this Mac, background ones included.
+    @Published private(set) var sessions: [ClaudeSession] = []
     /// The moment of the last pass. Rows read their elapsed time and their track against it, so
     /// they all agree and move together.
     @Published private(set) var now = Date()
-    /// The agent whose row is unfolded in the card: its session, what it wrote, the way to stop it.
+    /// The agent whose row is unfolded in the card: what it wrote, its last calls.
     @Published var expandedID: String?
+    /// The session unfolded in the card: where it runs, the way to its window, the interrupt.
+    @Published var expandedSessionID: String?
     /// The session an interrupt is being confirmed for.
     @Published var interruptPending: String?
-    /// One line under the list after an interrupt: sent, or why not. Clears itself.
+    /// One line under the list after an action: sent, or why not. Clears itself.
     @Published private(set) var notice: String?
+
+    /// Called after each pass with what it found: the notifications read it.
+    var onPass: ((ClaudeActivity) -> Void)?
 
     private let scanner: AgentScanning
     /// Whether a session's process is still that session, checked again the moment a signal is
@@ -27,6 +34,8 @@ final class AgentsViewModel: ObservableObject {
     private let isLive: @Sendable (Int32, Date?) -> Bool
     /// Sends a signal to a process: 0, or `errno`. Injected so the tests send none.
     private let signal: @Sendable (Int32, Int32) -> Int32
+    /// Brings an app forward; false when it is not there to open. Injected for the tests.
+    private let open: @MainActor (HostApp) -> Bool
     /// Each pass is numbered: a pass that finishes after a newer one changes nothing.
     private var generation = 0
     /// Each running agent's place in `Theme.agentTints`, kept for as long as it is listed.
@@ -41,10 +50,12 @@ final class AgentsViewModel: ObservableObject {
 
     init(scanner: AgentScanning = AgentScanner(),
          isLive: @escaping @Sendable (Int32, Date?) -> Bool = { ProcessIdentity.isSession(pid: $0, startedAt: $1) },
-         signal: @escaping @Sendable (Int32, Int32) -> Int32 = { ProcessIdentity.send($1, to: $0) }) {
+         signal: @escaping @Sendable (Int32, Int32) -> Int32 = { ProcessIdentity.send($1, to: $0) },
+         open: @escaping @MainActor (HostApp) -> Bool = AgentsViewModel.bringForward) {
         self.scanner = scanner
         self.isLive = isLive
         self.signal = signal
+        self.open = open
     }
 
     func start() {
@@ -54,18 +65,30 @@ final class AgentsViewModel: ObservableObject {
     func refresh() async {
         generation += 1
         let pass = generation
-        let found = await scanner.scan()
+        let found = await scanner.scanActivity()
         guard pass == generation else { return }
-        // Nothing running, nothing to move: the views that read `now` are not redrawn for it.
-        if !found.isEmpty || !agents.isEmpty { now = Date() }
-        assignColours(to: found)
-        if found != agents { agents = found }
-        if let expandedID, !found.contains(where: { $0.id == expandedID }) { self.expandedID = nil }
-        // The confirmation goes with the last agent of its session that could still be stopped.
-        if let interruptPending, !found.contains(where: { $0.sessionID == interruptPending && !$0.isFinished }) {
+        // Nothing open, nothing to move: the views that read `now` are not redrawn for it.
+        let isQuiet = found.agents.isEmpty && found.sessions.isEmpty
+        if !isQuiet || !agents.isEmpty || !sessions.isEmpty { now = Date() }
+        assignColours(to: found.agents)
+        if found.agents != agents { agents = found.agents }
+        if found.sessions != sessions { sessions = found.sessions }
+        dropWhatLeft()
+        let isBusy = !found.agents.isEmpty || found.sessions.contains { $0.status == .busy || $0.isWaiting }
+        schedule(isBusy ? Self.busyInterval : Self.quietInterval)
+        onPass?(found)
+    }
+
+    /// An unfolded row, or a confirmation, goes with the agent or session it was shown for.
+    private func dropWhatLeft() {
+        if let expandedID, !agents.contains(where: { $0.id == expandedID }) { self.expandedID = nil }
+        let listed = groups.map(\.session)
+        if let expandedSessionID, !listed.contains(where: { $0.id == expandedSessionID }) {
+            self.expandedSessionID = nil
+        }
+        if let interruptPending, !listed.contains(where: { $0.id == interruptPending && $0.canBeInterrupted }) {
             self.interruptPending = nil
         }
-        schedule(found.isEmpty ? Self.quietInterval : Self.busyInterval)
     }
 
     /// How many are not done: what the badges count. Finished agents stay listed a while, but
@@ -80,9 +103,43 @@ final class AgentsViewModel: ObservableObject {
         agents.first { $0.status(at: now) == .working } ?? agents.first { !$0.isFinished }
     }
 
-    /// Agents of more than one Claude Code session are listed: each row says whose it is.
-    var spansSessions: Bool {
-        Set(agents.map(\.sessionID)).count > 1
+    /// The sessions the card lists, each with its agents: the ones someone sits at, and a
+    /// program's own only while it runs agents. Waiting first, the longest wait on top, then at
+    /// work, then at rest.
+    var groups: [SessionGroup] {
+        let byID = Dictionary(grouping: agents, by: \.sessionID)
+        var listed = sessions.filter { !$0.isBackground || byID[$0.id] != nil }
+        // Agents whose session file was not read in this pass still show, under their session.
+        for agent in agents where !listed.contains(where: { $0.id == agent.sessionID }) {
+            listed.append(ClaudeSession(id: agent.sessionID, pid: agent.sessionPID,
+                                        processStartedAt: agent.sessionStartedAt, name: agent.sessionName,
+                                        cwd: nil, openedAt: nil, status: .unknown, statusSince: nil,
+                                        isBackground: false, host: nil, lastPrompt: nil))
+        }
+        return listed.sorted(by: Self.precedes).map { SessionGroup(session: $0, agents: byID[$0.id] ?? []) }
+    }
+
+    /// The sessions asking the user something, the longest wait first.
+    var waiting: [ClaudeSession] {
+        groups.map(\.session).filter { $0.isWaiting && !$0.isBackground }
+    }
+
+    private static func precedes(_ first: ClaudeSession, _ second: ClaudeSession) -> Bool {
+        let ranks = (rank(first), rank(second))
+        if ranks.0 != ranks.1 { return ranks.0 < ranks.1 }
+        if first.isWaiting {
+            return (first.statusSince ?? .distantPast, first.id) < (second.statusSince ?? .distantPast, second.id)
+        }
+        return (first.name.lowercased(), first.id) < (second.name.lowercased(), second.id)
+    }
+
+    private static func rank(_ session: ClaudeSession) -> Int {
+        switch session.status {
+        case .waiting: 0
+        case .busy: 1
+        case .unknown: 2
+        case .idle: 3
+        }
     }
 
     /// Its colour in `Theme.agentTints`. An agent not seen yet takes the first one.
@@ -142,6 +199,49 @@ final class AgentsViewModel: ObservableObject {
         }
     }
 
+    /// Where a session is, on the right of its row.
+    func state(_ session: ClaudeSession) -> String {
+        switch session.status {
+        case .busy: "working"
+        case .waiting: "waiting"
+        case .unknown: "open"
+        case .idle:
+            session.statusSince.map { "idle \(Self.duration(now.timeIntervalSince($0)))" } ?? "idle"
+        }
+    }
+
+    /// How long it has waited for the user.
+    func waited(_ session: ClaudeSession) -> String {
+        Self.duration(now.timeIntervalSince(session.statusSince ?? now))
+    }
+
+    /// How long it has been open, when its file says.
+    func age(_ session: ClaudeSession) -> String? {
+        session.openedAt.map { Self.duration(now.timeIntervalSince($0)) }
+    }
+
+    /// The line under a waiting session's name: what it waits for, its project, its app.
+    func waitingDetail(_ session: ClaudeSession) -> String {
+        [session.waitingReason ?? "Waiting for you", session.folderName, session.host?.shortName]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// An unfolded session's first line: its folder, its app, when it opened, its agents.
+    func details(_ session: ClaudeSession, agents count: Int) -> String {
+        var parts: [String] = []
+        if let cwd = session.cwd { parts.append(Self.abbreviated(cwd)) }
+        if let host = session.host { parts.append(host.shortName) }
+        if let opened = session.openedAt { parts.append("started \(UsageViewModel.clock(opened))") }
+        parts.append(count == 0 ? "no agent" : count == 1 ? "1 agent" : "\(count) agents")
+        return parts.joined(separator: " · ")
+    }
+
+    /// A path from the home folder on, as a terminal shows it.
+    static func abbreviated(_ path: String, home: String = NSHomeDirectory()) -> String {
+        guard !home.isEmpty, path == home || path.hasPrefix(home + "/") else { return path }
+        return "~" + path.dropFirst(home.count)
+    }
+
     static func duration(_ seconds: TimeInterval) -> String {
         let seconds = Int(seconds)
         switch seconds {
@@ -164,32 +264,63 @@ final class AgentsViewModel: ObservableObject {
         interruptPending = nil
     }
 
+    func toggleExpanded(_ session: ClaudeSession) {
+        expandedSessionID = expandedSessionID == session.id ? nil : session.id
+        interruptPending = nil
+    }
+
     /// Asks before interrupting: the signal reaches the whole session, every agent of it.
-    func askToInterrupt(_ agent: RunningAgent) {
-        interruptPending = agent.sessionID
+    func askToInterrupt(_ session: ClaudeSession) {
+        interruptPending = session.id
     }
 
     func cancelInterrupt() {
         interruptPending = nil
     }
 
-    /// Interrupts the agent's Claude Code session with the signal Ctrl+C sends in its terminal:
-    /// the turn stops and every agent the session runs with it, and the session stays open, at
-    /// its prompt or mid-turn alike (checked on real sessions: five signals, five survivors).
-    /// Agents have no process of their own, so there is nothing narrower to stop. A command an
-    /// agent had already started, a long `sleep` say, runs to its end on its own.
-    func interrupt(_ agent: RunningAgent) {
+    /// Interrupts a Claude Code session with the signal Ctrl+C sends in its terminal: the turn
+    /// stops and every agent the session runs with it, and the session stays open, at its prompt
+    /// or mid-turn alike (checked on real sessions: five signals, five survivors). Agents have no
+    /// process of their own, so there is nothing narrower to stop. A command an agent had already
+    /// started, a long `sleep` say, runs to its end on its own.
+    func interrupt(_ session: ClaudeSession) {
         interruptPending = nil
         // Checked again now, not when the list was last read: the pid may belong to someone else.
-        guard agent.sessionPID > 1, isLive(agent.sessionPID, agent.sessionStartedAt) else {
-            show("Not sent: \(agent.sessionName) has closed.")
+        // Without the start time its file records, nothing proves the pid is still the session.
+        guard session.pid > 1, let startedAt = session.processStartedAt, isLive(session.pid, startedAt) else {
+            show("Not sent: \(session.name) has closed.")
             return
         }
-        switch signal(agent.sessionPID, SIGINT) {
-        case 0: show("Ctrl+C sent to \(agent.sessionName).")
-        case EPERM: show("Not sent: \(agent.sessionName) runs under another user.")
-        default: show("Not sent: \(agent.sessionName) has closed.")
+        switch signal(session.pid, SIGINT) {
+        case 0: show("Ctrl+C sent to \(session.name).")
+        case EPERM: show("Not sent: \(session.name) runs under another user.")
+        default: show("Not sent: \(session.name) has closed.")
         }
+    }
+
+    /// Brings forward the app the session runs in: its terminal, its editor.
+    func focus(_ session: ClaudeSession) {
+        guard let host = session.host else {
+            show("Claudy cannot tell which app runs \(session.name).")
+            return
+        }
+        if !open(host) { show("\(host.name) could not be opened.") }
+    }
+
+    /// The session a notification spoke of, if it is still open.
+    func focus(sessionID: String) {
+        guard let session = sessions.first(where: { $0.id == sessionID }) else { return }
+        focus(session)
+    }
+
+    /// Activates the app, which brings its last window forward. Opening the session's folder with
+    /// it would find the right window in an editor, but open a new one in a terminal.
+    static func bringForward(_ host: HostApp) -> Bool {
+        guard FileManager.default.fileExists(atPath: host.bundleURL.path) else { return false }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: host.bundleURL, configuration: configuration)
+        return true
     }
 
     private func show(_ text: String) {

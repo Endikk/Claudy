@@ -36,6 +36,36 @@ final class TranscriptScannerTests: XCTestCase {
         XCTAssertEqual(entries.first?.tokens, 36_146 + 202)
     }
 
+    /// The CSV export prices each counter on its own, so the scanner keeps them apart as well as
+    /// adding them up.
+    func testEachCounterIsKeptApart() async throws {
+        let projects = try makeDirectory("projects")
+        try write(projects, "p/s.jsonl", [line(id: "m1", input: 1, output: 20, cacheWrite: 300, cacheRead: 4_000)])
+
+        let entries = try await scanner(projects).scan()
+        let entry = try XCTUnwrap(entries.first)
+
+        XCTAssertEqual(entry.inputTokens, 1)
+        XCTAssertEqual(entry.outputTokens, 20)
+        XCTAssertEqual(entry.cacheWriteTokens, 300)
+        XCTAssertEqual(entry.cacheReadTokens, 4_000)
+        XCTAssertEqual(entry.tokens, 4_321, "the total stays the sum of the four")
+    }
+
+    func testStreamedResponseKeepsTheCountersOfItsFinalLine() async throws {
+        let projects = try makeDirectory("projects")
+        try write(projects, "p/s.jsonl", [
+            line(id: "m1", input: 3, output: 4, cacheWrite: 36_146),
+            line(id: "m1", input: 3, output: 202, cacheWrite: 36_146),
+        ])
+
+        let entries = try await scanner(projects).scan()
+
+        XCTAssertEqual(entries.map(\.outputTokens), [202])
+        XCTAssertEqual(entries.map(\.inputTokens), [3])
+        XCTAssertEqual(entries.map(\.cacheWriteTokens), [36_146])
+    }
+
     func testLineAppendedAfterAReadCompletesTheResponse() async throws {
         let projects = try makeDirectory("projects")
         let file = try write(projects, "p/s.jsonl", [line(id: "m1", output: 4)])
@@ -341,12 +371,12 @@ final class TranscriptScannerTests: XCTestCase {
         try handle.write(contentsOf: Data((lines.joined(separator: "\n") + "\n").utf8))
     }
 
-    private func line(id: String, output: Int, cacheWrite: Int = 0, cacheRead: Int = 0,
+    private func line(id: String, input: Int = 0, output: Int, cacheWrite: Int = 0, cacheRead: Int = 0,
                       at date: Date = Date().addingTimeInterval(-600),
                       hasIdentifiers: Bool = true) -> String {
         var message: [String: Any] = [
             "model": "claude-opus-5",
-            "usage": ["input_tokens": 0, "output_tokens": output,
+            "usage": ["input_tokens": input, "output_tokens": output,
                       "cache_creation_input_tokens": cacheWrite, "cache_read_input_tokens": cacheRead],
         ]
         var object: [String: Any] = [

@@ -22,20 +22,23 @@ final class AgentScannerTests: XCTestCase {
 
     // MARK: - Fixture
 
-    private func scanner() -> AgentScanner {
+    private func scanner(host: HostApp? = nil) -> AgentScanner {
         let root = self.root!, now = self.now, livePID = self.livePID
         return AgentScanner(
             sessionsDirectory: { root.appendingPathComponent("sessions", isDirectory: true) },
             projectsDirectories: { [root.appendingPathComponent("projects", isDirectory: true)] },
             isLive: { pid, _ in pid == livePID },
+            hostApp: { _ in host },
             now: { now }
         )
     }
 
-    private func writeSession(pid: Int32, id: String, name: String?, cwd: String, procStart: String? = nil) throws {
-        var session: [String: Any] = ["pid": pid, "sessionId": id, "cwd": cwd, "status": "busy"]
+    private func writeSession(pid: Int32, id: String, name: String?, cwd: String, procStart: String? = nil,
+                              status: String = "busy", extra: [String: Any] = [:]) throws {
+        var session: [String: Any] = ["pid": pid, "sessionId": id, "cwd": cwd, "status": status]
         session["name"] = name
         session["procStart"] = procStart
+        session.merge(extra) { $1 }
         let folder = root.appendingPathComponent("sessions", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try JSONSerialization.data(withJSONObject: session).write(to: folder.appendingPathComponent("\(pid).json"))
@@ -85,6 +88,112 @@ final class AgentScannerTests: XCTestCase {
 
     private let running: [String: Any] = ["agentType": "general-purpose",
                                           "description": "Make prescription file reading reliable"]
+
+    /// The session's own transcript, beside its agents' folder.
+    @discardableResult
+    private func writeTranscript(session: String, lines: [[String: Any]]) throws -> URL {
+        let folder = root.appendingPathComponent("projects/-Users-me-Claire", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appendingPathComponent("\(session).jsonl")
+        try jsonl(lines).write(to: url)
+        return url
+    }
+
+    private func typed(_ content: Any, meta: Bool = false) -> [String: Any] {
+        var line: [String: Any] = ["type": "user", "message": ["role": "user", "content": content]]
+        if meta { line["isMeta"] = true }
+        return line
+    }
+
+    // MARK: - Sessions
+
+    /// A session's status, what it waits for and since when, as Claude Code wrote them.
+    func testListsOpenSessionsWithTheirStatus() async throws {
+        let host = HostApp(name: "Visual Studio Code", bundleURL: URL(fileURLWithPath: "/Applications/Visual Studio Code.app"))
+        try writeSession(pid: livePID, id: "s1", name: "evan-b6", cwd: "/Users/me/EVAN", status: "waiting",
+                         extra: ["waitingFor": "permission prompt", "statusUpdatedAt": 1_793_467_940_000.0,
+                                 "startedAt": 1_793_460_000_000.0, "entrypoint": "claude-vscode"])
+        try writeSession(pid: closedPID, id: "s2", name: "gone", cwd: "/Users/me/Gone")
+
+        let activity = await scanner(host: host).scanActivity()
+
+        XCTAssertEqual(activity.sessions.count, 1)
+        let session = try XCTUnwrap(activity.sessions.first)
+        XCTAssertEqual(session.id, "s1")
+        XCTAssertEqual(session.name, "evan-b6")
+        XCTAssertEqual(session.status, .waiting(reason: "permission prompt"))
+        XCTAssertEqual(session.waitingReason, "Permission prompt")
+        XCTAssertEqual(session.statusSince, Date(timeIntervalSince1970: 1_793_467_940))
+        XCTAssertEqual(session.openedAt, Date(timeIntervalSince1970: 1_793_460_000))
+        XCTAssertEqual(session.folderName, "EVAN")
+        XCTAssertEqual(session.host, host)
+        XCTAssertFalse(session.isBackground)
+        XCTAssertTrue(activity.agents.isEmpty)
+    }
+
+    /// A session open in two processes is one session.
+    func testSessionOpenTwiceIsListedOnce() async throws {
+        try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire")
+        try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire")
+        let activity = await scanner().scanActivity()
+        XCTAssertEqual(activity.sessions.map(\.id), ["s1"])
+    }
+
+    /// The last thing typed: not a tool result, not what Claude Code adds in tags, not a meta line.
+    func testReadsTheLastPromptOfASession() async throws {
+        try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire")
+        let url = try writeTranscript(session: "s1", lines: [
+            typed("first question"),
+            typed([["type": "text", "text": "<ide_opened_file>a.ts</ide_opened_file>"],
+                   ["type": "text", "text": "add the allergens\n  filter to the menu page"]]),
+            typed([["type": "tool_result", "tool_use_id": "t1", "content": "ok"]]),
+            typed("<command-name>/model</command-name>"),
+            typed("Caveat: this is meta", meta: true),
+            typed([["type": "text", "text": "[Request interrupted by user]"]]),
+        ])
+        let scanner = scanner()
+
+        var activity = await scanner.scanActivity()
+        XCTAssertEqual(activity.sessions.first?.lastPrompt, "add the allergens filter to the menu page")
+
+        // Appended since: read on the next pass, the rest of the file is not read again.
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: try jsonl([typed("now ship it")]))
+        try handle.close()
+        activity = await scanner.scanActivity()
+        XCTAssertEqual(activity.sessions.first?.lastPrompt, "now ship it")
+    }
+
+    /// Claude Code's own record of the last prompt is read too, and a compaction summary is not
+    /// taken for one.
+    func testLastPromptLineAndCompactSummary() {
+        func line(_ object: [String: Any]) -> Data { try! JSONSerialization.data(withJSONObject: object) }
+        XCTAssertEqual(AgentScanner.prompt(from: line(["type": "last-prompt", "lastPrompt": "Mettre en place !"])),
+                       "Mettre en place !")
+        var summary = typed("This session is being continued from a previous conversation")
+        summary["isCompactSummary"] = true
+        XCTAssertNil(AgentScanner.prompt(from: line(summary)))
+    }
+
+    /// A long prompt is cut: it only has to say which conversation it is.
+    func testLongPromptIsCut() {
+        let long = String(repeating: "word ", count: 100)
+        let line = try! JSONSerialization.data(withJSONObject: typed(long))
+        let prompt = AgentScanner.prompt(from: line)
+        XCTAssertEqual(prompt?.count, AgentScanner.promptLength + 1)
+        XCTAssertEqual(prompt?.hasSuffix("…"), true)
+    }
+
+    /// The outermost app a binary runs in: VS Code's helper is VS Code.
+    func testHostAppIsTheOutermostBundle() {
+        let helper = "/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)"
+        XCTAssertEqual(ProcessIdentity.hostApp(executable: helper)?.name, "Visual Studio Code")
+        XCTAssertEqual(ProcessIdentity.hostApp(executable: helper)?.bundleURL.path, "/Applications/Visual Studio Code.app")
+        XCTAssertEqual(ProcessIdentity.hostApp(executable: "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal")?.name,
+                       "Terminal")
+        XCTAssertNil(ProcessIdentity.hostApp(executable: "/opt/homebrew/bin/tmux"))
+    }
 
     // MARK: - Tests
 

@@ -57,6 +57,8 @@ struct NotchActivityView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             top
+            // An answer is what unblocks the work: it comes before the quotas.
+            WaitingList()
             if showsQuotas {
                 window
                 others
@@ -94,7 +96,7 @@ struct NotchActivityView: View {
                 IslandPercent(window: lead)
                     .notchLanding(.percent)
                 Text("\(lead.title) · \(lead.window)")
-                    .microLabel(0.5)
+                    .sectionLabel()
                     .lineLimit(1)
             }
             .frame(width: sideWidth, alignment: .trailing)
@@ -108,12 +110,9 @@ struct NotchActivityView: View {
                 .frame(height: notch.height + 6)
             if !snapshot.activeModel.isEmpty {
                 Text(snapshot.activeModel)
-                    .font(Theme.Font.label(9.5, .semibold))
-                    .foregroundStyle(.primary.opacity(0.6))
+                    .font(Theme.Font.label(11, .semibold))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.primary.opacity(0.1)))
             }
         }
     }
@@ -127,14 +126,14 @@ struct NotchActivityView: View {
                      pace: lead.isActive ? lead.elapsed : nil)
             HStack(spacing: 8) {
                 if let pace = UsageViewModel.pace(lead) {
-                    Text(pace.text)
-                        .foregroundStyle(pace.color)
+                    Text(pace.text.prefix(1).uppercased() + pace.text.dropFirst())
+                        .foregroundStyle(pace.ink.color(.dark))
                 }
                 Spacer(minLength: 8)
                 Text(activity.resetLine)
-                    .foregroundStyle(.primary.opacity(0.55))
+                    .foregroundStyle(.secondary)
             }
-            .font(Theme.Font.label(10.5, .medium))
+            .font(Theme.Font.label(11, .medium))
             .lineLimit(1)
         }
     }
@@ -145,7 +144,7 @@ struct NotchActivityView: View {
         if let spent = activity.spentLine {
             Text(spent)
                 .font(Theme.Font.value(11, .medium))
-                .foregroundStyle(.primary.opacity(0.65))
+                .foregroundStyle(.secondary)
         } else if !activity.others.isEmpty {
             HStack(spacing: 24) {
                 ForEach(activity.others, id: \.title) { window in
@@ -158,13 +157,13 @@ struct NotchActivityView: View {
     private func smallQuota(_ window: UsageWindow) -> some View {
         HStack(spacing: 8) {
             Text(window.title)
-                .font(Theme.Font.label(10.5, .medium))
-                .foregroundStyle(.primary.opacity(0.55))
+                .font(Theme.Font.label(11, .medium))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .fixedSize()
             UsageBar(percent: window.isMeasured ? window.percent : 0,
                      tint: Theme.tint(window.accent, at: window.percent),
-                     height: 4, showsGlow: false,
+                     height: 4,
                      pace: window.isActive ? window.elapsed : nil)
             Text(window.isMeasured ? "\(Int(window.percent * 100))%" : "—")
                 .font(Theme.Font.value(11, .semibold))
@@ -182,7 +181,7 @@ struct NotchActivityView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Not signed in to Claude")
                 .font(Theme.Font.label(12, .medium))
-                .foregroundStyle(.primary.opacity(0.7))
+                .foregroundStyle(.secondary)
             SignInControls()
         }
     }
@@ -193,8 +192,8 @@ struct NotchActivityView: View {
                 .fill(Theme.danger)
                 .frame(width: 5, height: 5)
             Text(message)
-                .font(Theme.Font.label(10.5, .medium))
-                .foregroundStyle(.primary.opacity(0.65))
+                .font(Theme.Font.label(11, .medium))
+                .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
     }

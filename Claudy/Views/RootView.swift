@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// The widget root: the glass background, the two-mode switch, the account card and the
-/// context menu.
+/// The widget root: the glass surface, the two-mode switch, the account card and the context
+/// menu.
 struct RootView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
-    @Environment(\.colorScheme) private var scheme
+    @EnvironmentObject private var notifier: Notifier
 
     /// What the card shows. No gauges without a Claude session: onboarding takes their place,
     /// never estimated figures.
@@ -26,8 +26,6 @@ struct RootView: View {
         }
     }
 
-    private var isDark: Bool { scheme == .dark }
-
     var body: some View {
         card
             .background(CardShadow(corner: corner))
@@ -46,44 +44,9 @@ struct RootView: View {
             case .full: FullView()
             }
         }
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: corner, style: .continuous)
-                .strokeBorder(
-                    LinearGradient(
-                        colors: isDark
-                            ? [.white.opacity(0.24), .white.opacity(0.05)]
-                            : [.black.opacity(0.10), .black.opacity(0.04)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
+        .cardSurface(corner: corner)
         .overlay(strainBorder)
         .overlay(profileLayer)
-    }
-
-    private var cardBackground: some View {
-        ZStack {
-            // The material that least follows the wallpaper. `.hudWindow` turned mid-grey in dark
-            // mode over a light wallpaper, and in light mode over a dark one: grey text on grey.
-            VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
-            LinearGradient(
-                colors: isDark
-                    ? [.white.opacity(0.10), .white.opacity(0.015)]
-                    : [.white.opacity(0.30), .white.opacity(0.06)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            RadialGradient(
-                colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
-                center: .topLeading,
-                startRadius: 0,
-                endRadius: 240
-            )
-        }
     }
 
     // MARK: - Account card
@@ -128,6 +91,27 @@ struct RootView: View {
         viewModel.snapshot.strain > 0 && (display == .full || display == .minimal)
     }
 
+    /// One switch per kind, in two groups, as in the menu bar item's menu.
+    @ViewBuilder
+    private var notificationSwitches: some View {
+        if notifier.isDenied {
+            Button("Turned off in System Settings…") { notifier.openSettings() }
+            Divider()
+        }
+        Section("Quota") {
+            ForEach(NotificationKind.allCases.filter(\.isQuota), id: \.self) { kind in
+                Toggle(kind.menuTitle, isOn: Binding(get: { notifier.isEnabled(kind) },
+                                                     set: { notifier.set(kind, on: $0) }))
+            }
+        }
+        Section("Sessions and agents") {
+            ForEach(NotificationKind.allCases.filter { !$0.isQuota }, id: \.self) { kind in
+                Toggle(kind.menuTitle, isOn: Binding(get: { notifier.isEnabled(kind) },
+                                                     set: { notifier.set(kind, on: $0) }))
+            }
+        }
+    }
+
     @ViewBuilder
     private var menu: some View {
         Button {
@@ -149,6 +133,35 @@ struct RootView: View {
             } label: {
                 Label(placement.menuTitle, systemImage: placement.systemImage)
             }
+        }
+
+        Divider()
+
+        Menu {
+            notificationSwitches
+        } label: {
+            Label("Notifications", systemImage: "bell")
+        }
+
+        if (NSApp.delegate as? AppDelegate)?.isHotKeyActive == true {
+            Button {
+                (NSApp.delegate as? AppDelegate)?.toggleClaudy()
+            } label: {
+                Label("Show or hide Claudy", systemImage: "eye")
+            }
+            .keyboardShortcut(KeyEquivalent(Character(GlobalHotKey.keyEquivalent)), modifiers: [.control, .option])
+        } else {
+            Button {
+                (NSApp.delegate as? AppDelegate)?.toggleClaudy()
+            } label: {
+                Label("Show or hide Claudy (\(GlobalHotKey.display) is taken)", systemImage: "eye")
+            }
+        }
+
+        Button {
+            viewModel.exportUsage()
+        } label: {
+            Label("Export usage as CSV…", systemImage: "square.and.arrow.up")
         }
 
         Divider()

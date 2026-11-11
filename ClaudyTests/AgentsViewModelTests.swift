@@ -3,14 +3,21 @@ import XCTest
 
 private struct StubAgents: AgentScanning {
     let result: [RunningAgent]
-    func scan() async -> [RunningAgent] { result }
+    func scanActivity() async -> ClaudeActivity { ClaudeActivity(agents: result) }
+}
+
+private struct StubActivity: AgentScanning {
+    let activity: ClaudeActivity
+    func scanActivity() async -> ClaudeActivity { activity }
 }
 
 /// One list per pass, then the last one again.
 private final class SequenceAgents: AgentScanning, @unchecked Sendable {
     private var passes: [[RunningAgent]]
     init(_ passes: [[RunningAgent]]) { self.passes = passes }
-    func scan() async -> [RunningAgent] { passes.count > 1 ? passes.removeFirst() : passes[0] }
+    func scanActivity() async -> ClaudeActivity {
+        ClaudeActivity(agents: passes.count > 1 ? passes.removeFirst() : passes[0])
+    }
 }
 
 @MainActor
@@ -22,6 +29,13 @@ final class AgentsViewModelTests: XCTestCase {
         RunningAgent(id: id, sessionID: session, sessionPID: pid, sessionStartedAt: nil, sessionName: "claire-bb", title: "Benchmark",
                      startedAt: startedAt, lastActivity: lastActivity, isFinished: isFinished, actionCount: 3,
                      recent: recent, lastAction: last, editedFiles: edited)
+    }
+
+    private func session(_ id: String = "s1", pid: Int32 = 4242, status: ClaudeSession.Status = .busy,
+                         since: Date? = nil, opened: Date? = nil, background: Bool = false,
+                         host: HostApp? = nil, name: String = "claire-bb", cwd: String? = nil) -> ClaudeSession {
+        ClaudeSession(id: id, pid: pid, processStartedAt: Date(), name: name, cwd: cwd, openedAt: opened,
+                      status: status, statusSince: since, isBackground: background, host: host, lastPrompt: nil)
     }
 
     private func action(_ tool: String, file: String? = nil, secondsAgo: TimeInterval = 0) -> AgentAction {
@@ -112,18 +126,6 @@ final class AgentsViewModelTests: XCTestCase {
                        ["Write c.ts", "Edit b.ts", "Bash"])
     }
 
-    /// Rows name their session only when agents of several sessions share the list.
-    func testSpansSessionsWhenMoreThanOneSessionIsListed() async {
-        let one = AgentsViewModel(scanner: StubAgents(result: [agent("a", lastActivity: Date()),
-                                                                agent("b", lastActivity: Date())]))
-        await one.refresh()
-        XCTAssertFalse(one.spansSessions)
-        let two = AgentsViewModel(scanner: StubAgents(result: [agent("a", lastActivity: Date()),
-                                                                agent("b", lastActivity: Date(), session: "s2")]))
-        await two.refresh()
-        XCTAssertTrue(two.spansSessions)
-    }
-
     /// One row unfolded at a time; an agent that leaves the list folds with it.
     func testExpandsOneRowAndFoldsItWhenTheAgentLeaves() async {
         let a = agent("a", lastActivity: Date()), b = agent("b", lastActivity: Date())
@@ -140,22 +142,23 @@ final class AgentsViewModelTests: XCTestCase {
         XCTAssertNil(model.expandedID)
     }
 
-    /// The interrupt is asked first, then sends Ctrl+C's signal to the agent's session.
+    /// The interrupt is asked first, then sends Ctrl+C's signal to the session.
     func testInterruptSendsSIGINTToTheSessionAfterConfirmation() async {
         let sent = Sent()
-        let a = agent("a", lastActivity: Date())
-        let model = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in true },
+        let model = AgentsViewModel(scanner: StubActivity(activity: ClaudeActivity(sessions: [session()])),
+                                    isLive: { _, _ in true },
                                     signal: { pid, signal in sent.record(pid, signal); return 0 })
         await model.refresh()
+        let session = try! XCTUnwrap(model.groups.first?.session)
 
-        model.askToInterrupt(a)
+        model.askToInterrupt(session)
         XCTAssertEqual(model.interruptPending, "s1")
         XCTAssertTrue(sent.calls.isEmpty)
         model.cancelInterrupt()
         XCTAssertNil(model.interruptPending)
 
-        model.askToInterrupt(a)
-        model.interrupt(a)
+        model.askToInterrupt(session)
+        model.interrupt(session)
         XCTAssertEqual(sent.calls.count, 1)
         XCTAssertEqual(sent.calls.first?.0, 4242)
         XCTAssertEqual(sent.calls.first?.1, SIGINT)
@@ -165,12 +168,11 @@ final class AgentsViewModelTests: XCTestCase {
 
     /// `kill` failing names the reason it can: gone, or someone else's.
     func testFailedInterruptSaysWhy() async {
-        let a = agent("a", lastActivity: Date())
-        let gone = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in true }, signal: { _, _ in ESRCH })
-        gone.interrupt(a)
+        let gone = AgentsViewModel(scanner: StubAgents(result: []), isLive: { _, _ in true }, signal: { _, _ in ESRCH })
+        gone.interrupt(session())
         XCTAssertEqual(gone.notice, "Not sent: claire-bb has closed.")
-        let other = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in true }, signal: { _, _ in EPERM })
-        other.interrupt(a)
+        let other = AgentsViewModel(scanner: StubAgents(result: []), isLive: { _, _ in true }, signal: { _, _ in EPERM })
+        other.interrupt(session())
         XCTAssertEqual(other.notice, "Not sent: claire-bb runs under another user.")
     }
 
@@ -178,39 +180,54 @@ final class AgentsViewModelTests: XCTestCase {
     /// longer belongs to the session, even if the list still shows it.
     func testInterruptNeverSignalsAPidThatIsNotTheSession() async {
         let sent = Sent()
-        let a = agent("a", lastActivity: Date())
-        let dead = AgentsViewModel(scanner: StubAgents(result: [a]), isLive: { _, _ in false },
+        let dead = AgentsViewModel(scanner: StubAgents(result: []), isLive: { _, _ in false },
                                    signal: { pid, signal in sent.record(pid, signal); return 0 })
-        dead.interrupt(a)
+        dead.interrupt(session())
         XCTAssertEqual(dead.notice, "Not sent: claire-bb has closed.")
 
         for pid: Int32 in [0, 1, -1] {
             let model = AgentsViewModel(scanner: StubAgents(result: []), isLive: { _, _ in true },
                                         signal: { pid, signal in sent.record(pid, signal); return 0 })
-            model.interrupt(agent("a", lastActivity: Date(), pid: pid))
+            model.interrupt(session(pid: pid))
             XCTAssertEqual(model.notice, "Not sent: claire-bb has closed.")
         }
         XCTAssertTrue(sent.calls.isEmpty)
     }
 
-    /// Unfolding another row, or the session's last running agent finishing, drops the
-    /// confirmation: it must never greet the next row armed.
-    func testPendingInterruptIsDroppedWhenTheRowOrTheAgentChanges() async {
+    /// Without the start time its file records, nothing proves the pid is still the session: no
+    /// signal, and no button offering one.
+    func testInterruptNeedsTheSessionsStartTime() {
+        let sent = Sent()
+        let unknown = ClaudeSession(id: "s1", pid: 4242, processStartedAt: nil, name: "claire-bb", cwd: nil,
+                                    openedAt: nil, status: .busy, statusSince: nil, isBackground: false,
+                                    host: nil, lastPrompt: nil)
+        let model = AgentsViewModel(scanner: StubAgents(result: []), isLive: { _, _ in true },
+                                    signal: { pid, signal in sent.record(pid, signal); return 0 })
+        XCTAssertFalse(unknown.canBeInterrupted)
+        model.interrupt(unknown)
+        XCTAssertTrue(sent.calls.isEmpty)
+        XCTAssertEqual(model.notice, "Not sent: claire-bb has closed.")
+    }
+
+    /// Unfolding another row, or the session leaving the list, drops the confirmation: it must
+    /// never greet the next row armed.
+    func testPendingInterruptIsDroppedWhenTheRowOrTheSessionChanges() async {
         let a = agent("a", lastActivity: Date()), b = agent("b", lastActivity: Date())
-        let aDone = agent("a", lastActivity: Date(), isFinished: true)
-        let model = AgentsViewModel(scanner: SequenceAgents([[a, b], [aDone]]), isLive: { _, _ in true },
+        let model = AgentsViewModel(scanner: SequenceAgents([[a, b], []]), isLive: { _, _ in true },
                                     signal: { _, _ in 0 })
         await model.refresh()
+        let session = try! XCTUnwrap(model.groups.first?.session)
 
-        model.toggleExpanded(a)
-        model.askToInterrupt(a)
+        model.toggleExpanded(session)
+        model.askToInterrupt(session)
         model.toggleExpanded(b)
         XCTAssertNil(model.interruptPending)
 
-        model.askToInterrupt(a)
+        model.askToInterrupt(session)
         await model.refresh()
-        XCTAssertEqual(model.agents.map(\.id), ["a"])
+        XCTAssertTrue(model.groups.isEmpty)
         XCTAssertNil(model.interruptPending)
+        XCTAssertNil(model.expandedSessionID)
     }
 
     /// Finished agents stay listed but are not counted as running, nor made the lead.
@@ -230,6 +247,77 @@ final class AgentsViewModelTests: XCTestCase {
         XCTAssertNil(onlyDone.lead)
     }
 
+    // MARK: - Sessions
+
+    /// Waiting first, the longest wait on top; then at work; then at rest. A program's own session
+    /// shows only while it runs agents.
+    func testGroupsPutWaitingSessionsFirstAndHideBackgroundOnes() async {
+        let now = Date()
+        let activity = ClaudeActivity(sessions: [
+            session("idle", status: .idle, since: now.addingTimeInterval(-60), name: "a-idle"),
+            session("busy", status: .busy, name: "b-busy"),
+            session("late", status: .waiting(reason: "permission prompt"), since: now.addingTimeInterval(-30), name: "c-late"),
+            session("early", status: .waiting(reason: nil), since: now.addingTimeInterval(-300), name: "d-early"),
+            session("sdk", status: .busy, background: true, name: "observer"),
+            session("sdk-agents", status: .busy, background: true, name: "worker"),
+        ], agents: [agent("x", lastActivity: now, session: "sdk-agents")])
+        let model = AgentsViewModel(scanner: StubActivity(activity: activity))
+        await model.refresh()
+
+        XCTAssertEqual(model.groups.map(\.session.id), ["early", "late", "busy", "sdk-agents", "idle"])
+        XCTAssertEqual(model.groups.first { $0.session.id == "sdk-agents" }?.agents.map(\.id), ["x"])
+        XCTAssertEqual(model.waiting.map(\.id), ["early", "late"])
+    }
+
+    /// The words of a session row: what it does, how long it has waited, what it waits for.
+    func testSessionWords() async {
+        let model = AgentsViewModel(scanner: StubAgents(result: []))
+        let now = model.now
+        XCTAssertEqual(model.state(session(status: .busy)), "working")
+        XCTAssertEqual(model.state(session(status: .idle, since: now.addingTimeInterval(-12 * 60))), "idle 12 min")
+        XCTAssertEqual(model.state(session(status: .unknown)), "open")
+        let waiting = session(status: .waiting(reason: "permission prompt"), since: now.addingTimeInterval(-90),
+                              host: HostApp(name: "Visual Studio Code", bundleURL: URL(fileURLWithPath: "/Applications/Visual Studio Code.app")),
+                              cwd: "/Users/me/EVAN")
+        XCTAssertEqual(model.waited(waiting), "1 min")
+        XCTAssertEqual(model.waitingDetail(waiting), "Permission prompt · EVAN · VS Code")
+        XCTAssertEqual(AgentsViewModel.abbreviated("/Users/me/EVAN", home: "/Users/me"), "~/EVAN")
+        XCTAssertEqual(AgentsViewModel.abbreviated("/Users/meme/EVAN", home: "/Users/me"), "/Users/meme/EVAN")
+    }
+
+    /// "Open" brings the session's app forward, and says so when there is none to bring.
+    func testFocusOpensTheSessionsApp() async {
+        let opened = Opened()
+        let host = HostApp(name: "Terminal", bundleURL: URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
+        let model = AgentsViewModel(scanner: StubActivity(activity: ClaudeActivity(sessions: [session(host: host)])),
+                                    open: { opened.hosts.append($0); return true })
+        await model.refresh()
+        model.focus(sessionID: "s1")
+        XCTAssertEqual(opened.hosts, [host])
+        XCTAssertNil(model.notice)
+
+        model.focus(session(host: nil))
+        XCTAssertEqual(model.notice, "Claudy cannot tell which app runs claire-bb.")
+    }
+
+    /// A session at its prompt has no turn to stop: no confirmation survives it going idle.
+    func testIdleSessionCannotBeInterrupted() async {
+        XCTAssertTrue(session(status: .busy).canBeInterrupted)
+        XCTAssertTrue(session(status: .waiting(reason: nil)).canBeInterrupted)
+        XCTAssertFalse(session(status: .idle).canBeInterrupted)
+    }
+
+    func testStatusReadsTheSessionFilesWords() {
+        XCTAssertEqual(ClaudeSession.Status(raw: "busy", waitingFor: nil), .busy)
+        XCTAssertEqual(ClaudeSession.Status(raw: "idle", waitingFor: nil), .idle)
+        XCTAssertEqual(ClaudeSession.Status(raw: "waiting", waitingFor: "input needed"), .waiting(reason: "input needed"))
+        XCTAssertEqual(ClaudeSession.Status(raw: nil, waitingFor: nil), .unknown)
+        XCTAssertEqual(ClaudeSession.Status(raw: "compacting", waitingFor: nil), .busy)
+        XCTAssertTrue(ClaudeSession.isBackground(entrypoint: "sdk-cli"))
+        XCTAssertFalse(ClaudeSession.isBackground(entrypoint: "claude-vscode"))
+        XCTAssertFalse(ClaudeSession.isBackground(entrypoint: nil))
+    }
+
     /// A pass that finishes after a newer one changes nothing.
     func testStalePassDoesNotOverwriteANewerOne() async {
         let slow = SlowAgents()
@@ -240,6 +328,12 @@ final class AgentsViewModelTests: XCTestCase {
         _ = await first
         XCTAssertEqual(model.agents.map(\.id), ["new"])
     }
+}
+
+/// Records the apps a view model brings forward.
+@MainActor
+private final class Opened {
+    var hosts: [HostApp] = []
 }
 
 /// Records the signals a view model sends.
@@ -262,8 +356,8 @@ private actor SlowAgents: AgentScanning {
         waiters = []
     }
 
-    func scan() async -> [RunningAgent] {
-        if let released { return released }
-        return await withCheckedContinuation { waiters.append($0) }
+    func scanActivity() async -> ClaudeActivity {
+        if let released { return ClaudeActivity(agents: released) }
+        return ClaudeActivity(agents: await withCheckedContinuation { waiters.append($0) })
     }
 }

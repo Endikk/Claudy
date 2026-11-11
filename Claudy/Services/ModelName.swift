@@ -26,7 +26,7 @@ enum ModelName {
         let lowercased = identifier.lowercased()
         if lowercased.contains("opus") { return .coral }
         if lowercased.contains("sonnet") { return .violet }
-        if lowercased.contains("haiku") { return .sky }
+        if lowercased.contains("haiku") { return .teal }
         return .sage
     }
 

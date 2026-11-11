@@ -63,6 +63,42 @@ enum ProcessIdentity {
         return kill(pid, signal) == 0 ? 0 : errno
     }
 
+    /// The process's parent; nil when it is gone or not ours.
+    static func parent(of pid: Int32) -> Int32? {
+        guard pid > 1 else { return nil }
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return Int32(bitPattern: info.pbi_ppid)
+    }
+
+    /// Ancestors past this are a loop or a broken table, not a real tree.
+    private static let hostSearchDepth = 16
+
+    /// The app a process runs in: the first of its ancestors whose binary sits in an `.app`
+    /// bundle, taken at its outermost bundle. VS Code runs Claude Code from a helper app nested in
+    /// its own frameworks; the user knows the outer one. A session under `tmux`, whose server
+    /// launchd adopted, has none.
+    static func hostApp(of pid: Int32) -> HostApp? {
+        var current = parent(of: pid)
+        var depth = 0
+        while let ancestor = current, ancestor > 1, depth < hostSearchDepth {
+            if let path = executablePath(of: ancestor), let host = hostApp(executable: path) { return host }
+            current = parent(of: ancestor)
+            depth += 1
+        }
+        return nil
+    }
+
+    /// The outermost `.app` a binary's path goes through.
+    static func hostApp(executable path: String) -> HostApp? {
+        guard let range = path.range(of: ".app/") else { return nil }
+        let bundlePath = String(path[..<range.lowerBound]) + ".app"
+        let name = ((bundlePath as NSString).lastPathComponent as NSString).deletingPathExtension
+        guard !name.isEmpty else { return nil }
+        return HostApp(name: name, bundleURL: URL(fileURLWithPath: bundlePath, isDirectory: true))
+    }
+
     /// The `procStart` of a session file, written as `ctime` does: "Mon Nov  9 22:26:03 2026".
     /// Claude Code writes it in UTC: checked against the kernel's start times of the sessions
     /// open on this Mac, which were one hour off the local reading and on the UTC one.

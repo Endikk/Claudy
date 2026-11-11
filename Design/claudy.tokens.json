@@ -7,20 +7,23 @@
         "$value": "#d97757"
       },
       "amber": {
-        "$value": "#e0a34e"
+        "$value": "#f2a93b"
       },
       "violet": {
-        "$value": "#8b7bd8"
+        "$value": "#a67cf7"
       },
       "sage": {
         "$value": "#6fae8f"
       },
       "sky": {
-        "$value": "#5e9bd1"
+        "$value": "#4fa8f7"
+      },
+      "teal": {
+        "$value": "#3ec6bc"
       }
     },
     "danger": {
-      "$value": "#e05c4b"
+      "$value": "#f0604d"
     },
     "pixel": {
       "highlight": {
@@ -115,10 +118,10 @@
       "$value": "440px"
     },
     "cardCorner": {
-      "$value": "20px"
+      "$value": "28px"
     },
     "minimalCorner": {
-      "$value": "15px"
+      "$value": "22px"
     },
     "screenMargin": {
       "$value": "8px"
@@ -126,11 +129,20 @@
     "padding": {
       "$value": "16px"
     },
-    "tabHeight": {
-      "$value": "22px"
+    "panelPadding": {
+      "$value": "10px"
     },
-    "tabCorner": {
-      "$value": "7px"
+    "gap": {
+      "$value": "8px"
+    },
+    "tileCorner": {
+      "$value": "18px"
+    },
+    "tilePadding": {
+      "$value": "14px"
+    },
+    "tabHeight": {
+      "$value": "28px"
     },
     "shadowInset": {
       "$value": "28px",
@@ -170,7 +182,7 @@
       },
       "dampingFraction": {
         "$type": "number",
-        "$value": 0.85
+        "$value": 0.95
       }
     },
     "mode": {
@@ -183,7 +195,7 @@
       },
       "dampingFraction": {
         "$type": "number",
-        "$value": 0.86
+        "$value": 0.95
       }
     },
     "accordion": {
@@ -196,7 +208,7 @@
       },
       "dampingFraction": {
         "$type": "number",
-        "$value": 0.88
+        "$value": 0.95
       }
     },
     "popup": {
@@ -209,7 +221,7 @@
       },
       "dampingFraction": {
         "$type": "number",
-        "$value": 0.82
+        "$value": 0.92
       }
     }
   },

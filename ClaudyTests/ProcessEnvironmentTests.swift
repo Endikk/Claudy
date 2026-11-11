@@ -40,6 +40,26 @@ final class ProcessEnvironmentTests: XCTestCase {
         XCTAssertEqual(markers?.projectDirectory, "/Users/x/Dev/Surikat")
     }
 
+    /// The session id is what tells an MCP server still serving a live session apart from one
+    /// whose session is over, when the process tree alone cannot.
+    func testReadsSessionID() {
+        let raw = buffer(
+            argc: 1, execPath: "/usr/local/bin/node", args: ["node"],
+            env: ["CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID=7f3c9a2e-41d8-4b6e-9b1a-2c5d8e0f4a11", "API_TOKEN=secret"]
+        )
+        XCTAssertEqual(
+            ProcessEnvironment.parse(raw),
+            ProcessEnvironment.Markers(isClaude: true, projectDirectory: nil,
+                                       sessionID: "7f3c9a2e-41d8-4b6e-9b1a-2c5d8e0f4a11")
+        )
+    }
+
+    func testEmptySessionIDIsNoSession() {
+        let raw = buffer(argc: 1, execPath: "/usr/local/bin/node", args: ["node"],
+                         env: ["CLAUDECODE=1", "CLAUDE_CODE_SESSION_ID="])
+        XCTAssertNil(ProcessEnvironment.parse(raw)?.sessionID)
+    }
+
     func testEntrypointAloneIsEnough() {
         let raw = buffer(argc: 1, execPath: "/bin/zsh", args: ["zsh"],
                          env: ["CLAUDE_CODE_ENTRYPOINT=cli"])

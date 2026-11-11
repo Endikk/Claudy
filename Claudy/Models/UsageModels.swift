@@ -164,7 +164,7 @@ struct UsageSnapshot {
                              isMeasured: false),
         weekly: UsageWindow(title: "Weekly", window: "7d",
                             percent: 0, tokensUsed: 0,
-                            windowStart: .now, resetDate: .now, accent: .amber,
+                            windowStart: .now, resetDate: .now, accent: .sky,
                             isMeasured: false),
         sonnet: UsageWindow(title: "Per model", window: "7d",
                             percent: 0, tokensUsed: 0,

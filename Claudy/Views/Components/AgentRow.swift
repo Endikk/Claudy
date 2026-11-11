@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// One agent in the card's Agents tab, on two lines: its Claudy, what it was asked and for how
-/// long; then its track over the last ten minutes and where it is. A click unfolds it: whose
-/// agent it is, what it wrote, its last calls, and the way to interrupt its session.
+/// One agent in the card's Sessions tab, under its session, on two lines: its Claudy, what it was
+/// asked and for how long; then its track over the last ten minutes and where it is. A click
+/// unfolds it: what it wrote and its last calls. Its session's row holds the way to stop it.
 struct AgentRow: View {
     let agent: RunningAgent
     let isExpanded: Bool
@@ -19,7 +19,7 @@ struct AgentRow: View {
         VStack(alignment: .leading, spacing: 0) {
             summary
             if isExpanded {
-                AgentDetails(agent: agent, status: status)
+                AgentDetails(agent: agent)
                     .padding(.leading, Self.claudyHeight * ClaudyTyping.aspectRatio + Self.spacing)
                     .padding(.top, 2)
                     .padding(.bottom, 6)
@@ -46,19 +46,10 @@ struct AgentRow: View {
                         .font(Theme.Font.label(11, .medium))
                         .foregroundStyle(.primary.opacity(status == .done ? 0.55 : 0.86))
                         .lineLimit(1)
-                    if viewModel.spansSessions {
-                        Text(agent.sessionName)
-                            .font(Theme.Font.label(9, .semibold))
-                            .foregroundStyle(.primary.opacity(0.45))
-                            .lineLimit(1)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(.primary.opacity(0.07)))
-                    }
                     Spacer(minLength: 0)
                     Text(viewModel.elapsed(agent))
-                        .font(Theme.Font.value(10, .semibold))
-                        .foregroundStyle(.primary.opacity(0.5))
+                        .font(Theme.Font.value(11, .semibold))
+                        .foregroundStyle(.secondary)
                         .fixedSize()
                 }
                 HStack(spacing: 8) {
@@ -76,22 +67,18 @@ struct AgentRow: View {
         .accessibilityLabel(AgentClaudy.spoken(agent, status: status))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { viewModel.toggleExpanded(agent) }
-        .accessibilityHint(isExpanded ? "Folds the agent" : "Unfolds the agent: session, files written, interrupt")
+        .accessibilityHint(isExpanded ? "Folds the agent" : "Unfolds the agent: files written, last calls")
     }
 }
 
-/// What a row unfolds to. The interrupt is two clicks: the first one asks, naming the session and
-/// saying what the signal does, since it reaches every agent of that session.
+/// What a row unfolds to: how much it did, what it wrote, its last calls.
 struct AgentDetails: View {
     let agent: RunningAgent
-    let status: RunningAgent.Status
     @EnvironmentObject private var viewModel: AgentsViewModel
-
-    private var isConfirming: Bool { viewModel.interruptPending == agent.sessionID }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            line("\(agent.sessionName) · \(agent.actionCount) actions · started \(UsageViewModel.clock(agent.startedAt))")
+            line("\(agent.actionCount) actions · started \(UsageViewModel.clock(agent.startedAt))")
             if !agent.editedFiles.isEmpty {
                 line("Wrote " + agent.editedFiles.joined(separator: ", "), tint: Theme.Accent.coral.color.opacity(0.9))
                     .lineLimit(2)
@@ -101,12 +88,8 @@ struct AgentDetails: View {
                 line("Last: " + calls.joined(separator: " · "), truncation: .tail)
                     .lineLimit(1)
             }
-            if status != .done {
-                interruptRow
-                    .padding(.top, 2)
-            }
         }
-        .font(Theme.Font.label(10, .medium))
+        .font(Theme.Font.label(11, .medium))
     }
 
     private func line(_ text: String, tint: Color = .primary.opacity(0.55),
@@ -116,53 +99,14 @@ struct AgentDetails: View {
             .truncationMode(truncation)
             .fixedSize(horizontal: false, vertical: true)
     }
-
-    @ViewBuilder
-    private var interruptRow: some View {
-        if isConfirming {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Sends Ctrl+C to \(agent.sessionName): its turn and every agent of it stop. The session stays open.")
-                    .foregroundStyle(.primary.opacity(0.65))
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Spacer(minLength: 0)
-                    Button("Cancel", action: viewModel.cancelInterrupt)
-                        .buttonStyle(QuietButtonStyle())
-                        .keyboardShortcut(.cancelAction)
-                    // No Return shortcut: the destructive choice takes a click.
-                    Button("Interrupt \(agent.sessionName)") { viewModel.interrupt(agent) }
-                        .buttonStyle(QuietButtonStyle(tint: Theme.danger))
-                }
-            }
-        } else {
-            HStack {
-                Spacer(minLength: 0)
-                Button {
-                    viewModel.askToInterrupt(agent)
-                } label: {
-                    Label("Interrupt session", systemImage: "stop.fill")
-                        .labelStyle(.titleAndIcon)
-                }
-                .buttonStyle(QuietButtonStyle(tint: Theme.danger))
-                .help("Sends Ctrl+C to the Claude Code session that runs this agent")
-            }
-        }
-    }
 }
 
-/// A small text button on the card's glass: a tinted capsule that only fills when pressed.
+/// A small text button on the card's glass: a capsule its tint washes, deeper when pressed.
 struct QuietButtonStyle: ButtonStyle {
-    var tint: Color = .primary.opacity(0.7)
+    var tint: Color = .secondary
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(Theme.Font.label(10, .semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(tint.opacity(configuration.isPressed ? 0.28 : 0.12)))
-            .contentShape(Capsule())
+        PillButtonStyle(tint: tint, isProminent: false).makeBody(configuration: configuration)
     }
 }
 
@@ -225,14 +169,12 @@ struct AgentState: View {
 /// What the tracks mean, in the section header: their reach, and the colour of a write.
 struct AgentTrackLegend: View {
     var body: some View {
-        HStack(spacing: 4) {
-            RoundedRectangle(cornerRadius: 0.5)
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 1)
                 .fill(Theme.Accent.coral.color)
-                .frame(width: 2, height: 7)
-            Text("writes")
-                .microLabel(0.4)
-            Text("· 10 min")
-                .microLabel(0.4)
+                .frame(width: 2, height: 10)
+            Text("Edits, last 10 min")
+                .meta()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Tracks cover the last ten minutes; writes are drawn in coral")

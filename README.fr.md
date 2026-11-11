@@ -25,11 +25,19 @@ locaux de Claude Code.
 
 - **Des chiffres réels, ou aucun.** Les pourcentages viennent de la seule API d'Anthropic. Quand
   elle ne dit rien, les jauges affichent « — » plutôt qu'une estimation.
+- **Onglet Sessions.** Chaque session Claude Code ouverte sur le Mac, celles qui attendent ta
+  réponse en premier, chacune avec ses agents. « Open » ramène au premier plan l'app où elle
+  tourne ; « Interrupt » lui envoie Ctrl+C.
+- **Notifications.** Session à 80 %, limite atteinte avant le reset, session revenue, une session
+  qui t'attend, un agent silencieux ou terminé. Un interrupteur pour chacune.
 - **Onglet Ports.** Liste les ports TCP laissés en écoute par Claude Code, sessions orphelines
-  comprises, et les ferme d'un clic. L'attribution lit les marqueurs Claude hérités dans
-  l'environnement du process : rien d'autre sur la machine n'est listé.
-- **Rien ne sort de la machine.** Pas de télémétrie, pas de serveur tiers, aucune conversation lue
-  ni envoyée. Les seules requêtes réseau vont à l'API d'Anthropic.
+  comprises, et les serveurs MCP qu'une session fermée a laissés tourner, et les ferme d'un clic.
+  L'attribution lit les marqueurs Claude hérités dans l'environnement du process : rien d'autre
+  sur la machine n'est listé.
+- **Rien ne sort de la machine.** Pas de télémétrie, pas de serveur tiers, aucune conversation
+  envoyée. Le seul texte que Claudy lit dans tes conversations est la dernière demande de chaque
+  session ouverte, affichée dans l'onglet Sessions. Les seules requêtes réseau vont à l'API
+  d'Anthropic.
 
 ## Installer
 
@@ -75,8 +83,9 @@ droit sur l'une ou l'autre permet de la déplacer.
 |---|---|
 | Glisser la carte | Déplacer le widget |
 | Clic sur la bande minimale | Passer en mode complet |
-| `usage` / `ports` | Basculer entre les quotas et les ports laissés ouverts par Claude |
-| Clic droit | Rafraîchir · Mode · Emplacement (carte, barre des menus, encoche) · Connexion · Toujours au-dessus · Lancement au démarrage · Quitter |
+| `usage` / `ports` / `sessions` | Basculer entre les quotas, ce que Claude a laissé tourner et les sessions ouvertes |
+| Clic droit | Rafraîchir · Mode · Emplacement (carte, barre des menus, encoche) · Notifications · Afficher ou masquer · Export CSV de l'usage · Connexion · Toujours au-dessus · Lancement au démarrage · Quitter |
+| ⌃⌥C, depuis n'importe quelle app | Afficher ou masquer Claudy |
 | Survol de l'île | Ouvrir la session, son rythme et son reset, et les autres quotas sous l'encoche |
 | Clic sur l'avatar | Carte du compte |
 | Clic sur « Details » | Répartition par modèle et principaux projets |

@@ -10,6 +10,7 @@ final class MenuBarController: NSObject {
     private let viewModel: UsageViewModel
     private let updates: UpdateChecker
     private let agents: AgentsViewModel
+    private let notifier: Notifier
     private var item: NSStatusItem?
     private let popover = NSPopover()
     /// Drops from the item once per new version, and stays until the user answers it.
@@ -17,7 +18,7 @@ final class MenuBarController: NSObject {
         .environmentObject(updates))
     private var cancellables = Set<AnyCancellable>()
     /// The right-click menu. Its items target it, so it lives as long as the item.
-    private lazy var menuContent = ClaudyMenu(viewModel: viewModel)
+    private lazy var menuContent = ClaudyMenu(viewModel: viewModel, notifier: notifier)
 
     private var timer: Timer?
     private var tick = 0
@@ -46,10 +47,11 @@ final class MenuBarController: NSObject {
     /// device pixels on Retina screens.
     private static let cell: CGFloat = 0.5
 
-    init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel) {
+    init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel, notifier: Notifier) {
         self.viewModel = viewModel
         self.updates = updates
         self.agents = agents
+        self.notifier = notifier
         super.init()
 
         let controller = NSHostingController(rootView: MenuBarView()
@@ -174,10 +176,12 @@ final class MenuBarController: NSObject {
         let now = agents.now
         let leadAgent = running.first { $0.status(at: now) == .working } ?? running.first
         let agentsTint = leadAgent.map { agents.tint(of: $0) }
-        let key = "\(percent)|\(running.count)|\(agentsTint.map { "\($0)" } ?? "")"
+        let waiting = agents.waiting.count
+        let key = "\(percent)|\(running.count)|\(agentsTint.map { "\($0)" } ?? "")|\(waiting)"
         if key != titleKey {
             titleKey = key
-            button.attributedTitle = Self.title(percent: percent, count: running.count, tint: agentsTint)
+            button.attributedTitle = Self.title(percent: percent, count: running.count, tint: agentsTint,
+                                                waiting: waiting > 0)
         }
         // The title just changed width and the bar moved the icon: keep the bubble's arrow on it.
         if bubble.isVisible {
@@ -189,9 +193,11 @@ final class MenuBarController: NSObject {
         let quota = lead.isActive
             ? "\(lead.title) \(percent) · reset \(UsageViewModel.resetTime(lead.resetDate))"
             : "Claudy"
-        button.toolTip = running.isEmpty
+        var tip = running.isEmpty
             ? quota
             : quota + " · " + (running.count == 1 ? "1 agent running" : "\(running.count) agents running")
+        if waiting > 0 { tip += " · " + (waiting == 1 ? "a session waits for you" : "\(waiting) sessions wait for you") }
+        button.toolTip = tip
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let overloaded = snapshot.isOverloaded
@@ -280,10 +286,19 @@ final class MenuBarController: NSObject {
 
     /// The icon with the coral update dot in its top-right corner, where the sprite is empty.
     /// The figure, then, while agents run, a small Claudy in the colour of the one at work and
-    /// how many there are. The card's Agents tab and the popover say which.
-    private static func title(percent: String, count: Int, tint: Color?) -> NSAttributedString {
+    /// how many there are. The card's Sessions tab and the popover say which. A session waiting
+    /// for the user adds an amber raised hand.
+    private static func title(percent: String, count: Int, tint: Color?, waiting: Bool) -> NSAttributedString {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
         let title = NSMutableAttributedString(string: " \(percent)", attributes: [.font: font])
+        if waiting, let hand = waitingHand(height: font.capHeight + 3) {
+            let attachment = NSTextAttachment()
+            attachment.image = hand
+            attachment.bounds = CGRect(x: 0, y: (font.capHeight - hand.size.height) / 2,
+                                       width: hand.size.width, height: hand.size.height)
+            title.append(NSAttributedString(string: " ", attributes: [.font: font]))
+            title.append(NSAttributedString(attachment: attachment))
+        }
         guard count > 0, let tint else { return title }
 
         let image = ClaudyTyping.image(.resting, tint: tint, cell: cell)
@@ -297,6 +312,14 @@ final class MenuBarController: NSObject {
         title.append(NSAttributedString(string: "\(count)",
                                         attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)]))
         return title
+    }
+
+    /// The raised hand in amber, drawn as an image: a menu bar title takes no tinted symbol.
+    private static func waitingHand(height: CGFloat) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: height, weight: .semibold)
+            .applying(.init(paletteColors: [NSColor(Theme.Accent.amber.color)]))
+        return NSImage(systemSymbolName: "hand.raised.fill", accessibilityDescription: "A session waits for you")?
+            .withSymbolConfiguration(configuration)
     }
 
     private static func withUpdateDot(_ image: NSImage) -> NSImage {
@@ -322,6 +345,12 @@ final class MenuBarController: NSObject {
         } else {
             togglePopover(from: sender)
         }
+    }
+
+    /// The shortcut opens or closes the popover, as a click on the item does.
+    func togglePopover() {
+        guard let button = item?.button else { return }
+        togglePopover(from: button)
     }
 
     private func togglePopover(from button: NSStatusBarButton) {

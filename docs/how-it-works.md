@@ -124,40 +124,121 @@ windows are absent, so it never hides a live session.
 An account with no cap, or with spending turned off, has no quota at all. The gauges then show
 "—", as for any missing measurement.
 
-### Agents
+### Sessions and agents
 
-The Agents tab lists the subagents Claude Code is running, from files it keeps anyway; nothing is
-installed in Claude Code for it:
+The Sessions tab lists every Claude Code session open on this Mac and the subagents each one runs,
+from files Claude Code keeps anyway; nothing is installed in Claude Code for it:
 
-- `~/.claude/sessions/<pid>.json`, one per open Claude Code process, gives each session its id and
-  name. A file whose process is gone belongs to a closed session and is ignored.
-- `<projects>/<folder>/<session>/subagents/agent-<id>.meta.json` holds what the agent was asked
+- `~/.claude/sessions/<pid>.json`, one per open Claude Code process, gives each session its id,
+  name and status, rewritten as it changes: `busy` while it works, `idle` at its prompt, `waiting`
+  when it asks the user something, with what it waits for in `waitingFor` ("permission prompt",
+  "input needed"). A file whose process is gone belongs to a closed session and is ignored.
+- `<projects>/<folder>/<session>.jsonl`, the session's transcript, for the last thing the user
+  asked it. Claude Code writes it down itself in `last-prompt` lines; Claudy reads the transcript's
+  tail once, then only what is appended, and keeps nothing else from it.
+- `<projects>/<folder>/<session>/subagents/agent-<id>.meta.json` holds what an agent was asked
   and, once it is over, `finished`.
 - `agent-<id>.jsonl` beside it is the agent's transcript. Claudy reads only its tool calls (the
   tool and the file it names), from a cursor per file, as it does for usage.
 
-Each row shows what the agent was asked, for how long it has run, where it is and its track: its
-tool calls over the last ten minutes, one bar per fifteen seconds, writes in coral (the header
-carries the legend). Each agent's Claudy has its own colour, kept while it runs; it types while
-the agent works and turns grey after a minute of silence. Three minutes of silence are called out
-on the right, in amber ("silent 4 min"): a permission nobody answered, a hung tool. A finished
-agent stays ten minutes, marked done with the number of files it wrote; an unfinished one silent
-for thirty minutes is taken as interrupted. No file says how far along an agent is, so no
-percentage is shown. When agents of several sessions are listed, each row names its session.
+Sessions waiting for the user come first, the longest wait on top, in an amber row that names
+what they wait for and offers "Open": it brings forward the app the session runs in, found up its
+process tree (Terminal, iTerm, Ghostty, VS Code, Cursor). Claudy activates that app; it cannot
+pick one window among several, so with two VS Code windows open the last one used comes forward.
+Then come the sessions at work, then those at rest with how long they have been idle. Sessions a
+program drives through the Agent SDK (`entrypoint` `sdk-cli`, `sdk-ts`) are listed only while they
+run agents: nobody sits at them.
 
-A click unfolds a row: its session, its number of calls and start time, the files it wrote, its
-last three calls, and an "Interrupt session" button. Agents have no process of their own, so
-there is nothing narrower to stop: after a confirmation that names the session, Claudy sends the
-session's Claude Code process the signal Ctrl+C sends in its terminal (`SIGINT`). The turn stops
-and every agent of that session with it; the session itself stays open, at its prompt or
-mid-turn. Claude Code then marks the agents finished, so they show as done. A command an agent
-had already started runs to its end on its own. Before the signal goes out, the pid is checked
-again against the start time the session file records: a pid reused by another process after a
-crash is never signalled.
+A click unfolds a session: its folder, its app, when it opened, its agent count, the last thing
+asked of it, "Open <app>", and "Interrupt" while it works or waits. Agents have no process of
+their own, so there is nothing narrower to stop: after a confirmation that names the session,
+Claudy sends the session's Claude Code process the signal Ctrl+C sends in its terminal
+(`SIGINT`). The turn stops and every agent of that session with it; the session itself stays
+open, at its prompt or mid-turn. Claude Code then marks the agents finished, so they show as
+done. A command an agent had already started runs to its end on its own. Before the signal goes
+out, the pid is checked again against the start time the session file records: a pid reused by
+another process after a crash is never signalled.
 
-The menu bar popover and the open island show the same list in short, four lines, with the way
-to the widget past that. The menu bar item adds the lead agent's Claudy and the count after the
-figure; the notch at rest puts the count alone in the left ear, in the lead agent's colour.
+Each agent sits under its session and shows what it was asked, for how long it has run, where it
+is and its track: its tool calls over the last ten minutes, one bar per fifteen seconds, writes
+in coral (the header carries the legend). Each agent's Claudy has its own colour, kept while it
+runs; it types while the agent works and turns grey after a minute of silence. Three minutes of
+silence are called out on the right, in amber ("silent 4 min"): a permission nobody answered, a
+hung tool. A finished agent stays ten minutes, marked done with the number of files it wrote; an
+unfinished one silent for thirty minutes is taken as interrupted. No file says how far along an
+agent is, so no percentage is shown. A click unfolds an agent: its number of calls and start
+time, the files it wrote, its last three calls.
+
+The menu bar popover and the open island put the waiting sessions first, then the agents in
+short, four lines, with the way to the widget past that. The menu bar item adds an amber raised
+hand while a session waits, then the lead agent's Claudy and the count after the figure. The
+notch at rest puts the count in the left ear in the lead agent's colour, or, while a session
+waits, a raised hand on glass turned amber; a click on the ears opens that session's app.
+
+### MCP servers left behind
+
+Claude Code runs MCP servers as child processes that talk over their standard input, with no
+port, so the ports list never saw them. When a session ends badly they stay behind, adopted by
+launchd, often holding hundreds of megabytes each. The Ports tab lists them under the ports, with
+the memory each tree holds and the total, and kills them like an orphaned port.
+
+A process is listed when all of this holds:
+
+- it is yours, its command line names an MCP server (`chrome-devtools-mcp`, `mcp-server-fetch`,
+  `@modelcontextprotocol/...`), and its binary is not inside an app bundle;
+- launchd adopted it: whatever started it is gone;
+- its environment carries Claude Code's markers (`CLAUDECODE`, `CLAUDE_PROJECT_DIR`), and its
+  `CLAUDE_CODE_SESSION_ID`, when it has one, names no open session;
+- no Claude Code process sits above it, and it does not hold a port already listed.
+
+Only processes that pass the cheap checks get their environment read, and nothing but those
+three markers is kept from it: an environment holds tokens. A daemon a plugin keeps on purpose,
+and the servers it runs itself, are not listed while that daemon lives.
+
+A kill goes to the whole tree, `SIGTERM` then `SIGKILL`, after checking again that the process is
+the one listed (its start time) and that no live Claude Code sits above it. A tree is signalled
+through its process group only when the server leads that group: otherwise the dead session's
+group could hold something else.
+
+### Notifications
+
+Claudy posts a macOS notification when something deserves a look while the widget is out of
+sight. Each kind has its own switch under Notifications in the right-click menu:
+
+| Kind | When | Default |
+|---|---|---|
+| Session at 80% | The 5-hour session crosses 80 %, once per window | on |
+| Limit before the reset | At the pace so far, the session fills more than ten minutes before it resets; said once per window, from 50 % on | on |
+| Session back | A session window seen full has reset | on |
+| A session waits for you | A session has waited twenty seconds for a permission or an answer; the banner is taken back once it no longer waits | on |
+| An agent falls silent | An agent has said nothing for three minutes | on |
+| An agent is done | An agent seen at work finishes | off |
+
+A click on a banner about a session brings its app forward. The first reading after launch only
+sets the scene: a threshold already crossed then is not announced. macOS asks for permission the
+first time Claudy has something to say, not at launch. If notifications are turned off for Claudy
+in System Settings, the submenu says so and leads there.
+
+### Keyboard shortcut
+
+⌃⌥C, from any app, shows or hides Claudy where it stands: the card comes and goes, the menu bar
+item's popover opens and closes, the island opens and closes. It goes through Carbon's hot keys,
+which need no accessibility permission. When another app already holds ⌃⌥C, the menu says so
+rather than promising it. ⌥⌘C was the obvious pick, but the Finder copies a file's path with it.
+
+### CSV export
+
+"Export usage as CSV…" in the right-click menu writes the last seven days from the local
+transcripts, one line per hour, project and model:
+
+```
+hour,project,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,list_price_usd
+2026-11-10T09:00,Claudy,claude-opus-5-5,18204,9310,2210440,86020,4.1200
+```
+
+`list_price_usd` is what those tokens would cost at Anthropic's list prices, the weight Claudy
+already ranks models and projects by. It is not a bill: a subscription is not charged per token.
+Hours are local. A field that a spreadsheet would read as a formula is prefixed with `'`.
 
 ### Status-line bridge (optional)
 

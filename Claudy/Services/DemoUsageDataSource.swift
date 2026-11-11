@@ -56,7 +56,7 @@ actor DemoUsageDataSource: UsageDataSource {
                 percent: weeklyPercent,
                 tokensUsed: weekTokens,
                 windowStart: week.start, resetDate: week.end,
-                accent: .amber
+                accent: .sky
             ),
             sonnet: UsageWindow(
                 title: "Sonnet", window: "7d",
@@ -72,7 +72,7 @@ actor DemoUsageDataSource: UsageDataSource {
                 ModelUsage(id: "sonnet", name: "Sonnet", tokens: sonnetTokens,
                            share: 0.29, accent: .violet),
                 ModelUsage(id: "haiku", name: "Haiku", tokens: Int(Double(weekTokens) * 0.17),
-                           share: 0.17, accent: .sky)
+                           share: 0.17, accent: .teal)
             ],
             projects: [
                 ProjectUsage(id: "a", name: "main-project", tokens: Int(Double(weekTokens) * 0.44), share: 0.44),

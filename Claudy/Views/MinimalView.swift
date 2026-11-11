@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Compact mode: one horizontal strip — the mark, the 5h window percentage, the reset time.
+/// Compact mode: one strip, the mark, the 5h window percentage and the reset time, the gauge
+/// underneath.
 struct MinimalView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
@@ -10,8 +11,8 @@ struct MinimalView: View {
     private var tint: Color { Theme.tint(lead.accent, at: lead.percent) }
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 9) {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Group {
                     if updates.isGreeting && !viewModel.snapshot.isOverloaded {
                         ClaudyWaving(tint: tint, cell: 1)
@@ -20,18 +21,9 @@ struct MinimalView: View {
                                      isOverloaded: viewModel.snapshot.isOverloaded)
                     }
                 }
-                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
+                .frame(width: 28 * ClaudyTyping.aspectRatio, height: 28)
 
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(lead.isMeasured ? "\(Int(lead.percent * 100))" : "—")
-                        .font(Theme.Font.hero(28))
-                        .foregroundStyle(.primary.opacity(lead.isMeasured ? 0.95 : 0.45))
-                    if lead.isMeasured {
-                        Text("%")
-                            .font(Theme.Font.label(13, .medium))
-                            .foregroundStyle(.primary.opacity(0.4))
-                    }
-                }
+                Figure(window: lead, size: 28)
 
                 if updates.available != nil {
                     UpdateDot(size: 5)
@@ -40,28 +32,27 @@ struct MinimalView: View {
                 if let message = viewModel.errorMessage {
                     Circle()
                         .fill(Theme.danger)
-                        .frame(width: 5, height: 5)
+                        .frame(width: 6, height: 6)
                         .help(message)
                 }
 
                 Spacer(minLength: 6)
 
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(lead.isActive ? "reset" : (lead.isMeasured ? "session" : "quota"))
-                        .microLabel(0.35)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(lead.isActive ? "Resets" : (lead.isMeasured ? "Session" : "Quota"))
+                        .meta()
                     Text(lead.isActive ? UsageViewModel.resetTime(lead.resetDate)
-                                          : (lead.isMeasured ? "inactive" : "unavailable"))
-                        .font(Theme.Font.value(12, .medium))
-                        .foregroundStyle(.primary.opacity(0.65))
+                                       : (lead.isMeasured ? "Inactive" : "Unavailable"))
+                        .font(Theme.Font.value(13, .semibold))
+                        .foregroundStyle(.primary)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 9)
-            .padding(.bottom, 8)
 
-            UsageBar(percent: lead.percent, tint: tint, height: 3, showsGlow: false,
+            UsageBar(percent: lead.percent, tint: tint, height: 5,
                      pace: lead.isActive ? lead.elapsed : nil)
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .frame(width: Theme.Metric.minimalWidth)
         .contentShape(Rectangle())
         .onTapGesture { viewModel.toggleMode() }

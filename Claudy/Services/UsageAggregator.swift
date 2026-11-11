@@ -23,7 +23,7 @@ enum UsageAggregator {
 
         let session = sessionGauge(reading?.session, entries: entries, now: now, source: source)
         let weekly = weeklyGauge(reading?.weekly, entries: entries, now: now, source: source,
-                                 title: "Weekly", accent: .amber, family: nil)
+                                 title: "Weekly", accent: .sky, family: nil)
 
         let scopedName = reading?.scoped?.label
         let third = weeklyGauge(reading?.scoped, entries: entries, now: now, source: source,

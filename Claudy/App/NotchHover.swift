@@ -66,6 +66,22 @@ final class NotchHover {
         pointer(inside: inside)
     }
 
+    /// Opened by other means than the pointer, the shortcut: nothing pending, and the pointer
+    /// leaving it later closes it as usual. Does not call `open`, which its owner does.
+    func markOpen() {
+        pending?.cancel()
+        pending = nil
+        isOpen = true
+    }
+
+    /// Closed by other means than the pointer, the shortcut: nothing pending, and where the
+    /// pointer is stays known, so a pointer resting on the ears does not reopen it at once.
+    func markClosed() {
+        pending?.cancel()
+        pending = nil
+        isOpen = false
+    }
+
     /// Closed at once with nothing pending, without calling `close`: the island is being hidden
     /// and its owner resets what it shows.
     func reset() {

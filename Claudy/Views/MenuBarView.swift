@@ -16,8 +16,12 @@ struct MenuBarView: View {
     private var leadTint: Color { Theme.tint(lead.accent, at: lead.percent) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Metric.gap) {
             header
+                .padding(.horizontal, 4)
+
+            WaitingList(compact: true)
+
             if viewModel.isSignedIn || snapshot.isDemo {
                 HStack(alignment: .top, spacing: 4) {
                     QuotaRing(window: lead)
@@ -27,39 +31,56 @@ struct MenuBarView: View {
                         QuotaRing(window: snapshot.sonnet, delay: 0.16)
                     }
                 }
+                .padding(.vertical, 4)
+
+                // On the glass, apart by hairlines: only a waiting session is a block.
                 if !agents.agents.isEmpty {
-                    hairline
+                    Hairline()
                     AgentsShortList()
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                 }
-                hairline
+
+                Hairline()
                 WeekBarsChart(samples: snapshot.history, tint: Theme.Accent.coral.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+
                 if !snapshot.models.isEmpty {
-                    hairline
+                    Hairline()
                     modelSplit
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
                 }
+
                 if viewModel.isSignedIn {
-                    hairline
                     accountRow
+                        .padding(.horizontal, 6)
                 }
             } else if viewModel.hasLoaded {
                 // Before the first reading, a signed-in user would see the way in flash by.
                 signedOut
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
             }
+
             UpdateRow()
+
             footer
+                .padding(.horizontal, 6)
         }
-        .padding(Theme.Metric.padding)
+        .padding(Theme.Metric.panelPadding)
         .frame(width: Theme.Metric.menuBarWidth)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
             ClaudyTyping(tint: leadTint, isTyping: snapshot.session.isRunning, isOverloaded: snapshot.isOverloaded)
-                .frame(width: 27 * ClaudyTyping.aspectRatio, height: 27)
+                .frame(width: 30 * ClaudyTyping.aspectRatio, height: 30)
 
             Text("Claudy")
-                .font(Theme.Font.label(14, .semibold))
-                .foregroundStyle(.primary.opacity(0.9))
+                .font(Theme.Font.label(16, .semibold))
+                .foregroundStyle(.primary)
 
             Spacer(minLength: 0)
 
@@ -72,11 +93,8 @@ struct MenuBarView: View {
 
             if !snapshot.activeModel.isEmpty {
                 Text(snapshot.activeModel)
-                    .font(Theme.Font.label(9.5, .semibold))
-                    .foregroundStyle(.primary.opacity(0.6))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.primary.opacity(0.08)))
+                    .font(Theme.Font.label(12, .medium))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -84,9 +102,9 @@ struct MenuBarView: View {
     /// The week's tokens split by model: one stacked bar, then one legend row per model, so
     /// names stay whole however many models the week used.
     private var modelSplit: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("By model · 7d")
-                .microLabel(0.55)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("By model · 7 days")
+                .sectionLabel()
 
             Chart(snapshot.models) { model in
                 BarMark(x: .value("Share", model.share), y: .value("Week", "week"))
@@ -120,20 +138,19 @@ struct MenuBarView: View {
                     HStack(spacing: 6) {
                         Circle()
                             .fill(model.accent.color)
-                            .frame(width: 6, height: 6)
+                            .frame(width: 7, height: 7)
                         Text(model.name)
-                            .font(Theme.Font.label(10.5, .medium))
-                            .foregroundStyle(.primary.opacity(0.7))
+                            .font(Theme.Font.label(13, .medium))
+                            .foregroundStyle(.primary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 8)
                         Text(UsageViewModel.tokens(model.tokens))
-                            .font(Theme.Font.value(10, .medium))
-                            .foregroundStyle(.primary.opacity(0.4))
-                        Text("\(Int((model.share * 100).rounded())) %")
-                            .font(Theme.Font.value(10.5, .semibold))
-                            .foregroundStyle(.primary.opacity(0.75))
-                            .frame(width: 34, alignment: .trailing)
+                            .meta()
+                        Text("\(Int((model.share * 100).rounded()))%")
+                            .font(Theme.Font.value(12, .semibold))
+                            .foregroundStyle(model.accent.color)
+                            .frame(width: 38, alignment: .trailing)
                     }
                     .opacity(modelOpacity(model.id))
                     .contentShape(Rectangle())
@@ -164,18 +181,13 @@ struct MenuBarView: View {
         return snapshot.models.last
     }
 
-    private var hairline: some View {
-        Rectangle()
-            .fill(.primary.opacity(0.07))
-            .frame(height: 1)
-    }
 
     /// No gauges without a session, same rule as the widget: say so and offer the way in.
     private var signedOut: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Not signed in to Claude")
                 .font(Theme.Font.label(12, .medium))
-                .foregroundStyle(.primary.opacity(0.7))
+                .foregroundStyle(.secondary)
             SignInControls()
         }
     }
@@ -184,8 +196,8 @@ struct MenuBarView: View {
     private var accountRow: some View {
         HStack(spacing: 8) {
             Text(snapshot.account.email.isEmpty ? snapshot.account.name : snapshot.account.email)
-                .font(Theme.Font.label(10.5, .medium))
-                .foregroundStyle(.primary.opacity(0.55))
+                .font(Theme.Font.label(11, .medium))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -200,9 +212,8 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Text("updated \(UsageViewModel.clock(snapshot.updatedAt))")
-                .font(Theme.Font.label(9.5, .medium))
-                .foregroundStyle(.primary.opacity(0.35))
+            Text("Updated \(UsageViewModel.clock(snapshot.updatedAt))")
+                .meta()
 
             Spacer(minLength: 0)
 
