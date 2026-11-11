@@ -7,10 +7,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     let viewModel = UsageViewModel()
     let portsViewModel = PortsViewModel()
+    let agentsViewModel = AgentsViewModel()
     let updates = UpdateChecker()
-    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates)
-    private(set) lazy var notch = NotchController(viewModel: viewModel, updates: updates)
+    let notifier = Notifier()
+    private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates, agents: agentsViewModel,
+                                                      notifier: notifier)
+    private(set) lazy var notch = NotchController(viewModel: viewModel, updates: updates, agents: agentsViewModel,
+                                                  notifier: notifier)
     private var panel: FloatingPanel?
+    /// ⌃⌥C, from any app.
+    private lazy var hotKey = GlobalHotKey { [weak self] in self?.toggleClaudy() }
+    private var quotaAlerts = QuotaAlerts()
+    private var activityAlerts = ActivityAlerts()
     private var cancellables = Set<AnyCancellable>()
     private var screenObserver: NSObjectProtocol?
 
@@ -34,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let controller = NSHostingController(rootView: RootView()
             .environmentObject(viewModel)
             .environmentObject(portsViewModel)
+            .environmentObject(agentsViewModel)
+            .environmentObject(notifier)
             .environmentObject(updates))
         controller.sizingOptions = [.preferredContentSize]
 
@@ -46,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         anchor = homeAnchor(on: NSScreen.main)
         applyAnchor()
         portsViewModel.start()
+        agentsViewModel.start()
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -64,6 +75,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         viewModel.hasNotchedScreen = NotchGeometry.current() != nil
         bind()
+        bindAlerts()
+        notifier.refreshPermission()
+        hotKey.register()
         viewModel.onUserRefresh = { [updates] in Task { await updates.checkNow() } }
         Task { await viewModel.refresh() }
         updates.start()
@@ -101,6 +115,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updates.greetAgain() }
             .store(in: &cancellables)
+    }
+
+    /// Every reading of the quota and every pass over the sessions goes through the rules; what
+    /// they call for is posted when its kind is switched on. A click on a banner about a session
+    /// brings that session's app forward.
+    private func bindAlerts() {
+        viewModel.$snapshot
+            .receive(on: RunLoop.main)
+            .sink { [weak self] snapshot in
+                // The demo set is made up: nothing in it deserves a banner.
+                guard let self, !snapshot.isDemo else { return }
+                self.notifier.deliver(self.quotaAlerts.evaluate(snapshot.session, now: Date()))
+            }
+            .store(in: &cancellables)
+
+        agentsViewModel.onPass = { [weak self] activity in
+            guard let self else { return }
+            let result = self.activityAlerts.evaluate(sessions: activity.sessions, agents: activity.agents, now: Date())
+            self.notifier.withdraw(result.withdraw)
+            self.notifier.deliver(result.post)
+        }
+        notifier.onOpenSession = { [weak self] sessionID in
+            self?.agentsViewModel.focus(sessionID: sessionID)
+        }
+    }
+
+    /// Whether ⌃⌥C reaches Claudy, for the menus to show it or say it is taken.
+    var isHotKeyActive: Bool { hotKey.isRegistered }
+
+    /// ⌃⌥C: Claudy where it stands, shown or put away. The card comes and goes, the menu bar
+    /// item's popover opens and closes, the island opens and closes.
+    func toggleClaudy() {
+        switch viewModel.placement.effective(hasNotch: viewModel.hasNotchedScreen) {
+        case .widget:
+            guard let panel else { return }
+            if panel.isVisible {
+                panel.orderOut(nil)
+            } else {
+                panel.orderFrontRegardless()
+                updates.acknowledgeGreeting()
+            }
+        case .menuBar:
+            menuBar.togglePopover()
+        case .notch:
+            if !notch.toggle() { menuBar.togglePopover() }
+        }
     }
 
     /// Exactly one of the card, the menu bar item and the island.

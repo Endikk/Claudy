@@ -2,6 +2,59 @@
 
 All notable changes to this project are documented here. Dates are release dates.
 
+## Unreleased
+
+### Added
+
+- **Sessions.** A third tab lists every Claude Code session open on the Mac: the ones waiting
+  for an answer first, in amber, with what they wait for ("Permission prompt"); then those at
+  work, then those at rest with how long they have been idle. Each session shows the subagents
+  it runs underneath: what each was asked, for how long, the file it is touching and its last ten
+  minutes as a track, with its own Claudy in its own colour. Read from Claude Code's own files,
+  nothing to install. Sessions a program drives through the Agent SDK only show while they run
+  agents.
+- **Open a session's window.** "Open" brings forward the app a session runs in (Terminal, iTerm,
+  Ghostty, VS Code), found up its process tree. A session unfolds to its folder, its app, the
+  last thing asked of it, and the buttons.
+- **Interrupt a session from the card.** After a confirmation that names the session, Claudy
+  sends its Claude Code process Ctrl+C's signal, which stops the turn and every agent of that
+  session and leaves the session open. The pid is checked against the session's recorded start
+  time first, so a pid reused by another process is never signalled.
+- **Agents that stall, agents that are done.** Three minutes without a word and the row says so,
+  in amber: "silent 4 min". A finished agent stays ten minutes with the number of files it
+  wrote, instead of leaving after one.
+- **A session waiting for you shows everywhere.** The open island and the menu bar popover put it
+  first, with "Open"; the notch at rest turns amber with a raised hand, and a click on the ears
+  opens the session's app; the menu bar item adds the hand after the figure.
+- **Notifications.** Session at 80 %, the limit coming before the reset at the current pace, the
+  session back after a full window, a session waiting for you, an agent gone silent, an agent
+  done (off by default). One switch each under Notifications in the right-click menu. A click on
+  a banner about a session brings its app forward; a waiting banner is taken back once the
+  session moves on.
+- **⌃⌥C shows or hides Claudy** from any app: the card, the popover or the island, wherever it
+  stands. No accessibility permission needed.
+- **MCP servers left behind.** The Ports tab lists the MCP servers a closed Claude Code session
+  left running, with the memory each one holds, and kills them like an orphaned port.
+- **Export usage as CSV.** The last seven days from the local transcripts, one line per hour,
+  project and model: the four token counts and what they weigh at list price.
+- **The short lists say more.** The popover and the island list four agents with their state in
+  colour, and "+N more" opens the widget. The notch at rest shows the count alone, in the lead
+  agent's colour: a second mascot did not read at 13 points.
+
+### Changed
+
+- **Liquid Glass.** On macOS 26 the card, the minimal strip and the tabs are Apple's Liquid Glass,
+  with a warm tint so the text stays readable over any wallpaper. The session, the figure you
+  come for, sits in a coral tile of its own; the weekly and per-model windows and the week's curve
+  lie on the glass, apart by a hairline. A session waiting for you is the only other block. Before
+  macOS 26, the same layout on the usual window material.
+- **One colour per window.** Coral for the session, sky for the week, violet for Sonnet, teal for
+  Haiku. Amber and red no longer name a window: a gauge only turns amber or red when it nears its
+  limit, so the weekly gauge at 61 % no longer looks like a warning.
+- **Easier to read.** Labels in sentence case instead of spaced capitals, no text under 11 points,
+  three text tones instead of thirty, ports and file names in monospace, and no more glows,
+  gradient figures or pills around every count. The week's totals now sit in the curve's header.
+
 ## 1.5.8 (7 October 2026)
 
 ### Fixed

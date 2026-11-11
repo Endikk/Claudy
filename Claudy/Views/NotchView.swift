@@ -12,11 +12,14 @@ final class NotchModel: ObservableObject {
 }
 
 /// Claudy around the notch. At rest a band the notch's height extends it on both sides, in the
-/// card's glass: the mascot in the left ear, the lead percentage in the right one. Open, the
-/// island's own view (`NotchActivityView`) hangs underneath on the same glass.
+/// card's glass: the mascot in the left ear, joined while agents run by their count, or by an
+/// amber raised hand while a session waits for the user, the glass warming with it; the lead
+/// percentage in the right one. Open, the island's own view (`NotchActivityView`) hangs
+/// underneath on the same glass.
 struct NotchView: View {
     @EnvironmentObject private var viewModel: UsageViewModel
     @EnvironmentObject private var updates: UpdateChecker
+    @EnvironmentObject private var agents: AgentsViewModel
     @ObservedObject var model: NotchModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The mascot and the percentage fly between the ears and the popover in this namespace.
@@ -63,12 +66,14 @@ struct NotchView: View {
         .background(alignment: .top) {
             ZStack(alignment: .top) {
                 glass
+                waitingWash
                 topShade
                 collar
             }
         }
         .clipShape(shape)
         .overlay(rim)
+        .overlay(waitingRim)
         // The card's shadow, open only: at rest the ears merge with the notch, and a margin
         // around them would take clicks from the menu bar next to them.
         .background(OutlineShadow(outline: shape).opacity(model.isOpen ? 1 : 0))
@@ -91,11 +96,24 @@ struct NotchView: View {
     private var glass: some View {
         ZStack {
             VisualEffectView(material: .underWindowBackground, blending: .behindWindow)
-            LinearGradient(colors: [.white.opacity(0.10), .white.opacity(0.015)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            RadialGradient(colors: [Theme.Accent.coral.color.opacity(0.16), .clear],
-                           center: .topLeading, startRadius: 0, endRadius: 240)
+            Theme.veil(.dark)
         }
+    }
+
+    /// At rest, a session waiting for the user warms the ears: seen from the corner of the eye,
+    /// where the count alone would not be.
+    private var waitsAtRest: Bool { !model.isOpen && !agents.waiting.isEmpty }
+
+    private var waitingWash: some View {
+        Theme.Accent.amber.color
+            .opacity(waitsAtRest ? 0.2 : 0)
+            .allowsHitTesting(false)
+    }
+
+    private var waitingRim: some View {
+        shape
+            .stroke(Theme.Accent.amber.color.opacity(waitsAtRest ? 0.55 : 0), lineWidth: 1)
+            .allowsHitTesting(false)
     }
 
     /// How far the collar reaches past the notch on each side, and below it once open.
@@ -163,18 +181,56 @@ struct NotchView: View {
         HStack(spacing: 0) {
             mascot
                 .scaleEffect(model.isOpen ? 1 : Self.mascotRestScale)
+                // Beside its agents, Claudy steps to the ear's outer edge to make room for them.
+                .offset(x: showsTeam ? -Self.teamShift : 0)
                 .matchedGeometryEffect(id: NotchFlight.mascot, in: flight,
                                        properties: .position, isSource: !model.isOpen)
                 .frame(width: NotchLayout.earWidth)
+                .overlay(alignment: .trailing) {
+                    if waitsAtRest {
+                        Image(systemName: "hand.raised.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.Accent.amber.color)
+                            .padding(.trailing, Self.collarClearance)
+                            .transition(.opacity)
+                    } else if showsTeam {
+                        AgentsEarBadge()
+                            .padding(.trailing, Self.collarClearance)
+                            .transition(.opacity)
+                    }
+                }
             Color.clear
                 .frame(width: model.notchSize.width)
             reading
         }
         .frame(height: model.notchSize.height)
+        // Keyed on the agents alone: opening and closing flip `showsAgents` too, and must keep the
+        // island's own spring for the mascot's flight.
+        .animation(reduceMotion ? nil : Theme.Motion.mode, value: agents.runningCount > 0)
+        .animation(reduceMotion ? nil : Theme.Motion.mode, value: agents.waiting.isEmpty)
         .zIndex(1)
+        // A click on the ears goes straight to the session that waits, open or not.
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if let session = agents.waiting.first { agents.focus(session) }
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Claudy, \(lead.title) \(percent)")
+        .accessibilityLabel(waitsAtRest ? "Claudy, \(lead.title) \(percent), a session waits for you"
+                                         : "Claudy, \(lead.title) \(percent)")
     }
+
+    /// At rest only: open, the island lists the agents and the waiting sessions itself.
+    ///
+    /// The agents' count, or the waiting hand, shares the left ear with Claudy rather than
+    /// widening the ears: wider, the island ran over the app's menus on the left of the notch.
+    private var showsTeam: Bool { !model.isOpen && (agents.runningCount > 0 || !agents.waiting.isEmpty) }
+
+    /// How far the resting mascot moves out to share its ear: from the centre to one point off the
+    /// outer edge.
+    private static let teamShift: CGFloat =
+        (NotchLayout.earWidth - NotchFlight.mascotSize * ClaudyTyping.aspectRatio * mascotRestScale) / 2 - 1
+    /// Keeps the agents clear of the black collar that melts the notch into the ear.
+    private static let collarClearance: CGFloat = 9
 
     private var mascot: some View {
         Group {

@@ -5,12 +5,21 @@ import Foundation
 /// The environment is inherited by every descendant and outlives the session that created it,
 /// so it is the only attribution signal that still holds once launchd has reparented an
 /// orphaned server. A process environment routinely carries tokens: nothing but the presence
-/// flag and the project directory ever leaves this type.
+/// flag, the project directory and the session id ever leaves this type.
 enum ProcessEnvironment {
 
     struct Markers: Equatable {
         let isClaude: Bool
         let projectDirectory: String?
+        /// The Claude Code session that launched the process. A session can outlive the parent
+        /// link to its servers, so this id is what says a server still has a live session.
+        let sessionID: String?
+
+        init(isClaude: Bool, projectDirectory: String?, sessionID: String? = nil) {
+            self.isClaude = isClaude
+            self.projectDirectory = projectDirectory
+            self.sessionID = sessionID
+        }
     }
 
     static func markers(pid: pid_t) -> Markers? {
@@ -42,6 +51,7 @@ enum ProcessEnvironment {
 
         var isClaude = false
         var projectDirectory: String?
+        var sessionID: String?
         var start = index
 
         while index <= raw.count {
@@ -54,6 +64,10 @@ enum ProcessEnvironment {
                     } else if let value = entry.dropPrefix("CLAUDE_PROJECT_DIR=") {
                         isClaude = true
                         projectDirectory = value
+                    } else if let value = entry.dropPrefix("CLAUDE_CODE_SESSION_ID="), !value.isEmpty {
+                        // The id alone does not attribute: the markers above keep that role,
+                        // as they always had.
+                        sessionID = value
                     }
                 }
                 start = index + 1
@@ -61,7 +75,7 @@ enum ProcessEnvironment {
             index += 1
         }
 
-        return Markers(isClaude: isClaude, projectDirectory: projectDirectory)
+        return Markers(isClaude: isClaude, projectDirectory: projectDirectory, sessionID: sessionID)
     }
 
     /// The buffer is sized from `kern.argmax`: asking `sysctl` for the size of

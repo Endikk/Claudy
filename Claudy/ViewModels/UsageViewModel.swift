@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The UI's single source of truth: the usage snapshot plus the widget's preferences.
 @MainActor
@@ -42,6 +43,10 @@ final class UsageViewModel: ObservableObject {
     /// Called on every refresh the user asks for, even one dropped because a reading is under
     /// way. The app delegate looks for a new Claudy there.
     var onUserRefresh: (@MainActor () -> Void)?
+
+    /// An export is reading the history or waiting on its save panel. A second click on the menu
+    /// item meanwhile is dropped rather than opening a second panel.
+    private(set) var isExporting = false
 
     private let source: UsageDataSource
     private let oauth = ClaudeOAuth()
@@ -221,6 +226,80 @@ final class UsageViewModel: ObservableObject {
             ?? "Sign-in failed: \(error.localizedDescription)"
     }
 
+    // MARK: - Export
+
+    /// Writes the last seven days of usage to a CSV file the user picks. Local transcripts only,
+    /// so a Mac without Claude Code has nothing to export, never the demo set.
+    func exportUsage() {
+        guard !isExporting else { return }
+        isExporting = true
+        Task {
+            defer { isExporting = false }
+            await runExport()
+        }
+    }
+
+    private func runExport() async {
+        let now = Date()
+        let calendar = Calendar.current
+
+        let entries: [TranscriptEntry]
+        do {
+            entries = try await source.recentEntries()
+        } catch UsageDataError.projectsUnreadable {
+            showAlert("Could not read the usage history",
+                      detail: "The Claude Code transcripts folder could not be read (permissions?).")
+            return
+        } catch {
+            showAlert("Could not read the usage history", detail: error.localizedDescription)
+            return
+        }
+
+        // A busy week holds a great many responses, each formatted into a date string: the file
+        // is built off the main thread so the card keeps drawing meanwhile.
+        let csv = await Task.detached(priority: .userInitiated) { () -> String? in
+            let rows = UsageExport.rows(from: entries, now: now, calendar: calendar)
+            return rows.isEmpty ? nil : UsageExport.csv(rows)
+        }.value
+
+        guard let csv else {
+            showAlert("No usage to export",
+                      detail: "Claude Code recorded no usage on this Mac over the last 7 days.",
+                      style: .informational)
+            return
+        }
+        guard let url = askWhereToSave(UsageExport.fileName(now: now, calendar: calendar)) else { return }
+
+        do {
+            try Data(csv.utf8).write(to: url, options: .atomic)
+        } catch {
+            showAlert("Could not save the usage export",
+                      detail: "Writing \(url.path) failed: \(error.localizedDescription)")
+        }
+    }
+
+    /// The destination, or `nil` when the user cancels. Claudy is an agent app with no Dock icon:
+    /// without activating it first, the panel opens behind the frontmost app's windows.
+    private func askWhereToSave(_ fileName: String) -> URL? {
+        NSApp.activate(ignoringOtherApps: true)
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = fileName
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
+    }
+
+    /// Activates the app first for the same reason as the save panel.
+    private func showAlert(_ message: String, detail: String, style: NSAlert.Style = .warning) {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = style
+        alert.messageText = message
+        alert.informativeText = detail
+        alert.runModal()
+    }
+
     /// Three minutes: Anthropic's quotas move by the minute, and polling faster brought nothing
     /// but a cascade of 429s (the client caches for 60 s anyway). Opening the card and waking the
     /// machine each trigger an immediate reading.
@@ -305,20 +384,19 @@ final class UsageViewModel: ObservableObject {
     /// A window's distance from its expected pace, ready to display. `nil` when no window is
     /// running. The four-point threshold keeps the noise of a single request from being called
     /// "ahead".
-    static func pace(_ window: UsageWindow) -> (text: String, color: Color)? {
+    static func pace(_ window: UsageWindow) -> (text: String, ink: Theme.Ink)? {
         guard window.isActive else { return nil }
 
         let delta = window.paceDelta
         let points = Int((abs(delta) * 100).rounded())
 
         if points < 4 {
-            return ("on pace", Theme.Accent.sage.color)
+            return ("on pace", .positive)
         }
         if delta > 0 {
-            return ("\(points) pts ahead of pace",
-                    delta > 0.20 ? Theme.danger : Theme.Accent.amber.color)
+            return ("\(points) pts ahead of pace", delta > 0.20 ? .danger : .amber)
         }
-        return ("\(points) pts behind pace", Theme.Accent.sage.color)
+        return ("\(points) pts behind pace", .positive)
     }
 
     /// Day initial for the sparkline axis: S M T W T F S. An explicit table rather than a

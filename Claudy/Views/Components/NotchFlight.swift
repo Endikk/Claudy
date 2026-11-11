@@ -67,7 +67,7 @@ struct IslandPercent: View {
             if window.isMeasured {
                 Text("%")
                     .font(Theme.Font.label(16, .medium))
-                    .foregroundStyle(.primary.opacity(0.4))
+                    .foregroundStyle(.secondary)
             }
         }
     }

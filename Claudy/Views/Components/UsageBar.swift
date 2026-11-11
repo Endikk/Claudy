@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Progress bar: recessed rail, gradient fill, tinted halo, and an optional pace marker.
+/// Progress bar: recessed rail, solid fill, and an optional pace marker.
 ///
 /// The fill has a visibility floor so a tiny value stays readable instead of disappearing, but
 /// the floor never applies at exactly zero — on an empty or unmeasured gauge a coloured dot would
@@ -9,7 +9,6 @@ struct UsageBar: View {
     let percent: Double
     let tint: Color
     let height: CGFloat
-    var showsGlow: Bool = true
 
     /// Marker position, 0…1: the share of the window already elapsed. Fill to the left of the
     /// marker means ahead of the clock, to the right means behind it. `nil` on bars that express
@@ -22,18 +21,11 @@ struct UsageBar: View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 Capsule(style: .continuous)
-                    .fill(.primary.opacity(0.09))
+                    .fill(.primary.opacity(0.12))
 
                 Capsule(style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [tint.opacity(0.72), tint],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
+                    .fill(tint)
                     .frame(width: clamped <= 0 ? 0 : max(height, geometry.size.width * clamped))
-                    .shadow(color: showsGlow ? tint.opacity(0.45) : .clear, radius: 5, y: 1)
 
                 if let pace {
                     marker(in: geometry.size, at: min(max(pace, 0), 1))

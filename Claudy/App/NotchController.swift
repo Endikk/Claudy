@@ -10,9 +10,11 @@ final class NotchController {
 
     private let viewModel: UsageViewModel
     private let updates: UpdateChecker
+    private let agents: AgentsViewModel
+    private let notifier: Notifier
     private let model = NotchModel()
     /// The island's right-click menu. Its items target it, so it lives as long as the island.
-    private lazy var menu = ClaudyMenu(viewModel: viewModel)
+    private lazy var menu = ClaudyMenu(viewModel: viewModel, notifier: notifier)
     private lazy var hover = NotchHover(
         open: { [weak self] in self?.open() },
         close: { [weak self] in self?.close() },
@@ -24,6 +26,9 @@ final class NotchController {
     private var settle: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     private var resignObserver: NSObjectProtocol?
+    /// While the shortcut holds the island open: a click anywhere else closes it, since no pointer
+    /// leaving it will.
+    private var outsideClicks: Any?
 
     /// Opening drops from the notch with a slight bounce, as the Dynamic Island does; closing
     /// goes back quicker and without one.
@@ -32,9 +37,47 @@ final class NotchController {
     /// Long enough for `closing` to come to rest.
     private static let settleDelay: TimeInterval = 0.5
 
-    init(viewModel: UsageViewModel, updates: UpdateChecker) {
+    init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel, notifier: Notifier) {
         self.viewModel = viewModel
         self.updates = updates
+        self.agents = agents
+        self.notifier = notifier
+    }
+
+    /// The shortcut opens the island, or closes it. False when the island is not on screen.
+    func toggle() -> Bool {
+        guard panel?.isVisible == true else { return false }
+        if model.isOpen {
+            hover.markClosed()
+            close()
+        } else {
+            hover.markOpen()
+            open()
+            watchOutsideClicks()
+        }
+        return true
+    }
+
+    /// Mouse clicks in other apps reach a global monitor without any permission, unlike keys.
+    private func watchOutsideClicks() {
+        stopWatchingOutsideClicks()
+        outsideClicks = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { _ in
+            MainActor.assumeIsolated {
+                (NSApp.delegate as? AppDelegate)?.notch.outsideClick()
+            }
+        }
+    }
+
+    private func stopWatchingOutsideClicks() {
+        if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
+        outsideClicks = nil
+    }
+
+    /// A click elsewhere closes an island the shortcut opened, unless the pointer has come onto it.
+    func outsideClick() {
+        guard model.isOpen, let panel, !panel.frame.contains(NSEvent.mouseLocation) else { return }
+        hover.markClosed()
+        close()
     }
 
     deinit {
@@ -53,6 +96,7 @@ final class NotchController {
             collapse()
             model.notchSize = geometry.notch.size
             panel.setFrame(layout.restingFrame, display: true)
+            refit()
         }
         panel.orderFrontRegardless()
         resyncPointer()
@@ -62,7 +106,14 @@ final class NotchController {
     func hide() {
         collapse()
         if let layout { panel?.setFrame(layout.restingFrame, display: false) }
+        refit()
         panel?.orderOut(nil)
+    }
+
+    /// The resting frame is the bare ears'. While agents run the ears are wider, and the shape,
+    /// whose size has not changed, would not ask again: fit the window to it now.
+    private func refit() {
+        if model.shapeSize != .zero { fit(model.shapeSize) }
     }
 
     /// The screens just changed: the notch may have moved, or gone with the lid. Hidden at once
@@ -85,7 +136,8 @@ final class NotchController {
     private func makePanel() -> NotchPanel {
         let host = NotchHostingView(rootView: NotchView(model: model)
             .environmentObject(viewModel)
-            .environmentObject(updates))
+            .environmentObject(updates)
+            .environmentObject(agents))
         // The window follows the shape through `fit`, not through SwiftUI's own sizing.
         host.sizingOptions = []
         host.onHover = { [weak self] inside in self?.hover.pointer(inside: inside) }
@@ -113,6 +165,7 @@ final class NotchController {
     }
 
     private func collapse() {
+        stopWatchingOutsideClicks()
         hover.reset()
         settle?.cancel()
         model.isOpen = false
@@ -140,6 +193,7 @@ final class NotchController {
     }
 
     private func close() {
+        stopWatchingOutsideClicks()
         withAnimation(reduceMotion ? nil : Self.closing) { model.isOpen = false }
     }
 

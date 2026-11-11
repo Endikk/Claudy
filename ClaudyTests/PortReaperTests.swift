@@ -142,4 +142,114 @@ final class PortReaperTests: XCTestCase {
                         table: table([RunningProcess(pid: 500, parent: 1, startedAt: epoch, arguments: "python3")]))
         XCTAssertEqual(signals.sent.first?.1, 500)
     }
+
+    func testKillsByPidWithTheSameGuardrails() {
+        let signals = FakeSignals(alive: [99], groups: [99: 99])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(pid: 99, startedAt: epoch,
+                                 table: table([RunningProcess(pid: 99, parent: 1, startedAt: epoch, arguments: "Claudy")]))
+        XCTAssertEqual(result.refusal, .protectedProcess)
+        XCTAssertTrue(signals.sent.isEmpty)
+    }
+
+    // MARK: - MCP servers left behind
+
+    private func server(pid: pid_t, startedAt: Date? = nil) -> McpOrphan {
+        McpOrphan(id: "mcp-\(pid)", pid: pid, startedAt: startedAt ?? epoch, name: "chrome-devtools-mcp",
+                  projectName: nil, residentBytes: 0)
+    }
+
+    /// `npm exec` above the package's binary above `node`: the tree an MCP server runs as.
+    private func serverTree(root: pid_t = 600, parent: pid_t = 1) -> [RunningProcess] {
+        [
+            RunningProcess(pid: root, parent: parent, startedAt: epoch, arguments: "npm exec chrome-devtools-mcp@latest"),
+            RunningProcess(pid: root + 1, parent: root, startedAt: epoch, arguments: "chrome-devtools-mcp"),
+            RunningProcess(pid: root + 2, parent: root + 1, startedAt: epoch, arguments: "node index.js"),
+        ]
+    }
+
+    func testKillsAServerThatLeadsItsOwnGroupThroughTheGroup() {
+        let signals = FakeSignals(alive: [600, 601, 602], groups: [600: 600, 601: 600, 602: 600])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(server(pid: 600), table: table(serverTree()))
+        XCTAssertNil(result.refusal)
+        XCTAssertEqual(signals.sent.map(\.1), [-600])
+    }
+
+    /// Claude Code does not detach the servers it spawns: they keep the group of the session
+    /// that died, which still holds everything else that session left behind. Signalling that
+    /// group would reach far beyond the row the user clicked, so the tree is signalled process
+    /// by process instead.
+    func testSignalsTheTreeOneByOneWhenTheGroupIsTheDeadSessions() {
+        let signals = FakeSignals(alive: [600, 601, 602, 700], groups: [600: 300, 601: 300, 602: 300, 700: 300])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(server(pid: 600), table: table(serverTree()))
+        XCTAssertNil(result.refusal)
+        XCTAssertEqual(signals.sent.map(\.0), [SIGTERM, SIGTERM, SIGTERM])
+        XCTAssertEqual(Set(signals.sent.map(\.1)), [600, 601, 602])
+        XCTAssertEqual(signals.sent.first?.1, 600)
+        XCTAssertTrue(signals.alive.contains(700))
+    }
+
+    func testSignalsTheTreeOneByOneWhenTheGroupIsClaudys() {
+        let signals = FakeSignals(alive: [600, 601, 602], groups: [600: 99, 601: 99, 602: 99, 99: 99])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        _ = reaper.kill(server(pid: 600), table: table(serverTree()))
+        XCTAssertFalse(signals.sent.contains { $0.1 < 0 })
+        XCTAssertEqual(Set(signals.sent.map(\.1)), [600, 601, 602])
+    }
+
+    func testEscalatesTheWholeTreeToKill() {
+        let signals = FakeSignals(alive: [600, 601, 602], groups: [600: 300, 601: 300, 602: 300], diesOnTerm: false)
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(server(pid: 600), table: table(serverTree()))
+        XCTAssertNil(result.refusal)
+        XCTAssertEqual(signals.sent.filter { $0.0 == SIGKILL }.map(\.1).sorted(), [600, 601, 602])
+    }
+
+    /// Between the scan and the click, the pid may have gone to a process a live session owns.
+    func testRefusesAServerThatHasALiveClaudeAncestorAgain() {
+        let signals = FakeSignals(alive: [600, 8859], groups: [600: 600])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(
+            server(pid: 600),
+            table: table(serverTree(parent: 8859)
+                         + [RunningProcess(pid: 8859, parent: 1, startedAt: epoch, arguments: "/Users/x/.claude/local/claude")])
+        )
+        XCTAssertEqual(result.refusal, .liveClaudeSession)
+        XCTAssertTrue(signals.sent.isEmpty)
+    }
+
+    func testRefusesAServerWhoseStartTimeChanged() {
+        let signals = FakeSignals(alive: [600], groups: [600: 600])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(server(pid: 600, startedAt: epoch.addingTimeInterval(-60)), table: table(serverTree()))
+        XCTAssertEqual(result.refusal, .identityChanged)
+        XCTAssertTrue(signals.sent.isEmpty)
+    }
+
+    func testRefusesAServerAboveClaudy() {
+        let signals = FakeSignals(alive: [600, 99], groups: [600: 600, 99: 600])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(
+            server(pid: 600),
+            table: table(serverTree() + [RunningProcess(pid: 99, parent: 602, startedAt: epoch, arguments: "Claudy")])
+        )
+        XCTAssertEqual(result.refusal, .protectedProcess)
+        XCTAssertTrue(signals.sent.isEmpty)
+    }
+
+    /// A server that drives Claude Code holds a live session in its tree: killing the tree
+    /// would kill that session.
+    func testRefusesATreeThatHoldsALiveClaudeSession() {
+        let signals = FakeSignals(alive: [600, 601, 602, 603], groups: [600: 600])
+        let reaper = PortReaper(signals: signals, ownPID: 99)
+        let result = reaper.kill(
+            server(pid: 600),
+            table: table(serverTree() + [RunningProcess(pid: 603, parent: 602, startedAt: epoch,
+                                                        arguments: "/Users/x/.claude/local/claude -p")])
+        )
+        XCTAssertEqual(result.refusal, .liveClaudeSession)
+        XCTAssertTrue(signals.sent.isEmpty)
+    }
 }

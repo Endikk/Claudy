@@ -112,7 +112,7 @@ struct UpdateButton: View {
             ProgressView().controlSize(.mini)
             Text(label)
         }
-        .foregroundStyle(.primary.opacity(0.6))
+        .foregroundStyle(.secondary)
     }
 }
 
@@ -126,7 +126,7 @@ struct UpdateRow: View {
                 UpdateDot()
                 Text(updates.upgradeState == .failed ? "Update failed" : "Claudy \(release.version.description) is available")
                     .font(Theme.Font.label(11, .medium))
-                    .foregroundStyle(.primary.opacity(0.8))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 UpdateButton()
@@ -156,31 +156,31 @@ struct UpdateBubble: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Claudy \(updates.available?.version.description ?? "") is out")
                         .font(Theme.Font.label(13, .semibold))
-                        .foregroundStyle(.primary.opacity(0.92))
+                        .foregroundStyle(.primary)
                     HStack(spacing: 4) {
                         if let current = updates.current {
                             Text("You have \(current.description) ·")
-                                .foregroundStyle(.primary.opacity(0.5))
+                                .foregroundStyle(.secondary)
                         }
                         Button("What's new", action: updates.openReleasePage)
                             .buttonStyle(.borderless)
-                            .foregroundStyle(.primary.opacity(0.7))
+                            .foregroundStyle(.secondary)
                             .underline()
                     }
-                    .font(Theme.Font.label(10.5, .medium))
+                    .font(Theme.Font.label(11, .medium))
                 }
             }
 
             HStack(spacing: 8) {
                 Button("Later", action: onClose)
-                    .foregroundStyle(.primary.opacity(0.75))
+                    .foregroundStyle(.primary)
                     .disabled(updates.upgradeState == .upgrading || updates.upgradeState == .restarting)
                 Spacer(minLength: 0)
                 UpdateButton()
                     .foregroundStyle(Theme.Accent.coral.color)
             }
             .buttonStyle(.borderless)
-            .font(Theme.Font.label(11.5, .semibold))
+            .font(Theme.Font.label(12, .semibold))
         }
         .padding(14)
         .frame(width: 256)

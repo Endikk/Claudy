@@ -3,6 +3,14 @@ import Foundation
 /// Source of usage data.
 protocol UsageDataSource: Sendable {
     func fetch() async throws -> UsageSnapshot
+    /// The responses Claude Code recorded on this Mac, for the CSV export. Local transcripts
+    /// only: the account's quotas say how full a window is, not what filled it.
+    func recentEntries() async throws -> [TranscriptEntry]
+}
+
+extension UsageDataSource {
+    /// A source with no local history, the demo set or a test stub, has nothing to export.
+    func recentEntries() async throws -> [TranscriptEntry] { [] }
 }
 
 /// Where the token detail comes from: `TranscriptScanner` in the app, a stub in tests.
@@ -76,6 +84,13 @@ actor LocalUsageDataSource: UsageDataSource {
         return snapshot
     }
 
+    /// The history through the pass a reading uses: an export clicked during a refresh joins the
+    /// pass under way rather than reading the transcripts a second time.
+    func recentEntries() async throws -> [TranscriptEntry] {
+        guard isInstalled() else { throw UsageDataError.claudeNotInstalled }
+        return try await readHistory().value
+    }
+
     private func readHistory() -> Task<[TranscriptEntry], Error> {
         if let pass { return pass }
         let scanner = self.scanner
@@ -104,8 +119,12 @@ actor LocalUsageDataSource: UsageDataSource {
 /// remade on every refresh, so installing Claude Code afterwards is enough.
 struct AdaptiveUsageDataSource: UsageDataSource {
 
-    private let local = LocalUsageDataSource()
+    private let local: LocalUsageDataSource
     private let demo = DemoUsageDataSource()
+
+    init(local: LocalUsageDataSource = LocalUsageDataSource()) {
+        self.local = local
+    }
 
     /// Only the absence of Claude Code justifies the demo set: any other failure must surface in
     /// the UI rather than show invented figures.
@@ -114,6 +133,16 @@ struct AdaptiveUsageDataSource: UsageDataSource {
             return try await local.fetch()
         } catch UsageDataError.claudeNotInstalled {
             return try await demo.fetch()
+        }
+    }
+
+    /// The export never falls back on the demo set: on screen it is labelled as a demo, but a
+    /// file of invented figures would pass for real ones. Without Claude Code there is nothing.
+    func recentEntries() async throws -> [TranscriptEntry] {
+        do {
+            return try await local.recentEntries()
+        } catch UsageDataError.claudeNotInstalled {
+            return []
         }
     }
 }

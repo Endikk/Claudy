@@ -10,8 +10,8 @@ struct QuotaRing: View {
 
     @State private var shown: Double = 0
 
-    private static let diameter: CGFloat = 60
-    private static let lineWidth: CGFloat = 6
+    private static let diameter: CGFloat = 64
+    private static let lineWidth: CGFloat = 7
 
     private var tint: Color { Theme.tint(window.accent, at: window.percent) }
     private var target: Double { window.isMeasured ? min(max(window.percent, 0), 1) : 0 }
@@ -20,39 +20,32 @@ struct QuotaRing: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .stroke(.primary.opacity(0.08), lineWidth: Self.lineWidth)
+                    .stroke(.primary.opacity(0.12), lineWidth: Self.lineWidth)
 
                 Circle()
                     .trim(from: 0, to: shown)
                     .stroke(tint, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: tint.opacity(0.45), radius: 4)
 
                 if window.isActive {
                     paceDot
                 }
 
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text(window.isMeasured ? "\(Int(window.percent * 100))" : "—")
-                        .font(Theme.Font.value(16, .semibold))
-                        .foregroundStyle(.primary.opacity(window.isMeasured ? 0.92 : 0.4))
-                    if window.isMeasured {
-                        Text("%")
-                            .font(Theme.Font.label(9, .medium))
-                            .foregroundStyle(.primary.opacity(0.4))
-                    }
-                }
+                Figure(window: window, size: 19)
             }
             .frame(width: Self.diameter, height: Self.diameter)
 
-            VStack(spacing: 1) {
-                Text("\(window.title) · \(window.window)")
-                    .microLabel(0.55)
-                    .lineLimit(1)
+            VStack(spacing: 2) {
+                HStack(spacing: 5) {
+                    Circle().fill(tint).frame(width: 6, height: 6)
+                    Text(window.title)
+                        .font(Theme.Font.label(11, .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
                 Text(window.isActive ? "in \(UsageViewModel.countdown(to: window.resetDate))"
-                                     : (window.isMeasured ? "inactive" : "unavailable"))
-                    .font(Theme.Font.label(9.5, .medium))
-                    .foregroundStyle(.primary.opacity(0.4))
+                                     : (window.isMeasured ? "Inactive" : "Unavailable"))
+                    .meta()
                     .lineLimit(1)
             }
         }
@@ -69,8 +62,8 @@ struct QuotaRing: View {
 
     private var paceDot: some View {
         Circle()
-            .fill(.primary.opacity(0.75))
-            .frame(width: 4, height: 4)
+            .fill(.primary)
+            .frame(width: 5, height: 5)
             .offset(y: -Self.diameter / 2)
             .rotationEffect(.degrees(window.elapsed * 360))
     }

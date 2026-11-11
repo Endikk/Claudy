@@ -1,13 +1,16 @@
 import SwiftUI
 import Charts
 
-/// Seven-day usage sparkline. No axes and no grid: the shape and the last point are enough.
-/// Hovering a day marks it and shows its figures in the header, next to the title.
+/// Seven-day usage curve. No axes and no grid: the shape and the last point are enough. The
+/// header carries today's and the week's totals; hovering a day puts its own figures there.
 struct SparklineChart: View {
     let title: String
     let samples: [TokenSample]
     let tint: Color
+    var today: Int?
+    var week: Int?
 
+    @Environment(\.colorScheme) private var scheme
     @State private var hovered: TokenSample?
 
     private var weekTotal: Int { samples.reduce(0) { $0 + $1.tokens } }
@@ -18,37 +21,54 @@ struct SparklineChart: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 12) {
             header
             chart
         }
         .animation(Theme.Motion.gauge, value: samples)
     }
 
+    /// The title, or once the totals are known, the totals themselves: "Today" and "7 days" say
+    /// what the curve is, and the title beside them pushed the figures to an ellipsis.
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(title)
-                .microLabel(0.55)
-            Spacer(minLength: 4)
             if let hovered {
                 Text(UsageViewModel.dayName(hovered.date))
-                    .font(Theme.Font.label(10.5, .semibold))
-                    .foregroundStyle(.primary.opacity(0.6))
+                    .meta()
                 Text(UsageViewModel.tokens(hovered.tokens))
-                    .font(Theme.Font.value(10.5, .semibold))
-                    .foregroundStyle(tint)
+                    .font(Theme.Font.value(13, .semibold))
+                    .ink(.coral)
+                Spacer(minLength: 4)
                 if weekTotal > 0 {
-                    Text("\(Int((Double(hovered.tokens) / Double(weekTotal) * 100).rounded())) % of week")
-                        .font(Theme.Font.value(10.5, .medium))
-                        .foregroundStyle(.primary.opacity(0.4))
+                    Text("\(Int((Double(hovered.tokens) / Double(weekTotal) * 100).rounded()))% of week")
+                        .meta()
                 }
+            } else if let today, let week {
+                total("Today", today, ink: .coral)
+                Spacer(minLength: 8)
+                total("7 days", week, ink: .sky)
+            } else {
+                Text(title)
+                    .sectionLabel()
+                Spacer(minLength: 0)
             }
         }
-        .frame(height: 12)
+        .lineLimit(1)
+        .frame(height: 16)
+    }
+
+    private func total(_ label: String, _ value: Int, ink: Theme.Ink) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(label)
+                .meta()
+            Text(UsageViewModel.tokens(value))
+                .font(Theme.Font.value(13, .semibold))
+                .ink(ink)
+        }
     }
 
     private var chart: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 6) {
             Chart {
                 ForEach(samples) { sample in
                     AreaMark(
@@ -58,7 +78,7 @@ struct SparklineChart: View {
                     .interpolationMethod(.catmullRom)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [tint.opacity(0.38), tint.opacity(0.02)],
+                            colors: [tint.opacity(0.42), tint.opacity(0)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
@@ -69,14 +89,14 @@ struct SparklineChart: View {
                         y: .value("Tokens", sample.tokens)
                     )
                     .interpolationMethod(.catmullRom)
-                    .lineStyle(StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                     .foregroundStyle(tint)
                 }
 
                 if let hovered {
                     RuleMark(x: .value("Day", hovered.date, unit: .day))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [2, 2]))
-                        .foregroundStyle(.primary.opacity(0.25))
+                        .foregroundStyle(.tertiary)
                 }
 
                 if let marked = hovered ?? samples.last {
@@ -84,15 +104,19 @@ struct SparklineChart: View {
                         x: .value("Day", marked.date, unit: .day),
                         y: .value("Tokens", marked.tokens)
                     )
-                    .symbolSize(38)
-                    .foregroundStyle(tint)
+                    .symbol {
+                        Circle()
+                            .fill(tint)
+                            .overlay(Circle().strokeBorder(.white.opacity(0.9), lineWidth: 2))
+                            .frame(width: 11, height: 11)
+                    }
                 }
             }
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartLegend(.hidden)
             .chartYScale(domain: 0...max(upperBound, 1))
-            .frame(height: 46)
+            .frame(height: 64)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
                     Rectangle()
@@ -112,9 +136,10 @@ struct SparklineChart: View {
 
             HStack(spacing: 0) {
                 ForEach(samples) { sample in
+                    let isMarked = sample.id == (hovered ?? samples.last)?.id
                     Text(UsageViewModel.dayInitial(sample.date))
-                        .font(Theme.Font.label(8.5, .semibold))
-                        .foregroundStyle(.primary.opacity(sample.id == (hovered ?? samples.last)?.id ? 0.65 : 0.28))
+                        .font(Theme.Font.label(11, isMarked ? .bold : .medium))
+                        .foregroundStyle(isMarked ? Theme.Ink.coral.color(scheme) : Color.secondary)
                         .frame(maxWidth: .infinity)
                 }
             }

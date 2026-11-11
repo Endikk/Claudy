@@ -10,49 +10,32 @@ struct StatColumn: View {
     private var points: Int { Int((abs(window.paceDelta) * 100).rounded()) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(tint)
-                    .frame(width: 5, height: 5)
+                    .frame(width: 7, height: 7)
                 Text("\(window.title) · \(window.window)")
-                    .microLabel(0.6)
+                    .sectionLabel()
+                    .lineLimit(1)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(window.isMeasured ? "\(Int(window.percent * 100))" : "—")
-                    .font(Theme.Font.value(19, .semibold))
-                if window.isMeasured {
-                    Text("%")
-                        .font(Theme.Font.label(11, .medium))
-                        .foregroundStyle(.primary.opacity(0.45))
-                }
-            }
-            .foregroundStyle(.primary.opacity(window.isMeasured ? 0.92 : 0.4))
+            Figure(window: window, size: 26)
 
-            UsageBar(percent: window.percent, tint: tint, height: 5, showsGlow: false,
+            UsageBar(percent: window.percent, tint: tint, height: 5,
                      pace: window.isActive ? window.elapsed : nil)
 
-            HStack(spacing: 4) {
-                Text(window.isMeasured ? UsageViewModel.tokens(window.tokensUsed) + " here" : "no quota")
-                    .font(Theme.Font.value(9.5, .medium))
-                    .foregroundStyle(.primary.opacity(0.38))
-
-                Spacer(minLength: 0)
-
+            VStack(alignment: .leading, spacing: 2) {
+                Text(window.isMeasured ? UsageViewModel.tokens(window.tokensUsed) + " here" : "No quota")
+                    .meta()
+                    .lineLimit(1)
                 if let pace = UsageViewModel.pace(window), window.paceDelta.magnitude >= 0.04 {
-                    Text(window.paceDelta > 0 ? "+\(points)" : "−\(points)")
-                        .font(Theme.Font.value(9.5, .semibold))
-                        .foregroundStyle(pace.color)
+                    Text(window.paceDelta > 0 ? "\(points) pts ahead" : "\(points) pts behind")
+                        .font(Theme.Font.label(11, .semibold))
+                        .ink(pace.ink)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 9)
-        .padding(.horizontal, 11)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.primary.opacity(0.05))
-        )
     }
 }

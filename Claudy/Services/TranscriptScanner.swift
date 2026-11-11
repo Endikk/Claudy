@@ -21,6 +21,13 @@ struct TranscriptEntry {
     /// content block; without this key every response would be counted several times. `nil` means
     /// no identifiers, so the line counts on its own.
     let dedupKey: String?
+    /// The four counters `tokens` adds up, kept apart for the CSV export, where a spreadsheet
+    /// prices each one on its own. Declared last and with a default, so an entry built by hand
+    /// elsewhere need not spell them out.
+    var inputTokens = 0
+    var outputTokens = 0
+    var cacheReadTokens = 0
+    var cacheWriteTokens = 0
 }
 
 /// Reads the `<config>/projects/**/*.jsonl` transcripts: the main sessions, and below them the
@@ -412,7 +419,11 @@ actor TranscriptScanner {
             project: cwd,
             sessionID: (root["sessionId"] as? String) ?? "",
             isSidechain: (root["isSidechain"] as? Bool) ?? false,
-            dedupKey: dedupKey
+            dedupKey: dedupKey,
+            inputTokens: input,
+            outputTokens: output,
+            cacheReadTokens: cacheRead,
+            cacheWriteTokens: cacheWrite
         ))
     }
 

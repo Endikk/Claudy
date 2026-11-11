@@ -20,15 +20,14 @@ struct SignInControls: View {
     private var manualEntry: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text("Paste the code the page shows:")
-                .font(Theme.Font.label(10.5, .medium))
-                .foregroundStyle(.primary.opacity(0.6))
+                .font(Theme.Font.label(11, .medium))
+                .foregroundStyle(.secondary)
             TextField("code#state", text: $manualCode)
                 .textFieldStyle(.roundedBorder)
                 .font(Theme.Font.value(11, .regular))
             HStack(spacing: 12) {
                 Button("Submit") { viewModel.submitManualCode(manualCode) }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Accent.coral.color)
+                    .buttonStyle(PillButtonStyle())
                     .disabled(manualCode.trimmed.isEmpty)
                 cancelButton
             }
@@ -39,8 +38,8 @@ struct SignInControls: View {
         HStack(spacing: 9) {
             ProgressView().controlSize(.small)
             Text("Waiting for the browser…")
-                .font(Theme.Font.label(10.5, .medium))
-                .foregroundStyle(.primary.opacity(0.6))
+                .font(Theme.Font.label(11, .medium))
+                .foregroundStyle(.secondary)
             Spacer(minLength: 0)
             cancelButton
         }
@@ -50,8 +49,8 @@ struct SignInControls: View {
     private var cancelButton: some View {
         Button("Cancel") { viewModel.cancelSignIn() }
             .buttonStyle(.plain)
-            .font(Theme.Font.label(10.5, .medium))
-            .foregroundStyle(.primary.opacity(0.5))
+            .font(Theme.Font.label(11, .medium))
+            .foregroundStyle(.secondary)
     }
 
     private var signInButton: some View {
@@ -60,31 +59,17 @@ struct SignInControls: View {
                 viewModel.startSignIn()
             } label: {
                 Text("Sign in to Claude")
-                    .font(Theme.Font.label(12.5, .semibold))
-                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [Theme.Accent.coral.color,
-                                         Theme.Accent.coral.color.opacity(0.78)],
-                                startPoint: .top, endPoint: .bottom
-                            )
-                        )
-                    )
-                    .shadow(color: Theme.Accent.coral.color.opacity(0.38), radius: 9, y: 2)
-                    .contentShape(Capsule())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PillButtonStyle(isLarge: true))
 
-            Text("Official claude.ai sign-in, revocable at any time.")
-                .font(Theme.Font.label(9, .medium))
-                .foregroundStyle(.primary.opacity(0.35))
+            Text("Official claude.ai sign-in, revocable at any time")
+                .font(Theme.Font.label(11, .medium))
+                .foregroundStyle(.secondary)
 
             if let message = viewModel.errorMessage {
                 Text(message)
-                    .font(Theme.Font.label(9.5, .medium))
+                    .font(Theme.Font.label(11, .medium))
                     .foregroundStyle(Theme.danger.opacity(0.9))
                     .fixedSize(horizontal: false, vertical: true)
             }

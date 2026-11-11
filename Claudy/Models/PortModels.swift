@@ -26,6 +26,20 @@ struct ListeningPort: Identifiable, Equatable {
     let sessionRootPID: pid_t?
 }
 
+/// An MCP server Claude Code launched over stdio and left running when its session ended.
+/// It holds no port, so lsof never sees it: its environment and command line give it away.
+struct McpOrphan: Identifiable, Equatable {
+    let id: String
+    /// The top of the orphaned tree: `npm exec`, not the `node` it spawned.
+    let pid: pid_t
+    let startedAt: Date
+    let name: String
+    let projectName: String?
+    /// Resident memory of the top process and everything under it, in bytes: what a kill gives
+    /// back.
+    let residentBytes: UInt64
+}
+
 enum PortScanState: Equatable {
     case scanning
     /// `isDegraded` marks a scan that could not read process environments and fell back to

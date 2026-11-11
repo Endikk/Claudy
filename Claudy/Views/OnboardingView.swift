@@ -12,73 +12,60 @@ struct OnboardingView: View {
                 .padding(.bottom, 14)
 
             Text("Claudy")
-                .font(Theme.Font.label(20, .semibold))
-                .foregroundStyle(.primary.opacity(0.92))
+                .font(Theme.Font.label(22, .semibold))
+                .foregroundStyle(.primary)
 
-            Text("Your real Claude quotas.")
-                .font(Theme.Font.label(11, .medium))
-                .foregroundStyle(.primary.opacity(0.5))
-                .padding(.top, 3)
+            Text("Your real Claude quotas")
+                .font(Theme.Font.label(13, .regular))
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
 
-            VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 14) {
                 feature("gauge.with.needle.fill", .coral,
                         "Real quotas",
-                        "The same figures as claude.ai, to the minute.")
-                feature("metronome.fill", .amber,
+                        "The same figures as claude.ai, to the minute")
+                feature("metronome.fill", .sky,
                         "Your pace",
-                        "Ahead of or behind each window, at a glance.")
-                feature("lock.shield.fill", .sage,
+                        "Ahead of or behind each window, at a glance")
+                feature("lock.shield.fill", .teal,
                         "Nothing leaves your Mac",
-                        "The only exchange is Anthropic's API, with your own token.")
+                        "The only exchange is Anthropic's API, with your own token")
             }
-            .padding(.vertical, 20)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 22)
 
             SignInControls()
+                .padding(.horizontal, 6)
                 .padding(.bottom, 22)
         }
-        .padding(.horizontal, Theme.Metric.padding + 6)
+        .padding(.horizontal, Theme.Metric.panelPadding)
         .frame(width: Theme.Metric.fullWidth)
     }
 
     // MARK: - Brand mark
 
     private var mark: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Theme.Accent.coral.color.opacity(0.22), .clear],
-                        center: .center, startRadius: 4, endRadius: 40
-                    )
-                )
-                .frame(width: 74, height: 74)
-
-            ClaudyTyping()
-                .frame(width: 54 * ClaudyTyping.aspectRatio, height: 54)
-        }
+        ClaudyTyping()
+            .frame(width: 60 * ClaudyTyping.aspectRatio, height: 60)
     }
 
     // MARK: - Arguments
 
     private func feature(_ icon: String, _ accent: Theme.Accent,
                          _ title: String, _ detail: String) -> some View {
-        HStack(alignment: .top, spacing: 11) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(accent.color)
-                .frame(width: 26, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(accent.color.opacity(0.14))
-                )
+                .frame(width: 22)
 
-            VStack(alignment: .leading, spacing: 1.5) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(Theme.Font.label(11.5, .semibold))
-                    .foregroundStyle(.primary.opacity(0.88))
+                    .font(Theme.Font.label(13, .semibold))
+                    .foregroundStyle(.primary)
                 Text(detail)
-                    .font(Theme.Font.label(10, .regular))
-                    .foregroundStyle(.primary.opacity(0.48))
+                    .font(Theme.Font.label(12, .regular))
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)

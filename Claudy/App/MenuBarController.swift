@@ -9,6 +9,8 @@ final class MenuBarController: NSObject {
 
     private let viewModel: UsageViewModel
     private let updates: UpdateChecker
+    private let agents: AgentsViewModel
+    private let notifier: Notifier
     private var item: NSStatusItem?
     private let popover = NSPopover()
     /// Drops from the item once per new version, and stays until the user answers it.
@@ -16,7 +18,7 @@ final class MenuBarController: NSObject {
         .environmentObject(updates))
     private var cancellables = Set<AnyCancellable>()
     /// The right-click menu. Its items target it, so it lives as long as the item.
-    private lazy var menuContent = ClaudyMenu(viewModel: viewModel)
+    private lazy var menuContent = ClaudyMenu(viewModel: viewModel, notifier: notifier)
 
     private var timer: Timer?
     private var tick = 0
@@ -26,6 +28,8 @@ final class MenuBarController: NSObject {
     private var waveFrames: [NSImage] = []
     private var framesTint: Color?
     private var framesBadged: Bool?
+    /// What the title last showed, so the agents' clock only rebuilds it when it reads otherwise.
+    private var titleKey: String?
 
     /// What the icon is doing. The explosion plays only when the quota fills while the item is
     /// up; opening Claudy on a full quota shows the dead state directly, as the widget does.
@@ -43,14 +47,17 @@ final class MenuBarController: NSObject {
     /// device pixels on Retina screens.
     private static let cell: CGFloat = 0.5
 
-    init(viewModel: UsageViewModel, updates: UpdateChecker) {
+    init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel, notifier: Notifier) {
         self.viewModel = viewModel
         self.updates = updates
+        self.agents = agents
+        self.notifier = notifier
         super.init()
 
         let controller = NSHostingController(rootView: MenuBarView()
             .environmentObject(viewModel)
-            .environmentObject(updates))
+            .environmentObject(updates)
+            .environmentObject(agents))
         controller.sizingOptions = [.preferredContentSize]
         popover.contentViewController = controller
         popover.behavior = .transient
@@ -83,6 +90,26 @@ final class MenuBarController: NSObject {
             }
             .store(in: &cancellables)
 
+        // The sink runs before the published value is set: the new list goes in as is.
+        agents.$agents
+            .receive(on: RunLoop.main)
+            .sink { [weak self] list in
+                guard let self else { return }
+                self.update(with: self.viewModel.snapshot, agents: list)
+            }
+            .store(in: &cancellables)
+
+        // An agent falling silent changes no list, only the clock: its Claudy turns grey.
+        agents.$now
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.update(with: self.viewModel.snapshot)
+                }
+            }
+            .store(in: &cancellables)
+
         updates.$shouldAnnounce
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -110,6 +137,7 @@ final class MenuBarController: NSObject {
         stopAnimating()
         animation = .still
         wasOverloaded = nil
+        titleKey = nil
         cancellables.removeAll()
         if let item {
             NSStatusBar.system.removeStatusItem(item)
@@ -119,8 +147,10 @@ final class MenuBarController: NSObject {
 
     // MARK: - Content
 
-    private func update(with snapshot: UsageSnapshot) {
+    private func update(with snapshot: UsageSnapshot, agents list: [RunningAgent]? = nil) {
         guard let button = item?.button else { return }
+        // Finished agents stay listed a while; the bar counts the ones still at it.
+        let running = (list ?? agents.agents).filter { !$0.isFinished }
         let session = snapshot.session
         // The figure in the bar: the 5h session, or the monthly spend on a plan billed on usage.
         let lead = snapshot.primary
@@ -143,10 +173,16 @@ final class MenuBarController: NSObject {
         }
 
         let percent = lead.isMeasured ? "\(Int(lead.percent * 100))%" : "—"
-        button.attributedTitle = NSAttributedString(
-            string: " \(percent)",
-            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)]
-        )
+        let now = agents.now
+        let leadAgent = running.first { $0.status(at: now) == .working } ?? running.first
+        let agentsTint = leadAgent.map { agents.tint(of: $0) }
+        let waiting = agents.waiting.count
+        let key = "\(percent)|\(running.count)|\(agentsTint.map { "\($0)" } ?? "")|\(waiting)"
+        if key != titleKey {
+            titleKey = key
+            button.attributedTitle = Self.title(percent: percent, count: running.count, tint: agentsTint,
+                                                waiting: waiting > 0)
+        }
         // The title just changed width and the bar moved the icon: keep the bubble's arrow on it.
         if bubble.isVisible {
             DispatchQueue.main.async { [weak self] in
@@ -154,9 +190,14 @@ final class MenuBarController: NSObject {
                 self.bubble.show(below: button)
             }
         }
-        button.toolTip = lead.isActive
+        let quota = lead.isActive
             ? "\(lead.title) \(percent) · reset \(UsageViewModel.resetTime(lead.resetDate))"
             : "Claudy"
+        var tip = running.isEmpty
+            ? quota
+            : quota + " · " + (running.count == 1 ? "1 agent running" : "\(running.count) agents running")
+        if waiting > 0 { tip += " · " + (waiting == 1 ? "a session waits for you" : "\(waiting) sessions wait for you") }
+        button.toolTip = tip
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let overloaded = snapshot.isOverloaded
@@ -244,6 +285,43 @@ final class MenuBarController: NSObject {
     }
 
     /// The icon with the coral update dot in its top-right corner, where the sprite is empty.
+    /// The figure, then, while agents run, a small Claudy in the colour of the one at work and
+    /// how many there are. The card's Sessions tab and the popover say which. A session waiting
+    /// for the user adds an amber raised hand.
+    private static func title(percent: String, count: Int, tint: Color?, waiting: Bool) -> NSAttributedString {
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
+        let title = NSMutableAttributedString(string: " \(percent)", attributes: [.font: font])
+        if waiting, let hand = waitingHand(height: font.capHeight + 3) {
+            let attachment = NSTextAttachment()
+            attachment.image = hand
+            attachment.bounds = CGRect(x: 0, y: (font.capHeight - hand.size.height) / 2,
+                                       width: hand.size.width, height: hand.size.height)
+            title.append(NSAttributedString(string: " ", attributes: [.font: font]))
+            title.append(NSAttributedString(attachment: attachment))
+        }
+        guard count > 0, let tint else { return title }
+
+        let image = ClaudyTyping.image(.resting, tint: tint, cell: cell)
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        // Centred on the digits rather than sat on the baseline.
+        attachment.bounds = CGRect(x: 0, y: (font.capHeight - image.size.height) / 2,
+                                   width: image.size.width, height: image.size.height)
+        title.append(NSAttributedString(string: "  ", attributes: [.font: font]))
+        title.append(NSAttributedString(attachment: attachment))
+        title.append(NSAttributedString(string: "\(count)",
+                                        attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold)]))
+        return title
+    }
+
+    /// The raised hand in amber, drawn as an image: a menu bar title takes no tinted symbol.
+    private static func waitingHand(height: CGFloat) -> NSImage? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: height, weight: .semibold)
+            .applying(.init(paletteColors: [NSColor(Theme.Accent.amber.color)]))
+        return NSImage(systemSymbolName: "hand.raised.fill", accessibilityDescription: "A session waits for you")?
+            .withSymbolConfiguration(configuration)
+    }
+
     private static func withUpdateDot(_ image: NSImage) -> NSImage {
         let diameter: CGFloat = 4
         return NSImage(size: image.size, flipped: true) { rect in
@@ -267,6 +345,12 @@ final class MenuBarController: NSObject {
         } else {
             togglePopover(from: sender)
         }
+    }
+
+    /// The shortcut opens or closes the popover, as a click on the item does.
+    func togglePopover() {
+        guard let button = item?.button else { return }
+        togglePopover(from: button)
     }
 
     private func togglePopover(from button: NSStatusBarButton) {

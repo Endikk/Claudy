@@ -1,75 +1,76 @@
 import SwiftUI
 
-/// "Details" accordion: split by model and top projects.
+/// The "Details" switch, in the card's footer row.
+struct DetailsToggle: View {
+    @EnvironmentObject private var viewModel: UsageViewModel
+
+    var body: some View {
+        Button(action: viewModel.toggleDetails) {
+            HStack(spacing: 6) {
+                Text("Details")
+                    .font(Theme.Font.label(12, .semibold))
+                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(viewModel.isDetailsExpanded ? 0 : -90))
+            }
+            .frame(height: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(viewModel.isDetailsExpanded ? "Hide the split by model and project" : "Split by model and project")
+    }
+}
+
+/// What "Details" unfolds to: the week split by model and by project.
 struct DetailsSection: View {
     @EnvironmentObject private var viewModel: UsageViewModel
 
     private var snapshot: UsageSnapshot { viewModel.snapshot }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Button(action: viewModel.toggleDetails) {
-                HStack(spacing: 6) {
-                    Text("Details")
-                        .microLabel(0.6)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.primary.opacity(0.4))
-                        .rotationEffect(.degrees(viewModel.isDetailsExpanded ? 0 : -90))
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: 12) {
+            if snapshot.models.isEmpty && snapshot.projects.isEmpty {
+                Text("No activity recorded over the last 7 days")
+                    .meta()
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                // Shares follow what each token costs, not the raw count: cache reads
+                // are most of the volume but weigh a tenth, and Opus weighs five Haiku.
+                Text("Last 7 days · share weighted by model price")
+                    .meta()
 
-            if viewModel.isDetailsExpanded {
-                VStack(alignment: .leading, spacing: 12) {
-                    if snapshot.models.isEmpty && snapshot.projects.isEmpty {
-                        Text("No activity recorded over the last 7 days.")
-                            .font(Theme.Font.label(10.5, .regular))
-                            .foregroundStyle(.primary.opacity(0.4))
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        // Shares follow what each token costs, not the raw count: cache reads
-                        // are most of the volume but weigh a tenth, and Opus weighs five Haiku.
-                        Text("Last 7 days · share weighted by model price")
-                            .font(Theme.Font.label(9, .regular))
-                            .foregroundStyle(.primary.opacity(0.35))
-
-                        group("By model") {
-                            ForEach(snapshot.models) { model in
-                                MiniBarRow(
-                                    name: model.name,
-                                    tokens: model.tokens,
-                                    share: model.share,
-                                    tint: model.accent.color
-                                )
-                            }
-                        }
-
-                        group("Top projects") {
-                            ForEach(snapshot.projects) { project in
-                                MiniBarRow(
-                                    name: project.name,
-                                    tokens: project.tokens,
-                                    share: project.share,
-                                    tint: Theme.Accent.sage.color
-                                )
-                            }
-                        }
+                group("By model") {
+                    ForEach(snapshot.models) { model in
+                        MiniBarRow(
+                            name: model.name,
+                            tokens: model.tokens,
+                            share: model.share,
+                            tint: model.accent.color
+                        )
                     }
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
+
+                group("Top projects") {
+                    ForEach(snapshot.projects) { project in
+                        MiniBarRow(
+                            name: project.name,
+                            tokens: project.tokens,
+                            share: project.share,
+                            tint: Theme.Accent.teal.color
+                        )
+                    }
+                }
             }
         }
     }
 
     @ViewBuilder
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(Theme.Font.label(9, .semibold))
-                .foregroundStyle(.primary.opacity(0.35))
+                .sectionLabel()
             content()
         }
     }
@@ -86,23 +87,22 @@ struct MiniBarRow: View {
         VStack(spacing: 4) {
             HStack(spacing: 6) {
                 Text(name)
-                    .font(Theme.Font.label(11, .medium))
-                    .foregroundStyle(.primary.opacity(0.8))
+                    .font(Theme.Font.label(13, .medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
 
                 Spacer(minLength: 4)
 
                 Text(UsageViewModel.tokens(tokens))
-                    .font(Theme.Font.value(10.5, .medium))
-                    .foregroundStyle(.primary.opacity(0.55))
+                    .meta()
 
-                Text("\(Int((share * 100).rounded())) %")
-                    .font(Theme.Font.value(10.5, .semibold))
-                    .foregroundStyle(tint)
-                    .frame(width: 36, alignment: .trailing)
+                Text("\(Int((share * 100).rounded()))%")
+                    .font(Theme.Font.value(12, .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 40, alignment: .trailing)
             }
 
-            UsageBar(percent: share, tint: tint, height: 3, showsGlow: false)
+            UsageBar(percent: share, tint: tint, height: 4)
         }
     }
 }
