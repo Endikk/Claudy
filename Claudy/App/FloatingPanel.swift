@@ -5,7 +5,7 @@ import AppKit
 /// `.nonactivatingPanel` keeps a click on the widget from stealing focus from the front app,
 /// and the system shadow stays off because it tracks rounded corners poorly on a transparent
 /// window and flickers while resizing — SwiftUI draws the shadow instead.
-final class FloatingPanel: NSPanel {
+class FloatingPanel: NSPanel {
 
     init(contentRect: NSRect) {
         super.init(

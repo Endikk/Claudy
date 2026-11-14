@@ -30,6 +30,20 @@ struct AgentAction: Equatable, Sendable {
     let tool: String
     /// The file's name alone: its full path says nothing more in a 300-point card.
     let file: String?
+    /// What the call is for, as the agent room shows it.
+    let work: AgentWork
+    /// The few words that name it: a command's first words, a skill's name, an MCP server's.
+    let detail: String?
+
+    init(date: Date, kind: AgentActionKind, tool: String, file: String?,
+         work: AgentWork? = nil, detail: String? = nil) {
+        self.date = date
+        self.kind = kind
+        self.tool = tool
+        self.file = file
+        self.work = work ?? AgentWork.read(tool: tool, path: file).work
+        self.detail = detail
+    }
 }
 
 /// One fifteen-second slot of an agent's track.
@@ -101,6 +115,32 @@ struct RunningAgent: Identifiable, Equatable, Sendable {
         case .read: return "search"
         case .edit, .other: return lastAction.tool.lowercased()
         }
+    }
+
+    /// How far back the room looks to decide where an agent sits.
+    static let familySpan: TimeInterval = 90
+
+    /// The area of the room its recent work belongs to: the family most of its last calls fall
+    /// in, the latest one on a tie. An agent reads and writes in turns; one call does not make
+    /// it cross the room.
+    func family(at now: Date) -> WorkFamily? {
+        let cutoff = now.addingTimeInterval(-Self.familySpan)
+        var counts: [WorkFamily: Int] = [:]
+        var latest: WorkFamily?
+        for action in recent where action.date >= cutoff {
+            guard let family = action.work.family else { continue }
+            counts[family, default: 0] += 1
+            latest = family
+        }
+        guard let top = counts.values.max() else { return lastAction?.work.family }
+        if let latest, counts[latest] == top { return latest }
+        return WorkFamily.allCases.first { counts[$0] == top }
+    }
+
+    /// What it does now in a few words: "tests · swift test", "code · AgentScanner.swift".
+    var workLabel: String {
+        guard let lastAction else { return "starting" }
+        return [lastAction.work.label, lastAction.detail ?? lastAction.file].compactMap { $0 }.joined(separator: " · ")
     }
 
     /// Its last call wrote a file: the file is shown in the accent.

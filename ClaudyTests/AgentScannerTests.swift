@@ -165,6 +165,23 @@ final class AgentScannerTests: XCTestCase {
         XCTAssertEqual(activity.sessions.first?.lastPrompt, "now ship it")
     }
 
+    /// What the session does itself, between two agents, is read from its own transcript.
+    func testReadsTheSessionsOwnLastCall() async throws {
+        try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire")
+        try writeTranscript(session: "s1", lines: [
+            typed("run the tests"),
+            tool("t1", "Read", ["file_path": "/x/a.ts"], at: now.addingTimeInterval(-60)),
+            typed([["type": "tool_result", "tool_use_id": "t1", "content": "ok"]]),
+            tool("t2", "Bash", ["command": "cd app && swift test"], at: now.addingTimeInterval(-5)),
+        ])
+
+        let activity = await scanner().scanActivity()
+
+        XCTAssertEqual(activity.sessions.first?.lastPrompt, "run the tests")
+        XCTAssertEqual(activity.sessions.first?.lastAction?.work, .tests)
+        XCTAssertEqual(activity.sessions.first?.lastAction?.detail, "swift test")
+    }
+
     /// Claude Code's own record of the last prompt is read too, and a compaction summary is not
     /// taken for one.
     func testLastPromptLineAndCompactSummary() {
@@ -311,6 +328,24 @@ final class AgentScannerTests: XCTestCase {
 
         XCTAssertEqual(agents.first?.actionCount, 2)
         XCTAssertEqual(agents.first?.editedFiles, ["b.ts"])
+    }
+
+    /// The agent room reads what each call is for: the command a shell call ran, the skill loaded.
+    func testReadsTheWorkBehindEachCall() async throws {
+        try writeSession(pid: livePID, id: "s1", name: "claire-bb", cwd: "/Users/me/Claire")
+        try writeAgent(session: "s1", id: "a1", meta: running, lines: [
+            prompt(at: now.addingTimeInterval(-120)),
+            tool("t1", "Edit", ["file_path": "/x/specs/001/plan.md"], at: now.addingTimeInterval(-60)),
+            tool("t2", "Skill", ["skill": "speckit-plan"], at: now.addingTimeInterval(-40)),
+            tool("t3", "Bash", ["command": "cd app && swift test --filter Scan"], at: now.addingTimeInterval(-5)),
+        ], modified: now.addingTimeInterval(-5))
+
+        let agents = await scanner().scan()
+        let agent = try XCTUnwrap(agents.first)
+
+        XCTAssertEqual(agent.recent.map(\.work), [.plan, .skill, .tests])
+        XCTAssertEqual(agent.recent.map(\.detail), [nil, "speckit-plan", "swift test"])
+        XCTAssertEqual(agent.workLabel, "tests · swift test")
     }
 
     /// A session resumed while its first process still runs has two pid files and one id.

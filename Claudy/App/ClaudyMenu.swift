@@ -37,6 +37,7 @@ final class ClaudyMenu: NSObject {
         notifications.submenu = notificationsMenu()
         menu.addItem(notifications)
         menu.addItem(showOrHideItem())
+        menu.addItem(entry("Open agent room", #selector(openRoom)))
         menu.addItem(entry("Export usage as CSV…", #selector(export)))
         if let account = accountItem() {
             menu.addItem(.separator())
@@ -127,6 +128,10 @@ final class ClaudyMenu: NSObject {
 
     @objc private func toggleClaudy() {
         (NSApp.delegate as? AppDelegate)?.toggleClaudy()
+    }
+
+    @objc private func openRoom() {
+        (NSApp.delegate as? AppDelegate)?.toggleRoom()
     }
 
     @objc private func export() {

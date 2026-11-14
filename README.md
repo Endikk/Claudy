@@ -27,6 +27,10 @@ full. The gauges show your account's **real quotas** — the same figures as cla
 - **Sessions tab.** Every Claude Code session open on the Mac, the ones waiting for your answer
   first, each with the agents it runs. "Open" brings forward the app it runs in; "Interrupt"
   sends it Ctrl+C.
+- **Agent room.** A window of its own: one open space per project, every agent at a desk in
+  the area of its work, its screen showing what it does (code, tests, build, benchmark, infra…),
+  walking to another desk when its work changes. The city in its window lights up and goes to
+  sleep with the hour.
 - **Notifications.** Session at 80 %, limit coming before the reset, session back, a session
   waiting for you, an agent gone silent or done. One switch each.
 - **Ports tab.** Lists the TCP ports Claude Code left listening, orphaned sessions included, and

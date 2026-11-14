@@ -8,6 +8,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let viewModel = UsageViewModel()
     let portsViewModel = PortsViewModel()
     let agentsViewModel = AgentsViewModel()
+    private(set) lazy var roomViewModel = RoomViewModel(agents: agentsViewModel)
+    /// The agent room, a window of its own opened from the card, the menu bar item or the island.
+    private(set) lazy var room = RoomWindowController(room: roomViewModel) { [unowned self] view in
+        AnyView(view
+            .environmentObject(viewModel)
+            .environmentObject(agentsViewModel))
+    }
     let updates = UpdateChecker()
     let notifier = Notifier()
     private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates, agents: agentsViewModel,
@@ -146,6 +153,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     /// ⌃⌥C: Claudy where it stands, shown or put away. The card comes and goes, the menu bar
     /// item's popover opens and closes, the island opens and closes.
+    /// Opens the agent room in the middle of the screen, or closes it.
+    func toggleRoom() {
+        room.toggle()
+    }
+
     func toggleClaudy() {
         switch viewModel.placement.effective(hasNotch: viewModel.hasNotchedScreen) {
         case .widget:

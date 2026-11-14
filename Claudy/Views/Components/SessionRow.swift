@@ -69,11 +69,13 @@ struct SessionHeader: View {
                 .fill(tint)
                 .frame(width: 7, height: 7)
                 .frame(width: 9)
+            // A long name gives way before it pushes the row past the card's edge.
             Text(session.name)
                 .font(Theme.Font.label(13, .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
-                .fixedSize()
+                .truncationMode(.tail)
+                .layoutPriority(1)
             if let folder = session.folderName, folder != session.name {
                 Text(folder)
                     .font(Theme.Font.label(11, .medium))

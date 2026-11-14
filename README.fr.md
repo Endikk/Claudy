@@ -28,6 +28,10 @@ locaux de Claude Code.
 - **Onglet Sessions.** Chaque session Claude Code ouverte sur le Mac, celles qui attendent ta
   réponse en premier, chacune avec ses agents. « Open » ramène au premier plan l'app où elle
   tourne ; « Interrupt » lui envoie Ctrl+C.
+- **Salle des agents.** Une fenêtre à part : un open space par projet, chaque agent à un bureau
+  dans l'espace de son travail, son écran montrant ce qu'il fait (code, tests, build, benchmark,
+  infra…), et qui change de bureau quand son travail change. La ville à sa fenêtre s'allume et
+  s'endort avec l'heure.
 - **Notifications.** Session à 80 %, limite atteinte avant le reset, session revenue, une session
   qui t'attend, un agent silencieux ou terminé. Un interrupteur pour chacune.
 - **Onglet Ports.** Liste les ports TCP laissés en écoute par Claude Code, sessions orphelines

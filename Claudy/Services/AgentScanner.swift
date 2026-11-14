@@ -53,6 +53,8 @@ actor AgentScanner: AgentScanning {
         var offset: UInt64 = 0
         var fileID: NSObject?
         var prompt: String?
+        /// The session's own last tool call.
+        var action: AgentAction?
     }
 
     private struct Meta: Decodable {
@@ -128,10 +130,13 @@ actor AgentScanner: AgentScanning {
         for (session, file) in sessions {
             let project = projectFolder(of: session.id)
             var prompt: String?
+            var action: AgentAction?
             if let project {
                 let transcript = project.appendingPathComponent("\(session.id).jsonl")
                 readPrompts.insert(transcript)
-                prompt = lastPrompt(in: transcript)
+                let read = lastPrompt(in: transcript)
+                prompt = read.prompt
+                action = read.action
                 let subagents = project.appendingPathComponent(session.id, isDirectory: true)
                     .appendingPathComponent("subagents", isDirectory: true)
                 for url in transcriptURLs(in: subagents) where visited.insert(url).inserted {
@@ -139,7 +144,7 @@ actor AgentScanner: AgentScanning {
                 }
             }
             listed.append(Self.session(file, startedAt: session.processStartedAt, name: session.name,
-                                       host: host(of: session.pid), prompt: prompt))
+                                       host: host(of: session.pid), prompt: prompt, action: action))
         }
         transcripts = transcripts.filter { visited.contains($0.key) }
         prompts = prompts.filter { readPrompts.contains($0.key) }
@@ -181,13 +186,13 @@ actor AgentScanner: AgentScanning {
     }
 
     private static func session(_ file: SessionFile, startedAt: Date?, name: String,
-                                host: HostApp?, prompt: String?) -> ClaudeSession {
+                                host: HostApp?, prompt: String?, action: AgentAction? = nil) -> ClaudeSession {
         ClaudeSession(id: file.sessionId, pid: file.pid, processStartedAt: startedAt, name: name, cwd: file.cwd,
                       openedAt: file.startedAt.map { Date(timeIntervalSince1970: $0 / 1000) },
                       status: ClaudeSession.Status(raw: file.status, waitingFor: file.waitingFor),
                       statusSince: file.statusUpdatedAt.map { Date(timeIntervalSince1970: $0 / 1000) },
                       isBackground: ClaudeSession.isBackground(entrypoint: file.entrypoint),
-                      host: host, lastPrompt: prompt)
+                      host: host, lastPrompt: prompt, lastAction: action)
     }
 
     private func host(of pid: Int32) -> HostApp? {
@@ -230,15 +235,16 @@ actor AgentScanner: AgentScanning {
 
     // MARK: - Last prompt
 
-    /// The last thing the user typed in a session, read from its transcript: the first time from
-    /// `promptLookback` before its end, then only what was appended.
-    private func lastPrompt(in url: URL) -> String? {
+    /// The last thing the user typed in a session and the session's own last tool call, read from
+    /// its transcript: the first time from `promptLookback` before its end, then only what was
+    /// appended.
+    private func lastPrompt(in url: URL) -> PromptCursor {
         let currentID = (try? url.resourceValues(forKeys: [.fileResourceIdentifierKey]))?
             .fileResourceIdentifier as? NSObject
         var state = prompts[url] ?? PromptCursor(fileID: currentID)
         defer { prompts[url] = state }
 
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return state.prompt }
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return state }
         defer { try? handle.close() }
         let size = (try? handle.seekToEnd()) ?? 0
 
@@ -249,7 +255,7 @@ actor AgentScanner: AgentScanning {
         let start = max(state.offset, floor)
         guard size > start,
               (try? handle.seek(toOffset: start)) != nil,
-              let data = try? handle.readToEnd(), !data.isEmpty else { return state.prompt }
+              let data = try? handle.readToEnd(), !data.isEmpty else { return state }
 
         var (lines, consumed) = Self.lines(in: data)
         // Jumping ahead lands anywhere in a line: what comes before the first newline is not one.
@@ -258,10 +264,33 @@ actor AgentScanner: AgentScanning {
             lines.removeAll { $0.lowerBound <= firstNewline }
         }
         state.offset = start + UInt64(consumed)
-        for range in lines where Self.holds(Self.lastPromptMarker, data, range) || Self.holds(Self.userMarker, data, range) {
-            if let prompt = Self.prompt(from: data.subdata(in: range)) { state.prompt = prompt }
+        for range in lines {
+            if Self.holdsToolUse(data, range) {
+                if let action = lastCall(from: data.subdata(in: range)) { state.action = action }
+            } else if Self.holds(Self.lastPromptMarker, data, range) || Self.holds(Self.userMarker, data, range) {
+                if let prompt = Self.prompt(from: data.subdata(in: range)) { state.prompt = prompt }
+            }
         }
-        return state.prompt
+        return state
+    }
+
+    /// The last tool call of one line of a session's transcript, when the session made it itself:
+    /// its agents' calls are in their own transcripts.
+    private func lastCall(from line: Data) -> AgentAction? {
+        guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+              object["type"] as? String == "assistant", object["isSidechain"] as? Bool != true,
+              let date = (object["timestamp"] as? String).flatMap(date(from:)),
+              let message = object["message"] as? [String: Any],
+              let content = message["content"] as? [[String: Any]],
+              let block = content.last(where: { $0["type"] as? String == "tool_use" }),
+              let tool = block["name"] as? String else { return nil }
+        let input = block["input"] as? [String: Any]
+        let path = (input?["file_path"] as? String) ?? (input?["notebook_path"] as? String)
+        let reading = AgentWork.read(tool: tool, command: input?["command"] as? String, path: path,
+                                     skill: input?["skill"] as? String)
+        return AgentAction(date: date, kind: AgentActionKind(tool: tool), tool: tool,
+                           file: path.map { ($0 as NSString).lastPathComponent },
+                           work: reading.work, detail: reading.detail)
     }
 
     private static let userMarker: [UInt8] = Array("\"type\":\"user\"".utf8)
@@ -373,8 +402,11 @@ actor AgentScanner: AgentScanning {
                   state.seen.insert(id).inserted else { continue }
             let input = block["input"] as? [String: Any]
             let path = (input?["file_path"] as? String) ?? (input?["notebook_path"] as? String)
+            let reading = AgentWork.read(tool: tool, command: input?["command"] as? String, path: path,
+                                         skill: input?["skill"] as? String)
             let action = AgentAction(date: date, kind: AgentActionKind(tool: tool), tool: tool,
-                                     file: path.map { ($0 as NSString).lastPathComponent })
+                                     file: path.map { ($0 as NSString).lastPathComponent },
+                                     work: reading.work, detail: reading.detail)
             state.count += 1
             state.last = action
             state.recent.append(action)

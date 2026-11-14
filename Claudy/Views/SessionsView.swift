@@ -71,6 +71,9 @@ struct SessionsView: View {
             if !viewModel.agents.isEmpty {
                 AgentTrackLegend()
             }
+            Button("Room") { (NSApp.delegate as? AppDelegate)?.toggleRoom() }
+                .buttonStyle(QuietButtonStyle())
+                .help("Opens the agent room: every agent at its desk")
         }
     }
 }

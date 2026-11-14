@@ -6,6 +6,21 @@ All notable changes to this project are documented here. Dates are release dates
 
 ### Added
 
+- **Agent room.** "Open agent room" opens a window in the middle of the screen: one open space
+  per project, Claudy at the centre desk for the session, its agents at the desks around, in the
+  area of their work (writing, commands, research, and a spare area that takes the overflow).
+  Each screen shows what its agent does, read from the tool, the file and the command of its
+  last call: code, docs, spec, design, search, review, web, tests, build, benchmark, install,
+  git, data, infra, deploy, security, or the name of the skill or MCP server at work. An agent
+  whose work changes walks to another desk. The window tells the hour: the sun in the middle at
+  noon, the city's windows lighting up as it sets, nearly all lit at nine, going out towards
+  midnight. The room follows the Mac's clock or holds an hour of your choice (noon at first). A
+  robot vacuum leaves its dock by the back wall, goes round the corridors and comes back to
+  charge. Claudy's first screen shows what the session itself does between two agents. A click on
+  a desk opens its agent's card: what it was asked, what it does, its last calls, the files it
+  wrote. An agent that is done goes and sits on the sofa, and leaves by the door when it leaves the
+  list. Past 90 % of the session quota the racks turn red and the room's edges glow. A click on
+  Claudy's second screen opens a summary of the session in sentences.
 - **Sessions.** A third tab lists every Claude Code session open on the Mac: the ones waiting
   for an answer first, in amber, with what they wait for ("Permission prompt"); then those at
   work, then those at rest with how long they have been idle. Each session shows the subagents
