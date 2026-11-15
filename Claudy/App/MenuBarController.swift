@@ -228,16 +228,17 @@ final class MenuBarController: NSObject {
         stopAnimating()
         switch animation {
         case .still:
-            item?.button?.image = frames[.resting]
+            show(frames[.resting])
         case .typing:
             startTimer(every: ClaudyTyping.frameDuration)
         case .exploding:
             startTimer(every: 0.035)
         case .waving:
-            startTimer(every: 0.03)
+            // `advanceFrame` arms its own timer, one frame of the wave at a time.
+            break
         case .dead:
             if reduceMotion {
-                item?.button?.image = overloadFrame(elapsed: nil)
+                show(overloadFrame(elapsed: nil))
             } else {
                 startTimer(every: 0.13)
             }
@@ -245,8 +246,15 @@ final class MenuBarController: NSObject {
         advanceFrame()
     }
 
-    private func startTimer(every interval: TimeInterval) {
-        let timer = Timer(timeInterval: interval, repeats: true) { _ in
+    /// Puts a frame in the bar, unless it is the one already there: each change of image has
+    /// AppKit capture the item again, which costs far more than the frame itself.
+    private func show(_ image: NSImage?) {
+        guard let button = item?.button, button.image !== image else { return }
+        button.image = image
+    }
+
+    private func startTimer(every interval: TimeInterval, repeats: Bool = true) {
+        let timer = Timer(timeInterval: interval, repeats: repeats) { _ in
             MainActor.assumeIsolated {
                 (NSApp.delegate as? AppDelegate)?.menuBar.advanceFrame()
             }
@@ -261,21 +269,23 @@ final class MenuBarController: NSObject {
             break
         case .typing:
             tick += 1
-            item?.button?.image = frames[ClaudyTyping.sequence[tick % ClaudyTyping.sequence.count]]
+            show(frames[ClaudyTyping.sequence[tick % ClaudyTyping.sequence.count]])
         case .exploding(let since):
             let elapsed = Date().timeIntervalSince(since)
-            item?.button?.image = overloadFrame(elapsed: elapsed)
+            show(overloadFrame(elapsed: elapsed))
             if elapsed >= ClaudyOverload.introDuration {
                 animation = .dead
                 applyAnimation(reduceMotion: false)
             }
         case .waving:
-            let index = ClaudyWave.frameIndex(elapsed: Date().timeIntervalSinceReferenceDate)
-            if waveFrames.indices.contains(index) { item?.button?.image = waveFrames[index] }
+            let elapsed = Date().timeIntervalSinceReferenceDate
+            let index = ClaudyWave.frameIndex(elapsed: elapsed)
+            if waveFrames.indices.contains(index) { show(waveFrames[index]) }
+            // Woken again when the frame changes, not thirty times a second in between.
+            stopAnimating()
+            startTimer(every: ClaudyWave.timeToNextFrame(elapsed: elapsed) + ClaudyWave.Schedule.margin, repeats: false)
         case .dead:
-            item?.button?.image = overloadFrame(
-                elapsed: ClaudyOverload.introDuration + Date().timeIntervalSinceReferenceDate
-            )
+            show(overloadFrame(elapsed: ClaudyOverload.introDuration + Date().timeIntervalSinceReferenceDate))
         }
     }
 

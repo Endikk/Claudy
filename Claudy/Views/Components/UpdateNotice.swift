@@ -13,6 +13,39 @@ extension ClaudyWave {
         return sequence[0].frame
     }
 
+    /// Seconds until the frame on screen `elapsed` seconds into the loop gives way to the next.
+    static func timeToNextFrame(elapsed: TimeInterval) -> TimeInterval {
+        let position = elapsed.truncatingRemainder(dividingBy: loopDuration)
+        var end: TimeInterval = 0
+        for step in sequence {
+            end += Double(step.ms) / 1000
+            if position < end { return end - position }
+        }
+        return Double(sequence[0].ms) / 1000
+    }
+
+    /// Redraws the wave when its frame changes and not in between: a frame stays up from 90 ms
+    /// to more than a second.
+    struct Schedule: TimelineSchedule {
+        /// Past the change by a hair, so that the date read back lands on the new frame.
+        static let margin: TimeInterval = 0.002
+
+        func entries(from startDate: Date, mode: TimelineScheduleMode) -> Entries {
+            Entries(upcoming: startDate)
+        }
+
+        struct Entries: Sequence, IteratorProtocol {
+            var upcoming: Date
+
+            mutating func next() -> Date? {
+                let date = upcoming
+                let wait = ClaudyWave.timeToNextFrame(elapsed: date.timeIntervalSinceReferenceDate)
+                upcoming = date.addingTimeInterval(wait + Schedule.margin)
+                return date
+            }
+        }
+    }
+
     /// Arm up and smiling: the still frame when motion is reduced.
     static let stillFrame = 4
 
@@ -34,16 +67,16 @@ struct ClaudyWaving: View {
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private static let tick: TimeInterval = 1.0 / 30
+    /// Nobody sees a window that is hidden or covered: Claudy holds still there.
+    @State private var isOnScreen = true
 
     var body: some View {
         let cell = max(1, (cell * displayScale).rounded()) / displayScale
         Group {
-            if reduceMotion {
+            if reduceMotion || !isOnScreen {
                 canvas(ClaudyWave.frames[ClaudyWave.stillFrame], cell: cell)
             } else {
-                TimelineView(.periodic(from: .now, by: Self.tick)) { context in
+                TimelineView(ClaudyWave.Schedule()) { context in
                     let elapsed = context.date.timeIntervalSinceReferenceDate
                     canvas(ClaudyWave.frames[ClaudyWave.frameIndex(elapsed: elapsed)], cell: cell)
                 }
@@ -51,6 +84,7 @@ struct ClaudyWaving: View {
         }
         .frame(width: CGFloat(ClaudyWave.columns) * cell, height: CGFloat(ClaudyWave.contentRows.count) * cell)
         .accessibilityLabel("Claudy waving")
+        .onWindowVisibility { isOnScreen = $0 }
     }
 
     private func canvas(_ frame: [String], cell: CGFloat) -> some View {

@@ -22,6 +22,9 @@ struct ClaudyTyping: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.displayScale) private var displayScale
 
+    /// Nobody sees a window that is hidden or covered: Claudy holds still there.
+    @State private var isOnScreen = true
+
     /// When the explosion started; `nil` outside the one-off intro.
     @State private var overloadStart: Date?
 
@@ -43,6 +46,7 @@ struct ClaudyTyping: View {
         Color.clear
             .overlay(GeometryReader { geometry in drawing(in: geometry.size) })
             .accessibilityHidden(true)
+            .onWindowVisibility { isOnScreen = $0 }
             .onChange(of: isOverloaded) { overloaded in
                 overloadStart = overloaded ? Date() : nil
             }
@@ -56,6 +60,7 @@ struct ClaudyTyping: View {
 
     @ViewBuilder
     private func drawing(in size: CGSize) -> some View {
+        let reduceMotion = reduceMotion || !isOnScreen
         if isOverloaded {
             if reduceMotion {
                 canvas(ClaudyOverload.frames[ClaudyOverload.frameIndex(elapsed: nil)], in: size)

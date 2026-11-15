@@ -91,6 +91,8 @@ struct RoomCanvas: View {
     }
 
     @State private var backdrop = Backdrop()
+    /// The room is an ordinary window: under another one, or minimised, it stops drawing.
+    @State private var isOnScreen = true
 
     /// What the last frame showed, so that a change of light is swept through hour by hour
     /// instead of jumped to.
@@ -150,7 +152,7 @@ struct RoomCanvas: View {
         // Told before the timelines are set up, so that a change of light starts at the fast rate.
         let _ = hour(at: Date())
         // Under Reduce Motion the room still tells the time: one frame a second, nobody walking.
-        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / frameRate)) { timeline in
+        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / frameRate, paused: !isOnScreen)) { timeline in
             let scene = room.scene(for: room.selected, at: timeline.date, quota: quota, withHelp: false)
             let title = room.selected?.id ?? "Claudy"
             let isSummaryOpen = room.isSummaryOpen
@@ -174,7 +176,7 @@ struct RoomCanvas: View {
             let falls = RoomWeather.chosen(weatherChoice, at: Date()).isFalling
             let pause = sweep.from != nil ? 1 / RoomScene.Pace.walking.framesPerSecond
                 : (falls ? 1 / RoomScene.Pace.typing.framesPerSecond : 0.5)
-            TimelineView(.animation(minimumInterval: reduceMotion ? 1 : pause)) { timeline in
+            TimelineView(.animation(minimumInterval: reduceMotion ? 1 : pause, paused: !isOnScreen)) { timeline in
                 let sky = RoomSky(hour: hour(at: timeline.date))
                 let weather = RoomWeather.chosen(weatherChoice, at: timeline.date)
                 let time = timeline.date.timeIntervalSinceReferenceDate
@@ -195,6 +197,7 @@ struct RoomCanvas: View {
                 hotspots(at: timeline.date)
             }
         }
+        .onWindowVisibility { isOnScreen = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Agent room of \(room.selected?.id ?? "no project")")
     }
