@@ -47,6 +47,10 @@ final class MenuBarController: NSObject {
     /// device pixels on Retina screens.
     private static let cell: CGFloat = 0.5
 
+    /// Seconds a frame of the typing stays in the bar: twice the card's, since each new image
+    /// has AppKit capture the whole item again.
+    private static let typingInterval = ClaudyTyping.frameDuration * 2
+
     init(viewModel: UsageViewModel, updates: UpdateChecker, agents: AgentsViewModel, notifier: Notifier) {
         self.viewModel = viewModel
         self.updates = updates
@@ -230,7 +234,7 @@ final class MenuBarController: NSObject {
         case .still:
             show(frames[.resting])
         case .typing:
-            startTimer(every: ClaudyTyping.frameDuration)
+            startTimer(every: Self.typingInterval)
         case .exploding:
             startTimer(every: 0.035)
         case .waving:

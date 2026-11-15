@@ -82,8 +82,8 @@ All notable changes to this project are documented here. Dates are release dates
 
 - **Claudy at rest costs less.** The mascot stops moving in a window nobody sees: a closed
   popover, a hidden card, the agent room under another window. The menu bar icon is only redrawn
-  when its frame changes, and the wave is redrawn at each of its frames instead of thirty times a
-  second.
+  when its frame changes and types at half the pace, and the wave is redrawn at each of its
+  frames instead of thirty times a second.
 - **The demo keeps pace.** Without Claude Code installed, the demo card opened on "35 pts ahead of
   pace" in red, its session window starting the moment Claudy launched, and stayed ahead all
   along. The demo session now opens partway through its window, on pace.
