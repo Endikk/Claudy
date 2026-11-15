@@ -62,6 +62,8 @@ struct ClaudeSession: Identifiable, Equatable, Sendable {
     let host: HostApp?
     /// The last thing the user asked it, on one line.
     let lastPrompt: String?
+    /// The session's own last tool call, apart from what its agents do.
+    var lastAction: AgentAction? = nil
 
     var isWaiting: Bool {
         if case .waiting = status { return true }

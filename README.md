@@ -14,7 +14,7 @@
 
 <p align="center"><img src="docs/claudy-typing.gif" width="132" alt="Claudy, the pixel mascot, typing at its laptop"></p>
 
-<p align="center"><img src="docs/video-readme.gif" width="620" alt="Claudy in 45 seconds: the compact strip, the usage card and its details, the Sessions and Ports tabs, the island around the notch, and the mascot at 100 %"></p>
+<p align="center"><img src="docs/video-readme.gif" width="620" alt="Claudy in a minute: the compact strip, the usage card and its details, the Sessions and Ports tabs, the island around the notch, the agent room where each agent sits at a desk, and the mascot at 100 %"></p>
 
 </div>
 
@@ -27,6 +27,10 @@ full. The gauges show your account's **real quotas** — the same figures as cla
 - **Sessions tab.** Every Claude Code session open on the Mac, the ones waiting for your answer
   first, each with the agents it runs. "Open" brings forward the app it runs in; "Interrupt"
   sends it Ctrl+C.
+- **Agent room.** A window of its own: one open space per project, every agent at a desk in
+  the area of its work, its screen showing what it does (code, tests, build, benchmark, infra…),
+  walking to another desk when its work changes. The city in its window lights up and goes to
+  sleep with the hour.
 - **Notifications.** Session at 80 %, limit coming before the reset, session back, a session
   waiting for you, an agent gone silent or done. One switch each.
 - **Ports tab.** Lists the TCP ports Claude Code left listening, orphaned sessions included, and
@@ -84,6 +88,7 @@ to move it.
 | `usage` / `ports` / `sessions` | Switch between quotas, what Claude left running, and the open sessions |
 | Right-click | Refresh · Mode · Placement (card, menu bar, notch) · Notifications · Show or hide · Export usage as CSV · Sign in · Always on top · Launch at login · Quit |
 | ⌃⌥C, from any app | Show or hide Claudy |
+| ⌃⌥R, from any app | Open or close the agent room |
 | Hover the notch island | Open the session, its pace and reset, and the other quotas under the notch |
 | Click the avatar | Account card |
 | Click "Details" | Split by model and top projects |

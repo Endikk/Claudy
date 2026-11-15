@@ -25,6 +25,8 @@ final class Notifier: ObservableObject {
 
     /// A click on a banner about a session.
     var onOpenSession: ((String) -> Void)?
+    /// A click on a banner about an agent. Without it, such a click opens the agent's session.
+    var onOpenAgent: ((String) -> Void)?
 
     private let poster: NotificationPosting
     private let store: UserDefaults
@@ -35,8 +37,12 @@ final class Notifier: ObservableObject {
         enabled = Set(NotificationKind.allCases.filter { kind in
             store.object(forKey: Self.key(kind)) as? Bool ?? kind.isOnByDefault
         })
-        (self.poster as? SystemNotifications)?.onOpen = { [weak self] sessionID in
-            self?.onOpenSession?(sessionID)
+        (self.poster as? SystemNotifications)?.onOpen = { [weak self] sessionID, agentID in
+            if let agentID, let onOpenAgent = self?.onOpenAgent {
+                onOpenAgent(agentID)
+            } else {
+                self?.onOpenSession?(sessionID)
+            }
         }
     }
 
@@ -96,7 +102,8 @@ final class Notifier: ObservableObject {
 @MainActor
 final class SystemNotifications: NSObject, NotificationPosting, UNUserNotificationCenterDelegate {
 
-    var onOpen: ((String) -> Void)?
+    /// The session of the banner clicked, and its agent when it is about one.
+    var onOpen: ((String, String?) -> Void)?
     private var center: UNUserNotificationCenter { .current() }
 
     override init() {
@@ -131,7 +138,10 @@ final class SystemNotifications: NSObject, NotificationPosting, UNUserNotificati
         content.body = alert.body
         content.sound = .default
         content.threadIdentifier = alert.kind.isQuota ? "quota" : "sessions"
-        if let sessionID = alert.sessionID { content.userInfo = ["sessionID": sessionID] }
+        var info: [String: String] = [:]
+        info["sessionID"] = alert.sessionID
+        info["agentID"] = alert.agentID
+        content.userInfo = info
         center.add(UNNotificationRequest(identifier: alert.id, content: content, trigger: nil)) { error in
             if let error {
                 DiagnosticLog.append("notifications: post failed: \(error.localizedDescription)")
@@ -155,6 +165,7 @@ final class SystemNotifications: NSObject, NotificationPosting, UNUserNotificati
         guard response.actionIdentifier == UNNotificationDefaultActionIdentifier,
               let sessionID = response.notification.request.content.userInfo["sessionID"] as? String
         else { return }
-        await MainActor.run { onOpen?(sessionID) }
+        let agentID = response.notification.request.content.userInfo["agentID"] as? String
+        await MainActor.run { onOpen?(sessionID, agentID) }
     }
 }

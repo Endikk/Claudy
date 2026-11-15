@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 import Combine
 
@@ -8,6 +9,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let viewModel = UsageViewModel()
     let portsViewModel = PortsViewModel()
     let agentsViewModel = AgentsViewModel()
+    private(set) lazy var roomViewModel = RoomViewModel(agents: agentsViewModel)
+    /// The agent room, a window of its own opened from the card, the menu bar item or the island.
+    private(set) lazy var room = RoomWindowController(room: roomViewModel) { [unowned self] view in
+        AnyView(view
+            .environmentObject(viewModel)
+            .environmentObject(agentsViewModel))
+    }
     let updates = UpdateChecker()
     let notifier = Notifier()
     private(set) lazy var menuBar = MenuBarController(viewModel: viewModel, updates: updates, agents: agentsViewModel,
@@ -17,6 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var panel: FloatingPanel?
     /// ⌃⌥C, from any app.
     private lazy var hotKey = GlobalHotKey { [weak self] in self?.toggleClaudy() }
+    private lazy var roomHotKey = GlobalHotKey(keyCode: kVK_ANSI_R, id: 2, display: GlobalHotKey.roomDisplay) { [weak self] in
+        self?.toggleRoom()
+    }
+    /// `--room` on the command line opens the agent room at launch.
+    static let roomArgument = "--room"
     private var quotaAlerts = QuotaAlerts()
     private var activityAlerts = ActivityAlerts()
     private var cancellables = Set<AnyCancellable>()
@@ -78,6 +91,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         bindAlerts()
         notifier.refreshPermission()
         hotKey.register()
+        roomHotKey.register()
+        if CommandLine.arguments.contains(Self.roomArgument) { room.show() }
         viewModel.onUserRefresh = { [updates] in Task { await updates.checkNow() } }
         Task { await viewModel.refresh() }
         updates.start()
@@ -139,13 +154,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         notifier.onOpenSession = { [weak self] sessionID in
             self?.agentsViewModel.focus(sessionID: sessionID)
         }
+        // A banner about an agent leads to its desk.
+        notifier.onOpenAgent = { [weak self] agentID in
+            guard let self else { return }
+            self.roomViewModel.sync()
+            self.roomViewModel.show(agent: agentID)
+            self.room.show()
+        }
     }
 
     /// Whether ⌃⌥C reaches Claudy, for the menus to show it or say it is taken.
     var isHotKeyActive: Bool { hotKey.isRegistered }
+    /// Whether ⌃⌥R reaches Claudy.
+    var isRoomHotKeyActive: Bool { roomHotKey.isRegistered }
 
     /// ⌃⌥C: Claudy where it stands, shown or put away. The card comes and goes, the menu bar
     /// item's popover opens and closes, the island opens and closes.
+    /// Opens the agent room in the middle of the screen, or closes it.
+    func toggleRoom() {
+        room.toggle()
+    }
+
     func toggleClaudy() {
         switch viewModel.placement.effective(hasNotch: viewModel.hasNotchedScreen) {
         case .widget:

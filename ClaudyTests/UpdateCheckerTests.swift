@@ -212,6 +212,35 @@ final class UpdateCheckerTests: XCTestCase {
         XCTAssertFalse(updates.isGreeting)
     }
 
+
+    func testTheWaveIsRedrawnOnlyWhenItsFrameChanges() {
+        // 1.2 s on the first frame: half a second in, the next change is 0.7 s away.
+        XCTAssertEqual(ClaudyWave.timeToNextFrame(elapsed: 0.5), 0.7, accuracy: 0.001)
+        XCTAssertEqual(ClaudyWave.timeToNextFrame(elapsed: 1.2), 0.09, accuracy: 0.001)
+        XCTAssertEqual(ClaudyWave.timeToNextFrame(elapsed: ClaudyWave.loopDuration + 0.5), 0.7, accuracy: 0.001)
+    }
+
+    func testEveryStepOfTheWaveLandsOnItsOwnFrame() {
+        var elapsed: TimeInterval = 0
+        for step in ClaudyWave.sequence {
+            XCTAssertEqual(ClaudyWave.frameIndex(elapsed: elapsed + 0.001), step.frame)
+            let wait = ClaudyWave.timeToNextFrame(elapsed: elapsed + 0.001)
+            XCTAssertEqual(wait, Double(step.ms) / 1000 - 0.001, accuracy: 0.001)
+            elapsed += Double(step.ms) / 1000
+        }
+    }
+
+    func testTheWaveScheduleFollowsTheFrames() {
+        let start = Date(timeIntervalSinceReferenceDate: 0)
+        let dates = Array(ClaudyWave.Schedule().entries(from: start, mode: .normal).prefix(4))
+        XCTAssertEqual(dates[0], start)
+        XCTAssertEqual(dates[1].timeIntervalSince(start), 1.2, accuracy: 0.005)
+        XCTAssertEqual(dates[2].timeIntervalSince(start), 1.29, accuracy: 0.005)
+        XCTAssertEqual(dates[3].timeIntervalSince(start), 1.4, accuracy: 0.005)
+        let shown = dates.map { ClaudyWave.frameIndex(elapsed: $0.timeIntervalSinceReferenceDate) }
+        XCTAssertEqual(shown, [0, 1, 2, 3])
+    }
+
     func testCroppedWaveFitsTheMascotSlot() {
         // One point per pixel must not exceed the typing mascot by more than a point.
         XCTAssertLessThanOrEqual(ClaudyWave.contentRows.count, 28)

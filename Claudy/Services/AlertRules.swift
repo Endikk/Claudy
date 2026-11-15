@@ -37,6 +37,8 @@ struct Alert: Equatable, Sendable {
     let body: String
     /// The session a click on the banner brings forward.
     var sessionID: String?
+    /// The agent the banner is about: a click then opens the agent room on its desk.
+    var agentID: String?
 }
 
 /// When the 5-hour session deserves a notification, worked out reading after reading. Each alert
@@ -181,12 +183,12 @@ struct ActivityAlerts {
                 post.append(Alert(kind: .agentSilent, id: id, title: "An agent is silent",
                                   body: "\u{201C}\(agent.title)\u{201D} has said nothing for "
                                       + "\(AgentsViewModel.duration(agent.silence(at: now))). \(agent.sessionName)",
-                                  sessionID: agent.sessionID))
+                                  sessionID: agent.sessionID, agentID: agent.id))
             case .done:
                 let id = "done-\(agent.id)"
                 guard seenRunning.contains(agent.id), sent.insert(id).inserted else { continue }
                 post.append(Alert(kind: .agentDone, id: id, title: "Agent done",
-                                  body: Self.doneBody(agent), sessionID: agent.sessionID))
+                                  body: Self.doneBody(agent), sessionID: agent.sessionID, agentID: agent.id))
             case .working, .idle:
                 break
             }

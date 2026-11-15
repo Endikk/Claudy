@@ -159,6 +159,12 @@ struct RootView: View {
         }
 
         Button {
+            (NSApp.delegate as? AppDelegate)?.toggleRoom()
+        } label: {
+            Label("Open agent room", systemImage: "person.3")
+        }
+
+        Button {
             viewModel.exportUsage()
         } label: {
             Label("Export usage as CSV…", systemImage: "square.and.arrow.up")
