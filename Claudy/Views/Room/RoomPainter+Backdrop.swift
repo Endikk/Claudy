@@ -74,7 +74,9 @@ extension RoomPainter {
                 let left = max(0, x - 62)
                 if wood == 1 || wood == 3 { fill(Color.white.opacity(wood == 1 ? 0.03 : 0.015), left, y + 0.5, x - left, 7.5) }
                 if wood == 0 || wood == 4 { fill(Color.black.opacity(wood == 0 ? 0.05 : 0.025), left, y + 0.5, x - left, 7.5) }
-                fill(Color.black.opacity(0.07), left + 6 + CGFloat((row * 7 + plank * 13) % 24), y + 2.5 + CGFloat(wood % 3) * 1.5, 16, 0.5)
+                let grainX: CGFloat = left + 6 + CGFloat((row * 7 + plank * 13) % 24)
+                let grainY: CGFloat = y + 2.5 + CGFloat(wood % 3) * 1.5
+                fill(Color.black.opacity(0.07), grainX, grainY, 16, 0.5)
                 fill(0x2F231C, x, y, 0.5, 8)
                 fill(0x43342B, x + 0.5, y + 0.5, 0.5, 7.5)
                 x += 62
@@ -133,7 +135,7 @@ extension RoomPainter {
         fill(0x7A6556, 173, 6, 134, 0.5)
         fill(Self.bubble, 175, 8, 130, 27)
         fill(0xFFFFFF, 175, 8, 130, 0.5)
-        text(title, x: 182, y: 14.5, size: 14, weight: .bold, color: Color(hex: 0x2A1418), width: 50)
+        text(title, x: 182, y: 14.5, size: 14, weight: .bold, color: 0x2A1418, width: 50)
         fill(0xD97757, 182, 21, 34, 1)
         fill(0xCFC3AE, 182, 25, 40, 0.5)
         fill(0xCFC3AE, 182, 28, 30, 0.5)
@@ -199,18 +201,34 @@ extension RoomPainter {
         fill(0xD97757, centre.x - 0.5, centre.y - 0.5, 1, 1)
     }
 
+    static func labelTag(_ string: String, size: CGFloat, weight: Font.Weight, color: UInt32) -> String {
+        "text|\(size)|\(weight)|\(color)|\(string)"
+    }
+
+    static func label(_ string: String, size: CGFloat, weight: Font.Weight, color: UInt32, unit: CGFloat) -> Text {
+        Text(string).font(Theme.Font.label(size * unit / 2, weight)).foregroundColor(Color(hex: color))
+    }
+
     private func hand(from centre: CGPoint, angle: Double, length: CGFloat, width: CGFloat, color: UInt32) {
         var path = Path()
         path.move(to: CGPoint(x: centre.x * unit, y: centre.y * unit))
-        path.addLine(to: CGPoint(x: (centre.x + length * sin(angle)) * unit, y: (centre.y - length * cos(angle)) * unit))
+        let across = CGFloat(Foundation.sin(angle)), up = CGFloat(Foundation.cos(angle))
+        path.addLine(to: CGPoint(x: (centre.x + length * across) * unit, y: (centre.y - length * up) * unit))
         context.stroke(path, with: .color(Color(hex: color)), style: StrokeStyle(lineWidth: width * unit, lineCap: .round))
     }
 
     /// A line of text in the app's rounded face, in a box `width` wide from `x`, its middle at
     /// `y`. `size` is in points at the room's usual scale.
-    func text(_ string: String, x: CGFloat, y: CGFloat, size: CGFloat, weight: Font.Weight, color: Color,
+    /// A line the canvas made into an image once (`labelTag`) is stamped: laying text out on
+    /// every frame costs far more.
+    func text(_ string: String, x: CGFloat, y: CGFloat, size: CGFloat, weight: Font.Weight, color: UInt32,
               width: CGFloat, isCentred: Bool = false) {
-        let label = Text(string).font(Theme.Font.label(size * unit / 2, weight)).foregroundColor(color)
+        if let stamp = stamps[Self.labelTag(string, size: size, weight: weight, color: color)] {
+            let place = CGPoint(x: (isCentred ? x + width / 2 : x) * unit, y: y * unit)
+            context.draw(stamp, at: place, anchor: isCentred ? .center : .leading)
+            return
+        }
+        let label = Self.label(string, size: size, weight: weight, color: color, unit: unit)
         let resolved = context.resolve(label)
         let measured = resolved.measure(in: CGSize(width: width * unit, height: 100))
         let left = isCentred ? x * unit + (width * unit - measured.width) / 2 : x * unit

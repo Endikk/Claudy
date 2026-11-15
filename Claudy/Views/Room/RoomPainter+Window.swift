@@ -54,19 +54,32 @@ extension RoomPainter {
     /// The frame of the window in units: all `window` draws stays inside it.
     static let windowFrame = CGRect(x: 12, y: 6, width: 150, height: 35)
 
-    func window(_ sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval) {
-        let glass = Self.glass
-        fill(0x4A3C34, 14, 6, 146, 33)
-        fill(0x5E4D42, 15, 7, 144, 31)
-        fill(0x3A2F29, 16, 8, 142, 29)
+    /// What of the window a pass draws. The sky and the city move slowly and cost the most; what
+    /// falls is cheap and fast. The room draws them at their own rates, a small room all at once.
+    enum WindowPart {
+        case all
+        /// The frame, the sky and the city.
+        case view
+        /// The rain or the snow, and what stands in front of the glass.
+        case falling
+    }
 
+    func window(_ sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval, part: WindowPart = .all) {
+        let glass = Self.glass
         // Everything behind the glass is cut to it: a cloud or a halo stops at the frame.
         var view = self
         view.context.clip(to: Path(CGRect(x: glass.minX * unit, y: glass.minY * unit,
                                           width: glass.width * unit, height: glass.height * unit)))
-        view.heavens(sky, weather: weather, step: step, time: time)
-        view.city(sky, weather: weather, step: step, time: time)
-        view.falling(weather, time: time)
+        if part != .falling {
+            fill(0x4A3C34, 14, 6, 146, 33)
+            fill(0x5E4D42, 15, 7, 144, 31)
+            fill(0x3A2F29, 16, 8, 142, 29)
+            view.heavens(sky, weather: weather, step: step, time: time)
+            view.city(sky, weather: weather, step: step, time: time)
+        }
+        if part != .view { view.falling(weather, time: time) }
+        // With rain or snow on its own pass, what stands in front of the glass is drawn there.
+        if part == .view, weather.isFalling { return }
 
         // The glass catches the light: two slanted sheens.
         let sheen = Color.white.opacity(0.1 - 0.06 * sky.darkness)
@@ -98,8 +111,9 @@ extension RoomPainter {
             for star in 0..<22 {
                 let twinkle = (step + star * 5) % 17 > 2 ? 1.0 : 0.35
                 let size: CGFloat = star % 5 == 0 ? 1 : 0.5
-                fill(Color(hex: 0xE8ECF8).opacity(sky.starlight * twinkle),
-                     glass.minX + 3 + CGFloat((star * 37) % 134), glass.minY + 3.5 + CGFloat((star * 11) % 13), size, size)
+                let starX: CGFloat = glass.minX + 3 + CGFloat((star * 37) % 134)
+                let starY: CGFloat = glass.minY + 3.5 + CGFloat((star * 11) % 13)
+                fill(Color(hex: 0xE8ECF8).opacity(sky.starlight * twinkle), starX, starY, size, size)
             }
         }
         if let moon = sky.moon {
@@ -152,6 +166,7 @@ extension RoomPainter {
     private func city(_ sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval) {
         let ground = Self.glass.maxY
         let bands = sky.bands
+        let litShare = sky.litShare
         let shade = pow(sky.darkness, 0.8)
         let haze = RoomSky.mix(RoomSky.mix(0x9AA6B2, Self.silhouette, shade), bands[5], 0.5)
         for (index, tower) in Self.far.enumerated() {
@@ -162,7 +177,7 @@ extension RoomPainter {
                 var x = tower.x + 1.5
                 var column = 0
                 while x < tower.x + tower.width - 1 {
-                    let glow = Self.glow(luck: Self.chance(index + 40, Int(y * 2), column), share: sky.litShare * 0.7, time: time)
+                    let glow = Self.glow(luck: Self.chance(index + 40, Int(y * 2), column), share: litShare * 0.7, time: time)
                     if glow > 0 { fill(Color(hex: 0xFFD98A).opacity(0.7 * glow), x, y, 0.75, 0.75) }
                     x += 2.5
                     column += 1
@@ -188,7 +203,7 @@ extension RoomPainter {
                 while x < building.x + building.width - 3 {
                     let luck = Self.chance(index, row, column)
                     fill(dark, x, y, 1.25, 1.5)
-                    let glow = Self.glow(luck: luck, share: sky.litShare, time: time)
+                    let glow = Self.glow(luck: luck, share: litShare, time: time)
                     if glow > 0 {
                         // One window in nine has a screen on: a cooler light.
                         let light: UInt32 = Int(luck * 9_000) % 9 == 0 ? 0xCFE4FF : 0xFFD98A

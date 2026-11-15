@@ -5,8 +5,6 @@ import SwiftUI
 /// desk says who sits there, and Claudy's second screen opens the summary.
 struct RoomCanvas: View {
     @ObservedObject var room: RoomViewModel
-    /// The hour to light the room for: the Mac's clock, or one held still.
-    var light: RoomLight = .clock
     /// The stored choice of weather: one of `RoomWeather`, or each day's own.
     var weatherChoice = RoomWeather.asItComes
     @EnvironmentObject private var usage: UsageViewModel
@@ -15,12 +13,9 @@ struct RoomCanvas: View {
     /// Points per unit of the scene: a half unit is then one point, two pixels on a Retina screen.
     static let unit: CGFloat = 2
     static let size = CGSize(width: RoomGeometry.size.width * unit, height: RoomGeometry.size.height * unit)
-    /// Frames a second: as many as what the room shows asks for, and the most while the hour is
-    /// swept through.
-    private var frameRate: Double {
-        if sweep.from != nil { return RoomScene.Pace.walking.framesPerSecond }
-        return room.scene(for: room.selected, at: Date(), quota: nil, withHelp: false).pace.framesPerSecond
-    }
+    /// Frames a second, whatever the room shows: the vacuum glides, the rain falls, a Claudy
+    /// walks without a jolt. The room stops drawing when its window cannot be seen.
+    private static let frameRate: Double = 30
     private static let stepDuration: TimeInterval = 0.18
     private static let strideDuration: TimeInterval = 0.12
 
@@ -56,6 +51,26 @@ struct RoomCanvas: View {
 
         /// Every symbol a screen can show, in each colour it is shown in, as small images: a
         /// symbol resolved on every frame costs far more than an image stamped.
+        /// The symbols, and the lines of text asked for, each made into an image the first time.
+        func stamps(labels: [(string: String, size: CGFloat, weight: Font.Weight, color: UInt32)]) -> [String: Image] {
+            var made = stamps()
+            let scale = NSScreen.main?.backingScaleFactor ?? 2
+            var isNew = false
+            for label in labels {
+                let tag = RoomPainter.labelTag(label.string, size: label.size, weight: label.weight, color: label.color)
+                guard made[tag] == nil else { continue }
+                let text = RoomPainter.label(label.string, size: label.size, weight: label.weight, color: label.color,
+                                             unit: RoomCanvas.unit)
+                let renderer = ImageRenderer(content: text.lineLimit(1).fixedSize())
+                renderer.scale = scale
+                guard let image = renderer.cgImage else { continue }
+                made[tag] = Image(decorative: image, scale: scale)
+                isNew = true
+            }
+            if isNew { symbols = made }
+            return made
+        }
+
         func stamps() -> [String: Image] {
             if let symbols { return symbols }
             let scale = NSScreen.main?.backingScaleFactor ?? 2
@@ -94,48 +109,6 @@ struct RoomCanvas: View {
     /// The room is an ordinary window: under another one, or minimised, it stops drawing.
     @State private var isOnScreen = true
 
-    /// What the last frame showed, so that a change of light is swept through hour by hour
-    /// instead of jumped to.
-    private final class Sweep {
-        var light: RoomLight?
-        var shown: Double?
-        var from: Double?
-        var startedAt: Date?
-    }
-
-    @State private var sweep = Sweep()
-
-    /// Seconds a sweep takes for each hour it crosses, and its bounds.
-    private static let sweepPerHour: TimeInterval = 0.4
-    private static let sweepBounds: ClosedRange<TimeInterval> = 1.2...5
-
-    /// The hour to draw: the light's own, or on the way to it just after the light changed. The
-    /// sweep takes the short way round the clock.
-    private func hour(at date: Date) -> Double {
-        let target = light.hour(at: date)
-        if sweep.light != light {
-            sweep.from = sweep.light == nil || reduceMotion ? nil : sweep.shown
-            sweep.startedAt = date
-            sweep.light = light
-        }
-        var shown = target
-        if let from = sweep.from, let startedAt = sweep.startedAt {
-            var span = (target - from).truncatingRemainder(dividingBy: 24)
-            if span > 12 { span -= 24 }
-            if span < -12 { span += 24 }
-            let duration = min(max(abs(span) * Self.sweepPerHour, Self.sweepBounds.lowerBound), Self.sweepBounds.upperBound)
-            let part = date.timeIntervalSince(startedAt) / duration
-            if part < 1 {
-                let eased = part * part * (3 - 2 * part)
-                shown = from + span * max(0, eased)
-            } else {
-                sweep.from = nil
-            }
-        }
-        sweep.shown = shown
-        return shown
-    }
-
     /// The tokens of the last seven days, each as a share of the busiest: the board's bars.
     private var week: [Double] {
         let days = usage.snapshot.history.suffix(7)
@@ -149,18 +122,18 @@ struct RoomCanvas: View {
     }
 
     var body: some View {
-        // Told before the timelines are set up, so that a change of light starts at the fast rate.
-        let _ = hour(at: Date())
         // Under Reduce Motion the room still tells the time: one frame a second, nobody walking.
-        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / frameRate, paused: !isOnScreen)) { timeline in
+        TimelineView(.animation(minimumInterval: reduceMotion ? 1 : 1 / Self.frameRate, paused: !isOnScreen)) { timeline in
             let scene = room.scene(for: room.selected, at: timeline.date, quota: quota, withHelp: false)
             let title = room.selected?.id ?? "Claudy"
             let isSummaryOpen = room.isSummaryOpen
             let week = week
-            let sky = RoomSky(hour: hour(at: timeline.date))
+            let sky = RoomSky(hour: RoomSky.hour(at: timeline.date))
             let still = backdrop.image(title: title, week: week, isLit: sky.hasLamps)
             let art = backdrop.deskArt()
-            let stamps = backdrop.stamps()
+            let sign = RoomPainter.signStyle, plate = RoomPainter.nameplateStyle
+            let stamps = backdrop.stamps(labels: scene.zones.map { ($0.title, sign.size, sign.weight, sign.color) }
+                + [("Claudy", plate.size, plate.weight, plate.color)])
             Canvas { context, _ in
                 Self.draw(scene, in: context, at: timeline.date, sky: sky,
                           weather: RoomWeather.chosen(weatherChoice, at: timeline.date), week: week, still: still, art: art,
@@ -169,22 +142,14 @@ struct RoomCanvas: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .overlay(alignment: .topLeading) {
-            // The window, over the room, in a drawing no larger than itself: twice a second is
-            // enough for clouds and for a city lighting up, more when something falls, and every
-            // frame while the hour is swept through.
+            // The window, over the room, in drawings no larger than itself: its sky and its city
+            // a few times a second, which is all clouds and lights ask for, and what falls on a
+            // pass of its own at the room's rate.
             let frame = RoomPainter.windowFrame
             let falls = RoomWeather.chosen(weatherChoice, at: Date()).isFalling
-            let pause = sweep.from != nil ? 1 / RoomScene.Pace.walking.framesPerSecond
-                : (falls ? 1 / RoomScene.Pace.typing.framesPerSecond : 0.5)
-            TimelineView(.animation(minimumInterval: reduceMotion ? 1 : pause, paused: !isOnScreen)) { timeline in
-                let sky = RoomSky(hour: hour(at: timeline.date))
-                let weather = RoomWeather.chosen(weatherChoice, at: timeline.date)
-                let time = timeline.date.timeIntervalSinceReferenceDate
-                Canvas { context, _ in
-                    var painter = RoomPainter(context: context, unit: Self.unit)
-                    painter.context.translateBy(x: -frame.minX * Self.unit, y: -frame.minY * Self.unit)
-                    painter.window(sky, weather: weather, step: Int(time / Self.stepDuration), time: time)
-                }
+            ZStack {
+                windowLayer(.view, every: Self.windowPause)
+                if falls { windowLayer(.falling, every: 1 / Self.frameRate) }
             }
             .frame(width: frame.width * Self.unit, height: frame.height * Self.unit)
             .offset(x: frame.minX * Self.unit, y: frame.minY * Self.unit)
@@ -200,6 +165,23 @@ struct RoomCanvas: View {
         .onWindowVisibility { isOnScreen = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Agent room of \(room.selected?.id ?? "no project")")
+    }
+
+    /// Seconds between two drawings of the sky and the city.
+    private static let windowPause: TimeInterval = 0.2
+
+    private func windowLayer(_ part: RoomPainter.WindowPart, every pause: TimeInterval) -> some View {
+        let frame = RoomPainter.windowFrame
+        return TimelineView(.animation(minimumInterval: reduceMotion ? 1 : pause, paused: !isOnScreen)) { timeline in
+            let sky = RoomSky(hour: RoomSky.hour(at: timeline.date))
+            let weather = RoomWeather.chosen(weatherChoice, at: timeline.date)
+            let time = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { context, _ in
+                var painter = RoomPainter(context: context, unit: Self.unit)
+                painter.context.translateBy(x: -frame.minX * Self.unit, y: -frame.minY * Self.unit)
+                painter.window(sky, weather: weather, step: Int(time / Self.stepDuration), time: time, part: part)
+            }
+        }
     }
 
     /// What a pointer can rest on or click.

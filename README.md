@@ -14,7 +14,7 @@
 
 <p align="center"><img src="docs/claudy-typing.gif" width="132" alt="Claudy, the pixel mascot, typing at its laptop"></p>
 
-<p align="center"><img src="docs/video-readme.gif" width="620" alt="Claudy in 45 seconds: the compact strip, the usage card and its details, the Sessions and Ports tabs, the island around the notch, and the mascot at 100 %"></p>
+<p align="center"><img src="docs/video-readme.gif" width="620" alt="Claudy in a minute: the compact strip, the usage card and its details, the Sessions and Ports tabs, the island around the notch, the agent room where each agent sits at a desk, and the mascot at 100 %"></p>
 
 </div>
 
@@ -88,6 +88,7 @@ to move it.
 | `usage` / `ports` / `sessions` | Switch between quotas, what Claude left running, and the open sessions |
 | Right-click | Refresh · Mode · Placement (card, menu bar, notch) · Notifications · Show or hide · Export usage as CSV · Sign in · Always on top · Launch at login · Quit |
 | ⌃⌥C, from any app | Show or hide Claudy |
+| ⌃⌥R, from any app | Open or close the agent room |
 | Hover the notch island | Open the session, its pace and reset, and the other quotas under the notch |
 | Click the avatar | Account card |
 | Click "Details" | Split by model and top projects |

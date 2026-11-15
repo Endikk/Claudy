@@ -99,11 +99,10 @@ final class RoomSkyTests: XCTestCase {
         XCTAssertFalse(RoomWeather.overcast.isFalling)
     }
 
-    func testAHeldLightGivesItsOwnHourAndTheClockGivesTheMacs() throws {
+    func testTheRoomIsLitForTheHourOnTheMacsClock() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
         let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 14, hour: 21, minute: 30)))
-        XCTAssertEqual(RoomLight.noon.hour(at: date, calendar: calendar), 12)
-        XCTAssertEqual(RoomLight.clock.hour(at: date, calendar: calendar), 21.5, accuracy: 0.001)
+        XCTAssertEqual(RoomSky.hour(at: date, calendar: calendar), 21.5, accuracy: 0.001)
     }
 }

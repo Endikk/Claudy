@@ -5,7 +5,6 @@ import SwiftUI
 /// walking here, only where everyone sits.
 struct RoomOverview: View {
     @ObservedObject var room: RoomViewModel
-    let light: RoomLight
     let weatherChoice: String
     @EnvironmentObject private var usage: UsageViewModel
     @EnvironmentObject private var agents: AgentsViewModel
@@ -48,7 +47,7 @@ struct RoomOverview: View {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 let date = timeline.date
                 let scene = room.scene(for: project, at: date, quota: quota, withHelp: false)
-                let sky = RoomSky(hour: light.hour(at: date))
+                let sky = RoomSky(hour: RoomSky.hour(at: date))
                 let weather = RoomWeather.chosen(weatherChoice, at: date)
                 Canvas { context, _ in
                     RoomCanvas.draw(scene, in: context, at: date, sky: sky, weather: weather, week: [], still: nil, art: nil,

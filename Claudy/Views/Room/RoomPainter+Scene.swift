@@ -15,6 +15,10 @@ extension RoomPainter {
 
     /// One area: its rug, and its sign. While the area changes work the new colour sweeps across
     /// the rug and the sign flips.
+    /// The style of an area's sign, for the canvas to keep its words as an image.
+    static let signStyle = (size: CGFloat(11), weight: Font.Weight.semibold, color: RoomPainter.ink)
+    static let nameplateStyle = (size: CGFloat(10), weight: Font.Weight.bold, color: UInt32(0x2A1418))
+
     func zone(_ zone: RoomZone, at origin: CGPoint) {
         let x = origin.x, y = origin.y
         let size = RoomGeometry.zoneSize
@@ -53,7 +57,7 @@ extension RoomPainter {
         fill(shown, x + 4, top, 70, height)
         fill(Color.white.opacity(0.25), x + 4, top, 70, 0.5)
         if height >= 8 {
-            text(zone.title, x: x + 7.5, y: y + 8, size: 11, weight: .semibold, color: Color(hex: Self.ink), width: 64)
+            text(zone.title, x: x + 7.5, y: y + 8, size: 11, weight: .semibold, color: Self.ink, width: 64)
         }
     }
 
@@ -83,7 +87,7 @@ extension RoomPainter {
         fill(0xCFC3AE, 225.5, 128.5, 29, 8)
         fill(Self.bubble, 226, 129, 28, 7)
         fill(0xFFFFFF, 226, 129, 28, 0.5)
-        text("Claudy", x: 226, y: 132.5, size: 10, weight: .bold, color: Color(hex: 0x2A1418), width: 28, isCentred: true)
+        text("Claudy", x: 226, y: 132.5, size: 10, weight: .bold, color: 0x2A1418, width: 28, isCentred: true)
 
         chiefScreens(chief, step: step, isSummaryOpen: isSummaryOpen)
         keyboard(x: 232, y: 120, keys: 9, isLit: isPresent)

@@ -14,7 +14,7 @@
 
 <p align="center"><img src="docs/claudy-typing.gif" width="132" alt="Claudy, la mascotte en pixel art, qui tape sur son ordinateur"></p>
 
-<p align="center"><img src="docs/video-readme.fr.gif" width="620" alt="Claudy en 45 secondes : la bande compacte, la carte d'usage et son détail, les onglets Sessions et Ports, l'île autour de l'encoche, et la mascotte à 100 %"></p>
+<p align="center"><img src="docs/video-readme.fr.gif" width="620" alt="Claudy en une minute : la bande compacte, la carte d'usage et son détail, les onglets Sessions et Ports, l'île autour de l'encoche, la salle des agents où chacun a son bureau, et la mascotte à 100 %"></p>
 
 </div>
 
@@ -90,6 +90,7 @@ droit sur l'une ou l'autre permet de la déplacer.
 | `usage` / `ports` / `sessions` | Basculer entre les quotas, ce que Claude a laissé tourner et les sessions ouvertes |
 | Clic droit | Rafraîchir · Mode · Emplacement (carte, barre des menus, encoche) · Notifications · Afficher ou masquer · Export CSV de l'usage · Connexion · Toujours au-dessus · Lancement au démarrage · Quitter |
 | ⌃⌥C, depuis n'importe quelle app | Afficher ou masquer Claudy |
+| ⌃⌥R, depuis n'importe quelle app | Ouvrir ou fermer la salle des agents |
 | Survol de l'île | Ouvrir la session, son rythme et son reset, et les autres quotas sous l'encoche |
 | Clic sur l'avatar | Carte du compte |
 | Clic sur « Details » | Répartition par modèle et principaux projets |

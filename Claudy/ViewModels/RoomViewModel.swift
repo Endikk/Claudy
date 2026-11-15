@@ -46,7 +46,10 @@ final class RoomViewModel: ObservableObject {
         let walk: Walk
     }
 
+    /// The rooms on show: every project with a session open, less the ones put away.
     @Published private(set) var projects: [Project] = []
+    /// The rooms put away, in the order their projects are listed: the menu brings one back.
+    @Published private(set) var hidden: [String] = []
     @Published var selectedID: String?
     @Published var isSummaryOpen = false
     /// The agent whose card is open over the room.
@@ -75,7 +78,13 @@ final class RoomViewModel: ObservableObject {
     /// Past this, the session's last call no longer says what it is doing.
     static let freshCall: TimeInterval = 120
 
+    static let hiddenKey = "roomHidden"
+
     private let agents: AgentsViewModel
+    private let store: UserDefaults
+    /// Every project with a session open, put away or not.
+    private var open: [Project] = []
+    private var hiddenIDs: Set<String>
     private let clock: () -> Date
     private let reducesMotion: () -> Bool
     private var plans: [String: RoomPlan] = [:]
@@ -92,9 +101,11 @@ final class RoomViewModel: ObservableObject {
     private var tints: [String: Color] = [:]
     private var subscription: AnyCancellable?
 
-    init(agents: AgentsViewModel, clock: @escaping () -> Date = { Date() },
+    init(agents: AgentsViewModel, store: UserDefaults = .standard, clock: @escaping () -> Date = { Date() },
          reducesMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
         self.agents = agents
+        self.store = store
+        hiddenIDs = Set(store.stringArray(forKey: Self.hiddenKey) ?? [])
         self.clock = clock
         self.reducesMotion = reducesMotion
         subscription = agents.$agents.combineLatest(agents.$sessions)
@@ -113,7 +124,8 @@ final class RoomViewModel: ObservableObject {
 
     /// Shows the room of the project an agent works in, its card open.
     func show(agent id: String) {
-        guard let project = projects.first(where: { project in project.agents.contains { $0.id == id } }) else { return }
+        guard let project = open.first(where: { project in project.agents.contains { $0.id == id } }) else { return }
+        if hiddenIDs.contains(project.id) { restore(project.id) }
         selectedID = project.id
         selectedAgentID = id
         isOverview = false
@@ -125,6 +137,20 @@ final class RoomViewModel: ObservableObject {
         selectedID = projectID
         isOverview = false
         selectedAgentID = nil
+    }
+
+    /// Puts a room away: it leaves the list until it is asked back, or until its sessions close.
+    func hide(_ projectID: String) {
+        hiddenIDs.insert(projectID)
+        store.set(hiddenIDs.sorted(), forKey: Self.hiddenKey)
+        sync()
+    }
+
+    /// Brings back a room that was put away.
+    func restore(_ projectID: String) {
+        hiddenIDs.remove(projectID)
+        store.set(hiddenIDs.sorted(), forKey: Self.hiddenKey)
+        sync()
     }
 
     func toggleAgent(_ id: String) {
@@ -139,7 +165,19 @@ final class RoomViewModel: ObservableObject {
     /// Reads the sessions and agents again and seats everyone.
     func sync() {
         let now = clock()
-        let found = Self.projects(from: agents.groups)
+        open = Self.projects(from: agents.groups)
+        // A room put away is forgotten once its sessions close: the folder opened again is a
+        // room again. Nothing is forgotten on an empty reading, the first one at launch.
+        if !open.isEmpty {
+            let stillOpen = hiddenIDs.intersection(open.map(\.id))
+            if stillOpen != hiddenIDs {
+                hiddenIDs = stillOpen
+                store.set(hiddenIDs.sorted(), forKey: Self.hiddenKey)
+            }
+        }
+        let found = open.filter { !hiddenIDs.contains($0.id) }
+        let away = open.map(\.id).filter(hiddenIDs.contains)
+        if away != hidden { hidden = away }
         // Seats are not published one by one: every pass tells the views to read them again.
         objectWillChange.send()
         if found != projects { projects = found }
@@ -154,10 +192,10 @@ final class RoomViewModel: ObservableObject {
         lastWork = lastWork.filter { listed.contains($0.key) }
         flashes = flashes.filter { listed.contains($0.key) }
         tints = tints.filter { listed.contains($0.key) }
-        let open = Set(found.map(\.id))
-        plans = plans.filter { open.contains($0.key) }
-        flips = flips.filter { open.contains($0.key) }
-        lounges = lounges.filter { open.contains($0.key) }
+        let shown = Set(found.map(\.id))
+        plans = plans.filter { shown.contains($0.key) }
+        flips = flips.filter { shown.contains($0.key) }
+        lounges = lounges.filter { shown.contains($0.key) }
         if let selectedAgentID, !listed.contains(selectedAgentID) { self.selectedAgentID = nil }
         if found.count < 2 { isOverview = false }
 

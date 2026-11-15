@@ -6,12 +6,8 @@ struct RoomView: View {
     @ObservedObject var room: RoomViewModel
     let close: () -> Void
     @EnvironmentObject private var agents: AgentsViewModel
-    /// Noon until told otherwise: the room is first seen in daylight.
-    @AppStorage(RoomLight.storageKey) private var lightChoice = RoomLight.noon.rawValue
-
     @AppStorage(RoomWeather.storageKey) private var weatherChoice = RoomWeather.asItComes
 
-    private var light: RoomLight { RoomLight(rawValue: lightChoice) ?? .noon }
     /// Every project at once, when there is more than one to show.
     private var showsOverview: Bool { room.isOverview && room.projects.count > 1 }
 
@@ -20,9 +16,9 @@ struct RoomView: View {
             header
             Group {
                 if showsOverview {
-                    RoomOverview(room: room, light: light, weatherChoice: weatherChoice)
+                    RoomOverview(room: room, weatherChoice: weatherChoice)
                 } else {
-                    RoomCanvas(room: room, light: light, weatherChoice: weatherChoice)
+                    RoomCanvas(room: room, weatherChoice: weatherChoice)
                         .overlay(alignment: .topLeading) { summary }
                         .overlay(alignment: .topLeading) { agentCard }
                 }
@@ -47,7 +43,7 @@ struct RoomView: View {
                 RoomSwitcher(room: room)
             }
             Spacer(minLength: 8)
-            lightMenu
+            roomMenu
             Button(action: close) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
@@ -65,14 +61,9 @@ struct RoomView: View {
         .padding(.horizontal, 6)
     }
 
-    /// The hour the room is lit for: the Mac's clock, or one held still.
-    private var lightMenu: some View {
+    /// The weather in the window, and the rooms put away. The hour is the Mac's own.
+    private var roomMenu: some View {
         Menu {
-            Section("Light") {
-                ForEach(RoomLight.allCases) { choice in
-                    Toggle(choice.title, isOn: Binding(get: { choice == light }, set: { _ in lightChoice = choice.rawValue }))
-                }
-            }
             Section("Weather") {
                 Toggle("As it comes", isOn: Binding(get: { RoomWeather(rawValue: weatherChoice) == nil },
                                                     set: { _ in weatherChoice = RoomWeather.asItComes }))
@@ -81,15 +72,26 @@ struct RoomView: View {
                                                        set: { _ in weatherChoice = choice.rawValue }))
                 }
             }
+            if !room.hidden.isEmpty {
+                Section("Rooms put away") {
+                    ForEach(room.hidden, id: \.self) { name in
+                        Button("Show \(name)") { room.restore(name) }
+                    }
+                }
+            }
         } label: {
-            Label(light.title, systemImage: light == .clock ? "clock" : "sun.max")
-                .font(Theme.Font.label(11, .semibold))
+            Image(systemName: "ellipsis")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(.primary.opacity(0.06)))
+                .contentShape(Circle())
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
-        .foregroundStyle(.secondary)
-        .help("The hour the room is lit for, and the weather in its window")
+        .help(room.hidden.isEmpty ? "The weather in the window" : "The weather in the window, and the rooms put away")
+        .accessibilityLabel("Room options")
     }
 
     // MARK: - Footer
@@ -201,6 +203,10 @@ struct RoomTally: Equatable {
 private struct RoomSwitcher: View {
     @ObservedObject var room: RoomViewModel
     @Environment(\.colorScheme) private var scheme
+    /// The project under the pointer: its cross shows.
+    @State private var hovered: String?
+
+    private static let crossSize: CGFloat = 14
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -266,6 +272,37 @@ private struct RoomSwitcher: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
+        .accessibilityAction(named: "Put away") { room.hide(project.id) }
+        // The cross makes its own room at the end of the name, so that nothing is covered.
+        .padding(.trailing, hovered == project.id ? Self.crossSize : 0)
+        .overlay(alignment: .trailing) {
+            if hovered == project.id { cross(project.id) }
+        }
+        .contentShape(Rectangle())
+        .onHover { isInside in
+            withAnimation(Theme.Motion.feedback) {
+                if isInside { hovered = project.id } else if hovered == project.id { hovered = nil }
+            }
+        }
+    }
+
+    /// Puts the room away: it comes back from the menu, or when its sessions close and open again.
+    private func cross(_ projectID: String) -> some View {
+        Button {
+            withAnimation(Theme.Motion.mode) { room.hide(projectID) }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 7, weight: .heavy))
+                .foregroundStyle(.secondary)
+                .frame(width: Self.crossSize, height: Self.crossSize)
+                .background(Circle().fill(.primary.opacity(0.12)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 6)
+        .transition(.opacity)
+        .help("Put this room away")
+        .accessibilityLabel("Put away \(projectID)")
     }
 }
 

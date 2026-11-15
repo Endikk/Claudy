@@ -10,8 +10,8 @@ All notable changes to this project are documented here. Dates are release dates
   at launch. With several projects open, "All" shows every one as a small room, a click enters
   it. A banner about an agent, silent or done, now opens the room on its desk. An agent that waits
   dozes at its desk. The window has weather: each day its own, decided by its date, rain some
-  days and snow in winter, or the one chosen in the room's menu. A room where nobody works is
-  redrawn twice a second only, and what never moves is drawn once.
+  days and snow in winter, or the one chosen in the room's menu. A cross beside a
+  room's name, under the pointer, puts the room away; the room's menu brings it back.
 - **Agent room.** "Open agent room" opens a window in the middle of the screen: one open space
   per project, Claudy at the centre desk for the session, its agents at the desks around, in the
   area of their work (writing, commands, research, and a spare area that takes the overflow).
@@ -20,7 +20,7 @@ All notable changes to this project are documented here. Dates are release dates
   git, data, infra, deploy, security, or the name of the skill or MCP server at work. An agent
   whose work changes walks to another desk. The window tells the hour: the sun in the middle at
   noon, the city's windows lighting up as it sets, nearly all lit at nine, going out towards
-  midnight. The room follows the Mac's clock or holds an hour of your choice (noon at first). A
+  midnight. The room follows the Mac's clock. A
   robot vacuum leaves its dock by the back wall, goes round the corridors and comes back to
   charge. Claudy's first screen shows what the session itself does between two agents. A click on
   a desk opens its agent's card: what it was asked, what it does, its last calls, the files it
@@ -76,14 +76,17 @@ All notable changes to this project are documented here. Dates are release dates
   three text tones instead of thirty, ports and file names in monospace, and no more glows,
   gradient figures or pills around every count. The week's totals now sit in the curve's header.
 
-## 1.5.8 (7 October 2026)
-
 ### Fixed
 
 - **Claudy at rest costs less.** The mascot stops moving in a window nobody sees: a closed
   popover, a hidden card, the agent room under another window. The menu bar icon is only redrawn
   when its frame changes and types at half the pace, and the wave is redrawn at each of its
   frames instead of thirty times a second.
+
+## 1.5.8 (7 October 2026)
+
+### Fixed
+
 - **The demo keeps pace.** Without Claude Code installed, the demo card opened on "35 pts ahead of
   pace" in red, its session window starting the moment Claudy launched, and stayed ahead all
   along. The demo session now opens partway through its window, on pace.

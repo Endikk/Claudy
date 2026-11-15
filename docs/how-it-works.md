@@ -203,10 +203,8 @@ tab offers them. The window is drawn from the hour alone: the sky blends from on
 the sun crosses it from six to six and stands in the middle at noon, the moon does the same by
 night, and each window of the city has a fixed threshold that decides when it lights up, so the
 same ones come on first every evening: a third of them at half past five, nearly all at nine, a
-fifth at midnight. A change of light is swept through, hour by hour,
-and a window of the city fades in and out rather than switching. The menu in the room's header
-holds the light at one hour (noon at first) or
-hands it to the Mac's clock; the wall clock tells the Mac's time either way. 
+fifth at midnight. A window of the city fades in and out rather than switching. The hour is the
+Mac's own, in the window as on the wall clock: there is nothing to set.
 
 Claudy's first screen shows the session's own last tool call, read from the tail of its
 transcript like its last prompt, while that call is less than two minutes old; otherwise that it
@@ -226,11 +224,17 @@ The weather in the window asks nothing of the network: each day has its own, wor
 date. Half the days are clear, two in ten overcast, three in ten wet, and from December to
 February what falls is mostly snow. The room's menu can hold one weather instead.
 
+A room is named after its sessions' folder, whatever opened them: a conversation of the Claude
+desktop app works in a folder of its own, `scratch-` and a date, and gets a room like any other.
+A cross beside a room's name, under the pointer, puts the room away. It comes back from the
+room's menu, when a banner leads to one of its agents, or once its sessions have closed and the
+folder is opened again.
+
 What never moves (floor, walls, furniture, a desk's own furniture, the symbols of the screens)
-is drawn once and kept as images. The rest is redrawn as often as what it shows asks for: twice a
-second while nobody works, six times while an agent or Claudy types, twenty while a Claudy walks
-or the hour is swept through. The window is redrawn twice a second, six when something falls.
-Nothing is drawn once the room is closed.
+and the words on the signs are drawn once and kept as images. The rest is redrawn thirty times a
+second, so that the vacuum glides and a Claudy walks without a jolt. The window's sky and city
+are redrawn five times a second, and what falls in front of them thirty. Nothing is drawn once
+the room is closed, or while its window is hidden or wholly covered.
 
 ### MCP servers left behind
 

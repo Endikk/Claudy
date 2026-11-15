@@ -1,40 +1,6 @@
 import CoreGraphics
 import Foundation
 
-/// The hour the agent room is lit for: the Mac's clock, or one hour held still.
-enum RoomLight: String, CaseIterable, Identifiable, Sendable {
-    case clock, morning, noon, sunset, evening, midnight
-
-    static let storageKey = "roomLight"
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .clock: "Follow the clock"
-        case .morning: "Morning"
-        case .noon: "Noon"
-        case .sunset: "Sunset"
-        case .evening: "Evening"
-        case .midnight: "Midnight"
-        }
-    }
-
-    /// The hour of the day to light the room for, 0 to 24, minutes as a fraction.
-    func hour(at date: Date, calendar: Calendar = .current) -> Double {
-        switch self {
-        case .clock:
-            let parts = calendar.dateComponents([.hour, .minute, .second], from: date)
-            return Double(parts.hour ?? 12) + Double(parts.minute ?? 0) / 60 + Double(parts.second ?? 0) / 3600
-        case .morning: return 7.5
-        case .noon: return 12
-        case .sunset: return 18.25
-        case .evening: return 21
-        case .midnight: return 0
-        }
-    }
-}
-
 /// What an hour of the day does to the room: the sky in its window, how many of the city's
 /// windows are lit, where the sun or the moon stands, and how much the room itself dims.
 struct RoomSky: Equatable, Sendable {
@@ -45,6 +11,12 @@ struct RoomSky: Equatable, Sendable {
     init(hour: Double) {
         let wrapped = hour.truncatingRemainder(dividingBy: 24)
         self.hour = wrapped < 0 ? wrapped + 24 : wrapped
+    }
+
+    /// The hour on the Mac's clock, minutes and seconds as a fraction: the room is lit for it.
+    static func hour(at date: Date, calendar: Calendar = .current) -> Double {
+        let parts = calendar.dateComponents([.hour, .minute, .second], from: date)
+        return Double(parts.hour ?? 12) + Double(parts.minute ?? 0) / 60 + Double(parts.second ?? 0) / 3600
     }
 
     // MARK: - Moments

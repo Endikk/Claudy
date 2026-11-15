@@ -33,10 +33,90 @@ final class RoomViewModelTests: XCTestCase {
                             actionCount: actions.count, recent: actions, lastAction: actions.last, editedFiles: [])
     }
 
+    private let storeName = "RoomViewModelTests"
+    private lazy var store = UserDefaults(suiteName: storeName) ?? .standard
+
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removePersistentDomain(forName: storeName)
+    }
+
     private func room(_ passes: [ClaudeActivity]) -> (RoomViewModel, AgentsViewModel) {
         let agents = AgentsViewModel(scanner: SequenceActivity(passes))
-        let room = RoomViewModel(agents: agents, clock: { [unowned self] in self.now }, reducesMotion: { false })
+        let room = RoomViewModel(agents: agents, store: store, clock: { [unowned self] in self.now },
+                                 reducesMotion: { false })
         return (room, agents)
+    }
+
+    // MARK: - Rooms put away
+
+    private var threeRooms: ClaudeActivity {
+        ClaudeActivity(sessions: [session("a", cwd: "/me/Claudy"), session("b", cwd: "/me/scratch-1"),
+                                  session("c", cwd: "/me/Api")],
+                       agents: [agent("x", session: "b", calls: [("Read", nil)])])
+    }
+
+    func testARoomPutAwayIsNoLongerListed() async {
+        let (room, agents) = room([threeRooms])
+        await agents.refresh()
+        room.sync()
+        room.hide("scratch-1")
+        XCTAssertEqual(room.projects.map(\.id), ["Claudy", "Api"])
+        XCTAssertEqual(room.hidden, ["scratch-1"])
+    }
+
+    func testPuttingAwayTheRoomOnScreenShowsTheNextOne() async {
+        let (room, agents) = room([threeRooms])
+        await agents.refresh()
+        room.sync()
+        room.enter("scratch-1")
+        room.hide("scratch-1")
+        XCTAssertEqual(room.selected?.id, "Claudy")
+    }
+
+    func testARoomPutAwayStaysAwayAfterARelaunch() async {
+        let (first, agents) = room([threeRooms])
+        await agents.refresh()
+        first.sync()
+        first.hide("scratch-1")
+        let (second, others) = room([threeRooms])
+        await others.refresh()
+        second.sync()
+        XCTAssertEqual(second.projects.map(\.id), ["Claudy", "Api"])
+    }
+
+    func testARoomPutAwayComesBackWhenAskedFor() async {
+        let (room, agents) = room([threeRooms])
+        await agents.refresh()
+        room.sync()
+        room.hide("scratch-1")
+        room.restore("scratch-1")
+        XCTAssertEqual(room.projects.map(\.id), ["Claudy", "scratch-1", "Api"])
+        XCTAssertTrue(room.hidden.isEmpty)
+    }
+
+    func testARoomPutAwayIsForgottenOnceItsSessionsClose() async {
+        let later = ClaudeActivity(sessions: [session("a", cwd: "/me/Claudy")], agents: [])
+        let (room, agents) = room([threeRooms, later, threeRooms])
+        await agents.refresh()
+        room.sync()
+        room.hide("scratch-1")
+        await agents.refresh()
+        room.sync()
+        XCTAssertTrue(room.hidden.isEmpty)
+        await agents.refresh()
+        room.sync()
+        XCTAssertEqual(room.projects.map(\.id), ["Claudy", "scratch-1", "Api"])
+    }
+
+    func testABannerAboutAnAgentBringsItsRoomBack() async {
+        let (room, agents) = room([threeRooms])
+        await agents.refresh()
+        room.sync()
+        room.hide("scratch-1")
+        room.show(agent: "x")
+        XCTAssertEqual(room.selected?.id, "scratch-1")
+        XCTAssertEqual(room.selectedAgentID, "x")
     }
 
     func testSessionsOfOneFolderShareARoom() async {
