@@ -177,8 +177,8 @@ waits, a raised hand on glass turned amber; a click on the ears opens that sessi
 
 ### The agent room
 
-"Open agent room", in the card's menu, the menu bar item's and the island's, and "Room" in the
-Sessions tab, opens a window in the middle of the screen: one open space per project, a project
+"Open agent room", in the card's menu, the menu bar item's and the island's, "Room" in the
+Sessions tab, and ⌃⌥R from any app, open a window in the middle of the screen: one open space per project, a project
 being the folder its sessions run in. Claudy sits at the centre desk for the session; its agents
 sit around it, four areas of six desks.
 
@@ -216,9 +216,21 @@ list; with the sofa full it goes straight out. A Claudy leaves and reaches its d
 behind its row, so it never walks through its neighbours. Past three quarters of the session
 quota the racks' lights turn amber, past nine tenths red, with a red glow at the room's edges.
 
-What never moves (floor, walls, furniture) is drawn once and kept as an image. The rest is
-redrawn eight times a second, twenty while a Claudy walks or the hour is swept through, and the
-window twice a second. Nothing is drawn once the room is closed.
+⌃⌥R opens the room from any app, as ⌃⌥C shows the card, and `open -a Claudy --args --room`
+opens it at launch. With more than one project open, "All" lays every project out as a small
+room, drawn once a second. A click on a banner about an agent opens the room of its project with
+its card open; a banner about a session still brings the session's app forward. An agent silent
+for a minute, waiting on a long command or on its parent, dozes at its desk.
+
+The weather in the window asks nothing of the network: each day has its own, worked out from its
+date. Half the days are clear, two in ten overcast, three in ten wet, and from December to
+February what falls is mostly snow. The room's menu can hold one weather instead.
+
+What never moves (floor, walls, furniture, a desk's own furniture, the symbols of the screens)
+is drawn once and kept as images. The rest is redrawn as often as what it shows asks for: twice a
+second while nobody works, six times while an agent or Claudy types, twenty while a Claudy walks
+or the hour is swept through. The window is redrawn twice a second, six when something falls.
+Nothing is drawn once the room is closed.
 
 ### MCP servers left behind
 

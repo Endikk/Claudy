@@ -6,6 +6,12 @@ All notable changes to this project are documented here. Dates are release dates
 
 ### Added
 
+- **More of the agent room.** ⌃⌥R opens it from any app, and `--room` on the command line opens it
+  at launch. With several projects open, "All" shows every one as a small room, a click enters
+  it. A banner about an agent, silent or done, now opens the room on its desk. An agent that waits
+  dozes at its desk. The window has weather: each day its own, decided by its date, rain some
+  days and snow in winter, or the one chosen in the room's menu. A room where nobody works is
+  redrawn twice a second only, and what never moves is drawn once.
 - **Agent room.** "Open agent room" opens a window in the middle of the screen: one open space
   per project, Claudy at the centre desk for the session, its agents at the desks around, in the
   area of their work (writing, commands, research, and a spare area that takes the overflow).

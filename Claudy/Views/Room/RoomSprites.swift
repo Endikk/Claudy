@@ -64,6 +64,17 @@ enum RoomGlyph {
     static let thinking = "ellipsis"
     static let delegating = "person.2.fill"
 
+    /// Every symbol the room can draw, and the colours and sizes it draws them in: the canvas
+    /// resolves each pair once instead of on every frame.
+    static let names: [String] = Array(Set(AgentWork.allCases.map(symbol(for:)) + [waiting, stalled, done, thinking, delegating])).sorted()
+    static let inks: [(color: UInt32, points: CGFloat)] = [
+        (0xC8E4FF, 13), (0x5E7C93, 13), (0x1F1A17, 13), (0xF0604D, 13), (0x4CC38A, 13), (0x1F1A17, 12),
+    ]
+
+    static func tag(_ name: String, color: UInt32, points: CGFloat) -> String {
+        "\(name)|\(color)|\(Int(points))"
+    }
+
     static func symbol(for work: AgentWork) -> String {
         switch work {
         case .code: "chevron.left.forwardslash.chevron.right"

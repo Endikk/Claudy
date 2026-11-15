@@ -51,7 +51,10 @@ extension RoomPainter {
         return Double(hash & 0xFFFF) / 65_535
     }
 
-    func window(_ sky: RoomSky, step: Int, time: TimeInterval) {
+    /// The frame of the window in units: all `window` draws stays inside it.
+    static let windowFrame = CGRect(x: 12, y: 6, width: 150, height: 35)
+
+    func window(_ sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval) {
         let glass = Self.glass
         fill(0x4A3C34, 14, 6, 146, 33)
         fill(0x5E4D42, 15, 7, 144, 31)
@@ -61,8 +64,9 @@ extension RoomPainter {
         var view = self
         view.context.clip(to: Path(CGRect(x: glass.minX * unit, y: glass.minY * unit,
                                           width: glass.width * unit, height: glass.height * unit)))
-        view.heavens(sky, step: step, time: time)
-        view.city(sky, step: step, time: time)
+        view.heavens(sky, weather: weather, step: step, time: time)
+        view.city(sky, weather: weather, step: step, time: time)
+        view.falling(weather, time: time)
 
         // The glass catches the light: two slanted sheens.
         let sheen = Color.white.opacity(0.1 - 0.06 * sky.darkness)
@@ -83,14 +87,14 @@ extension RoomPainter {
     }
 
     /// The sky, its stars, its clouds, and the sun or the moon.
-    private func heavens(_ sky: RoomSky, step: Int, time: TimeInterval) {
+    private func heavens(_ sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval) {
         let glass = Self.glass
         let bands = sky.bands
         let bandHeight = glass.height / CGFloat(bands.count)
         for (index, band) in bands.enumerated() {
             fill(band, glass.minX, glass.minY + CGFloat(index) * bandHeight, glass.width, bandHeight + 0.5)
         }
-        if sky.starlight > 0 {
+        if sky.starlight > 0, weather == .clear {
             for star in 0..<22 {
                 let twinkle = (step + star * 5) % 17 > 2 ? 1.0 : 0.35
                 let size: CGFloat = star % 5 == 0 ? 1 : 0.5
@@ -114,10 +118,17 @@ extension RoomPainter {
             disc(centre, radius: 3.5, color: color)
             disc(centre, radius: 2.5, color: Color.white.opacity(0.35))
         }
+        // Under a covered sky a grey veil takes the colour out, and the sun is a pale patch in it.
+        if weather != .clear {
+            fill(RoomSky.mix(0x9AA3AE, 0x1E232D, sky.darkness), glass.minX, glass.minY, glass.width, glass.height, opacity: 0.66)
+        }
         let cloudiness = max(0, 1 - sky.darkness * 1.4)
         guard cloudiness > 0 else { return }
-        let white = Color.white.opacity(0.9 * cloudiness)
-        for (start, y, scale, speed) in [(10, 15, 1, 0.5), (70, 19.5, 0.75, 0.3), (118, 13.5, 0.6, 0.4)] as [(Double, CGFloat, CGFloat, Double)] {
+        let white = weather == .clear ? Color.white.opacity(0.9 * cloudiness)
+            : Color(hex: RoomSky.mix(0xD3D9E0, 0x596270, sky.darkness)).opacity(0.75 * cloudiness)
+        var clouds: [(Double, CGFloat, CGFloat, Double)] = [(10, 15, 1, 0.5), (70, 19.5, 0.75, 0.3), (118, 13.5, 0.6, 0.4)]
+        if weather != .clear { clouds += [(40, 13, 1.2, 0.35), (100, 17, 1.1, 0.45), (150, 14.5, 0.9, 0.25)] }
+        for (start, y, scale, speed) in clouds {
             let drift = (start + time * speed).truncatingRemainder(dividingBy: 170) - 15
             let x = glass.minX + CGFloat(drift)
             fill(white, x, y + 1.5 * scale, 16 * scale, 2 * scale)
@@ -138,7 +149,7 @@ extension RoomPainter {
         return part * part * (3 - 2 * part)
     }
 
-    private func city(_ sky: RoomSky, step: Int, time: TimeInterval) {
+    private func city(_ sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval) {
         let ground = Self.glass.maxY
         let bands = sky.bands
         let shade = pow(sky.darkness, 0.8)
@@ -167,6 +178,7 @@ extension RoomPainter {
             fill(facade, building.x, top, building.width, building.height)
             shadow(building.x + building.width - 1.5, top, 1.5, building.height, opacity: 0.2)
             fill(Color.white.opacity(0.12 - 0.08 * sky.darkness), building.x, top, building.width, 0.5)
+            if weather == .snow { fill(Color.white.opacity(0.8 - 0.45 * sky.darkness), building.x, top - 0.5, building.width, 1) }
             let dark = RoomSky.mix(facade, pane, 0.45)
             var row = 0
             var y = top + 2
@@ -188,6 +200,33 @@ extension RoomPainter {
                 y += 2.75
                 row += 1
             }
+        }
+    }
+
+    /// Rain in slanted streaks, or snow in slow flakes, in front of the city.
+    private func falling(_ weather: RoomWeather, time: TimeInterval) {
+        let glass = Self.glass
+        switch weather {
+        case .rain:
+            var streaks = Path()
+            for drop in 0..<46 {
+                let across = (Double(drop) * 29 + time * 30).truncatingRemainder(dividingBy: Double(glass.width) + 8)
+                let down = (Double(drop * drop % 97) * 3 + time * 70).truncatingRemainder(dividingBy: Double(glass.height))
+                let x = glass.maxX + 4 - CGFloat(across), y = glass.minY + CGFloat(down)
+                streaks.move(to: CGPoint(x: x * unit, y: y * unit))
+                streaks.addLine(to: CGPoint(x: (x - 1.1) * unit, y: (y + 3.2) * unit))
+            }
+            context.stroke(streaks, with: .color(Color.white.opacity(0.32)), lineWidth: 0.35 * unit)
+        case .snow:
+            for flake in 0..<42 {
+                let sway = sin(time * 0.8 + Double(flake)) * 2
+                let down = (Double(flake) * 13 + time * Double(4 + flake % 4)).truncatingRemainder(dividingBy: Double(glass.height))
+                let size: CGFloat = flake % 3 == 0 ? 0.75 : 0.5
+                fill(Color.white.opacity(0.9), glass.minX + CGFloat((flake * 23) % Int(glass.width)) + CGFloat(sway),
+                     glass.minY + CGFloat(down), size, size)
+            }
+        case .clear, .overcast:
+            break
         }
     }
 

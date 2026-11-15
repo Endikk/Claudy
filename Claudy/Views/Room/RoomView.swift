@@ -9,15 +9,25 @@ struct RoomView: View {
     /// Noon until told otherwise: the room is first seen in daylight.
     @AppStorage(RoomLight.storageKey) private var lightChoice = RoomLight.noon.rawValue
 
+    @AppStorage(RoomWeather.storageKey) private var weatherChoice = RoomWeather.asItComes
+
     private var light: RoomLight { RoomLight(rawValue: lightChoice) ?? .noon }
+    /// Every project at once, when there is more than one to show.
+    private var showsOverview: Bool { room.isOverview && room.projects.count > 1 }
 
     var body: some View {
         VStack(spacing: Theme.Metric.gap) {
             header
-            RoomCanvas(room: room, light: light)
-                .overlay(alignment: .topLeading) { summary }
-                .overlay(alignment: .topLeading) { agentCard }
-                .clipShape(RoundedRectangle(cornerRadius: Theme.Metric.tileCorner, style: .continuous))
+            Group {
+                if showsOverview {
+                    RoomOverview(room: room, light: light, weatherChoice: weatherChoice)
+                } else {
+                    RoomCanvas(room: room, light: light, weatherChoice: weatherChoice)
+                        .overlay(alignment: .topLeading) { summary }
+                        .overlay(alignment: .topLeading) { agentCard }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Metric.tileCorner, style: .continuous))
             footer
         }
         .padding(Theme.Metric.panelPadding)
@@ -58,15 +68,17 @@ struct RoomView: View {
     /// The hour the room is lit for: the Mac's clock, or one held still.
     private var lightMenu: some View {
         Menu {
-            ForEach(RoomLight.allCases) { choice in
-                Button {
-                    lightChoice = choice.rawValue
-                } label: {
-                    if choice == light {
-                        Label(choice.title, systemImage: "checkmark")
-                    } else {
-                        Text(choice.title)
-                    }
+            Section("Light") {
+                ForEach(RoomLight.allCases) { choice in
+                    Toggle(choice.title, isOn: Binding(get: { choice == light }, set: { _ in lightChoice = choice.rawValue }))
+                }
+            }
+            Section("Weather") {
+                Toggle("As it comes", isOn: Binding(get: { RoomWeather(rawValue: weatherChoice) == nil },
+                                                    set: { _ in weatherChoice = RoomWeather.asItComes }))
+                ForEach(RoomWeather.allCases) { choice in
+                    Toggle(choice.title, isOn: Binding(get: { weatherChoice == choice.rawValue },
+                                                       set: { _ in weatherChoice = choice.rawValue }))
                 }
             }
         } label: {
@@ -77,7 +89,7 @@ struct RoomView: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .foregroundStyle(.secondary)
-        .help("The hour the room is lit for")
+        .help("The hour the room is lit for, and the weather in its window")
     }
 
     // MARK: - Footer
@@ -85,7 +97,12 @@ struct RoomView: View {
     @ViewBuilder
     private var footer: some View {
         HStack(spacing: 8) {
-            if let project = room.selected, let lead = project.lead {
+            if showsOverview {
+                Text(room.projects.count == 1 ? "1 project open" : "\(room.projects.count) projects open")
+                    .font(Theme.Font.label(12, .medium))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            } else if let project = room.selected, let lead = project.lead {
                 Circle()
                     .fill(dot(of: lead))
                     .frame(width: 7, height: 7)
@@ -188,6 +205,7 @@ private struct RoomSwitcher: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
+                if room.projects.count > 1 { everything }
                 ForEach(room.projects) { project in
                     segment(project)
                 }
@@ -199,8 +217,35 @@ private struct RoomSwitcher: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
+    /// Every project at once, ahead of the projects themselves.
+    private var everything: some View {
+        Text("All")
+            .font(Theme.Font.label(12, .semibold))
+            .foregroundStyle(room.isOverview ? .primary : .secondary)
+            .padding(.horizontal, 14)
+            .frame(height: Theme.Metric.tabHeight)
+            .background { if room.isOverview { lens } }
+            .contentShape(Capsule())
+            .onTapGesture {
+                withAnimation(Theme.Motion.mode) {
+                    room.isOverview = true
+                    room.isSummaryOpen = false
+                    room.selectedAgentID = nil
+                }
+            }
+            .help("Every project at once")
+            .accessibilityAddTraits(room.isOverview ? [.isSelected, .isButton] : .isButton)
+    }
+
+    /// The brighter lens behind the chosen segment, as in the card's tabs.
+    private var lens: some View {
+        Capsule()
+            .fill(scheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.85))
+            .overlay(Capsule().strokeBorder(.white.opacity(scheme == .dark ? 0.2 : 0.6), lineWidth: 0.5))
+    }
+
     private func segment(_ project: RoomViewModel.Project) -> some View {
-        let isSelected = room.selected?.id == project.id
+        let isSelected = !room.isOverview && room.selected?.id == project.id
         return HStack(spacing: 6) {
             Text(project.id)
                 .font(Theme.Font.label(12, .semibold))
@@ -214,16 +259,10 @@ private struct RoomSwitcher: View {
         }
         .padding(.horizontal, 14)
         .frame(height: Theme.Metric.tabHeight)
-        .background {
-            if isSelected {
-                Capsule()
-                    .fill(scheme == .dark ? Color.white.opacity(0.16) : Color.white.opacity(0.85))
-                    .overlay(Capsule().strokeBorder(.white.opacity(scheme == .dark ? 0.2 : 0.6), lineWidth: 0.5))
-            }
-        }
+        .background { if isSelected { lens } }
         .contentShape(Capsule())
         .onTapGesture {
-            withAnimation(Theme.Motion.mode) { room.selectedID = project.id }
+            withAnimation(Theme.Motion.mode) { room.enter(project.id) }
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)

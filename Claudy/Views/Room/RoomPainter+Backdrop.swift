@@ -30,8 +30,8 @@ extension RoomPainter {
     /// What moves in the backdrop, drawn over the still part on every frame: the day on the
     /// floor, the clock's hands, and the lights of the racks and of the dock. The window is a
     /// drawing of its own, laid over the room: it changes slowly, and the night must not dim it.
-    func liveBackdrop(sky: RoomSky, step: Int, time: TimeInterval, date: Date, quota: Double) {
-        sunlight(sky)
+    func liveBackdrop(sky: RoomSky, weather: RoomWeather, step: Int, time: TimeInterval, date: Date, quota: Double) {
+        sunlight(sky, strength: weather == .clear ? 1 : 0.3)
         clockHands(at: date)
         serverLights(step: step, quota: quota)
         dockLights(isCharging: RoomVacuum.state(at: time).isDocked, step: step)
@@ -84,16 +84,16 @@ extension RoomPainter {
     }
 
     /// The light the window's three panes throw on the floor, leaning away from the sun.
-    private func sunlight(_ sky: RoomSky) {
+    private func sunlight(_ sky: RoomSky, strength: Double) {
         guard let sun = sky.sun, sun.height > 0.15 else { return }
         let lean = CGFloat(0.5 - sun.across) * 22
         // The day spreads from the window over the floor, before the panes draw their shapes.
         let warm = Color(hex: 0xFFE9B8)
         let source = CGPoint(x: (87 + lean) * unit, y: 44 * unit)
         let reach = CGRect(x: max(6 * unit, source.x - 150 * unit), y: 46.5 * unit, width: 300 * unit, height: 108 * unit)
-        context.fill(Path(reach), with: .radialGradient(Gradient(colors: [warm.opacity(0.13 * sun.height), warm.opacity(0)]),
+        context.fill(Path(reach), with: .radialGradient(Gradient(colors: [warm.opacity(0.13 * sun.height * strength), warm.opacity(0)]),
                                                         center: source, startRadius: 0, endRadius: 110 * unit))
-        let color = warm.opacity(0.07 * sun.height)
+        let color = warm.opacity(0.07 * sun.height * strength)
         for (left, right) in [(17, 62), (65, 109.5), (112.5, 157)] as [(CGFloat, CGFloat)] {
             shape([CGPoint(x: left, y: 46.5), CGPoint(x: right, y: 46.5),
                    CGPoint(x: max(7, right + lean), y: 58.5), CGPoint(x: max(7, left + lean), y: 58.5)], color: color)

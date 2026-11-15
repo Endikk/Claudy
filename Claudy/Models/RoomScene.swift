@@ -78,4 +78,28 @@ struct RoomScene: Equatable {
     var loungers: [RoomLounger] = []
     /// The desk whose agent is being looked at, as an index in `desks`.
     var selectedDesk: Int?
+
+    /// How fast what the room shows moves, which sets how often it is redrawn.
+    enum Pace: Equatable {
+        /// Nobody works: a slow vacuum, a clock, an agent dozing.
+        case quiet
+        /// Hands on a keyboard.
+        case typing
+        /// A Claudy crosses the room.
+        case walking
+
+        var framesPerSecond: Double {
+            switch self {
+            case .quiet: return 2
+            case .typing: return 6
+            case .walking: return 20
+            }
+        }
+    }
+
+    var pace: Pace {
+        if !walkers.isEmpty { return .walking }
+        let isSomeoneTyping = chief.state == .working || desks.contains { $0?.state == .working }
+        return isSomeoneTyping ? .typing : .quiet
+    }
 }

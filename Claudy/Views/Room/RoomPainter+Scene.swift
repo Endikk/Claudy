@@ -31,11 +31,13 @@ extension RoomPainter {
             fill(new, x, y, swept, size.height, opacity: 0.24)
         }
         let shown = zone.progress > 0.5 ? new : old
+        var weave = Path()
         var thread: CGFloat = 2
         while thread < size.height - 1 {
-            fill(Color.white.opacity(0.028), x + 1, y + thread, size.width - 2, 0.5)
+            weave.addRect(CGRect(x: (x + 1) * unit, y: (y + thread) * unit, width: (size.width - 2) * unit, height: 0.5 * unit))
             thread += 2
         }
+        context.fill(weave, with: .color(Color.white.opacity(0.028)))
         for (edge, opacity) in [(CGFloat(0), 0.55), (CGFloat(2), 0.36)] {
             let thickness: CGFloat = edge == 0 ? 1 : 0.5
             let width = size.width - edge * 2, height = size.height - edge * 2

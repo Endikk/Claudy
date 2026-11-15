@@ -7,50 +7,90 @@ struct RoomCanvas: View {
     @ObservedObject var room: RoomViewModel
     /// The hour to light the room for: the Mac's clock, or one held still.
     var light: RoomLight = .clock
+    /// The stored choice of weather: one of `RoomWeather`, or each day's own.
+    var weatherChoice = RoomWeather.asItComes
     @EnvironmentObject private var usage: UsageViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Points per unit of the scene: a half unit is then one point, two pixels on a Retina screen.
     static let unit: CGFloat = 2
     static let size = CGSize(width: RoomGeometry.size.width * unit, height: RoomGeometry.size.height * unit)
-    /// Frames a second: more while a Claudy crosses the room, or the hour is swept through.
+    /// Frames a second: as many as what the room shows asks for, and the most while the hour is
+    /// swept through.
     private var frameRate: Double {
-        let isMoving = !room.scene(for: room.selected, at: Date(), quota: nil, withHelp: false).walkers.isEmpty
-        return isMoving || sweep.from != nil ? Self.walkingRate : Self.restingRate
+        if sweep.from != nil { return RoomScene.Pace.walking.framesPerSecond }
+        return room.scene(for: room.selected, at: Date(), quota: nil, withHelp: false).pace.framesPerSecond
     }
     private static let stepDuration: TimeInterval = 0.18
     private static let strideDuration: TimeInterval = 0.12
 
-    /// The still part of the room as an image, drawn again only when what it shows changes: the
-    /// project's name, the week on the board, the lamps.
+    /// What never changes from one frame to the next, kept as images: the still part of the
+    /// room, drawn again only when what it shows changes (the project's name, the week on the
+    /// board, the lamps), and a desk's furniture, drawn once.
     @MainActor
     private final class Backdrop {
         private var key: String?
-        private var image: Image?
+        private var still: Image?
+        private var desk: RoomPainter.DeskArt?
+        private var hasTriedDesk = false
 
         func image(title: String, week: [Double], isLit: Bool) -> Image? {
             let wanted = "\(title)|\(week)|\(isLit)"
-            if wanted == key { return image }
+            if wanted == key { return still }
             key = wanted
+            still = Self.render(RoomGeometry.size) { $0.stillBackdrop(title: title, week: week, isLit: isLit) }
+            return still
+        }
+
+        func deskArt() -> RoomPainter.DeskArt? {
+            if hasTriedDesk { return desk }
+            hasTriedDesk = true
+            let origin = CGPoint(x: RoomPainter.DeskArt.margin, y: RoomPainter.DeskArt.margin)
+            guard let chair = Self.render(RoomPainter.DeskArt.size, draw: { $0.deskChair(at: origin) }),
+                  let body = Self.render(RoomPainter.DeskArt.size, draw: { $0.deskBody(at: origin) }) else { return nil }
+            desk = RoomPainter.DeskArt(chair: chair, desk: body)
+            return desk
+        }
+
+        private var symbols: [String: Image]?
+
+        /// Every symbol a screen can show, in each colour it is shown in, as small images: a
+        /// symbol resolved on every frame costs far more than an image stamped.
+        func stamps() -> [String: Image] {
+            if let symbols { return symbols }
+            let scale = NSScreen.main?.backingScaleFactor ?? 2
+            var made: [String: Image] = [:]
+            for name in RoomGlyph.names {
+                for ink in RoomGlyph.inks {
+                    let symbol = Image(systemName: name)
+                        .font(.system(size: ink.points * RoomCanvas.unit / 2, weight: .semibold))
+                        .foregroundColor(Color(hex: ink.color))
+                    let renderer = ImageRenderer(content: symbol)
+                    renderer.scale = scale
+                    if let image = renderer.cgImage {
+                        made[RoomGlyph.tag(name, color: ink.color, points: ink.points)] = Image(decorative: image, scale: scale)
+                    }
+                }
+            }
+            symbols = made
+            return made
+        }
+
+        /// A drawing of `size` units as an image. Where SwiftUI cannot render off screen there
+        /// is none, and the room draws that part itself on every frame.
+        private static func render(_ size: CGSize, draw: @escaping (RoomPainter) -> Void) -> Image? {
             let scale = NSScreen.main?.backingScaleFactor ?? 2
             let drawing = Canvas { context, _ in
-                RoomPainter(context: context, unit: RoomCanvas.unit).stillBackdrop(title: title, week: week, isLit: isLit)
+                draw(RoomPainter(context: context, unit: RoomCanvas.unit))
             }
-            .frame(width: RoomCanvas.size.width, height: RoomCanvas.size.height)
+            .frame(width: size.width * RoomCanvas.unit, height: size.height * RoomCanvas.unit)
             let renderer = ImageRenderer(content: drawing)
             renderer.scale = scale
-            // Where SwiftUI cannot render off screen there is no image, and the room draws the
-            // still part itself on every frame.
-            image = renderer.cgImage.map { Image(decorative: $0, scale: scale) }
-            return image
+            return renderer.cgImage.map { Image(decorative: $0, scale: scale) }
         }
     }
 
     @State private var backdrop = Backdrop()
-
-    /// With nobody walking, the room only has to keep up with typing hands and a slow vacuum.
-    private static let restingRate: Double = 8
-    private static let walkingRate: Double = 20
 
     /// What the last frame showed, so that a change of light is swept through hour by hour
     /// instead of jumped to.
@@ -117,24 +157,35 @@ struct RoomCanvas: View {
             let week = week
             let sky = RoomSky(hour: hour(at: timeline.date))
             let still = backdrop.image(title: title, week: week, isLit: sky.hasLamps)
+            let art = backdrop.deskArt()
+            let stamps = backdrop.stamps()
             Canvas { context, _ in
-                Self.draw(scene, in: context, at: timeline.date, sky: sky, week: week, still: still, title: title,
-                          isSummaryOpen: isSummaryOpen)
+                Self.draw(scene, in: context, at: timeline.date, sky: sky,
+                          weather: RoomWeather.chosen(weatherChoice, at: timeline.date), week: week, still: still, art: art,
+                          stamps: stamps, title: title, isSummaryOpen: isSummaryOpen)
             }
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .overlay(alignment: .topLeading) {
-            // The window, over the room: twice a second is enough for clouds and for a city
-            // lighting up, and every frame while the hour is swept through.
-            TimelineView(.animation(minimumInterval: reduceMotion ? 1 : (sweep.from != nil ? 1 / Self.walkingRate : 0.5))) { timeline in
+            // The window, over the room, in a drawing no larger than itself: twice a second is
+            // enough for clouds and for a city lighting up, more when something falls, and every
+            // frame while the hour is swept through.
+            let frame = RoomPainter.windowFrame
+            let falls = RoomWeather.chosen(weatherChoice, at: Date()).isFalling
+            let pause = sweep.from != nil ? 1 / RoomScene.Pace.walking.framesPerSecond
+                : (falls ? 1 / RoomScene.Pace.typing.framesPerSecond : 0.5)
+            TimelineView(.animation(minimumInterval: reduceMotion ? 1 : pause)) { timeline in
                 let sky = RoomSky(hour: hour(at: timeline.date))
+                let weather = RoomWeather.chosen(weatherChoice, at: timeline.date)
                 let time = timeline.date.timeIntervalSinceReferenceDate
                 Canvas { context, _ in
-                    RoomPainter(context: context, unit: Self.unit)
-                        .window(sky, step: Int(time / Self.stepDuration), time: time)
+                    var painter = RoomPainter(context: context, unit: Self.unit)
+                    painter.context.translateBy(x: -frame.minX * Self.unit, y: -frame.minY * Self.unit)
+                    painter.window(sky, weather: weather, step: Int(time / Self.stepDuration), time: time)
                 }
             }
-            .frame(width: Self.size.width, height: Self.size.height)
+            .frame(width: frame.width * Self.unit, height: frame.height * Self.unit)
+            .offset(x: frame.minX * Self.unit, y: frame.minY * Self.unit)
             .allowsHitTesting(false)
         }
         .overlay(alignment: .topLeading) {
@@ -205,20 +256,24 @@ struct RoomCanvas: View {
 
     // MARK: - Drawing
 
-    private static func draw(_ scene: RoomScene, in context: GraphicsContext, at date: Date, sky: RoomSky, week: [Double], still: Image?,
-                             title: String, isSummaryOpen: Bool) {
-        var painter = RoomPainter(context: context, unit: unit)
+    /// Draws a room. `unit` is its scale; a small room, in the overview, has no image kept for
+    /// it and draws its own window (`drawsWindow`), where the full one leaves it to its layer.
+    static func draw(_ scene: RoomScene, in context: GraphicsContext, at date: Date, sky: RoomSky, weather: RoomWeather,
+                     week: [Double], still: Image?, art: RoomPainter.DeskArt?, stamps: [String: Image], title: String,
+                     isSummaryOpen: Bool, unit: CGFloat = RoomCanvas.unit, drawsWindow: Bool = false) {
+        var painter = RoomPainter(context: context, unit: unit, stamps: stamps)
         let time = date.timeIntervalSinceReferenceDate
         let step = Int(time / stepDuration)
 
         let centre = painter.lowered(by: RoomGeometry.centreDrop)
         if let still {
-            context.draw(still, in: CGRect(origin: .zero, size: size))
+            context.draw(still, in: CGRect(x: 0, y: 0, width: RoomGeometry.size.width * unit, height: RoomGeometry.size.height * unit))
         } else {
             painter.stillBackdrop(title: title, week: week, isLit: sky.hasLamps)
         }
         let quota = scene.chief.quota ?? 0
-        painter.liveBackdrop(sky: sky, step: step, time: time, date: date, quota: quota)
+        painter.liveBackdrop(sky: sky, weather: weather, step: step, time: time, date: date, quota: quota)
+        if drawsWindow { painter.window(sky, weather: weather, step: step, time: time) }
         for (index, zone) in scene.zones.enumerated() {
             painter.zone(zone, at: RoomGeometry.zoneOrigins[index])
         }
@@ -230,7 +285,7 @@ struct RoomCanvas: View {
         let chosen = scene.selectedDesk.map { desks[$0].origin }
         var layers: [(depth: CGFloat, draw: (RoomPainter) -> Void)] = desks.map { desk in
             (desk.origin.y + RoomGeometry.deskSize.height, { painter in
-                painter.desk(at: desk.origin, occupant: desk.occupant, step: step)
+                painter.desk(at: desk.origin, occupant: desk.occupant, step: step, art: art)
                 if desk.origin == chosen { painter.selection(at: desk.origin) }
             })
         }
@@ -263,10 +318,11 @@ struct RoomCanvas: View {
         painter.vignette()
         painter.strain(quota, time: time)
         painter.light(sky, screens: lit)
+        if drawsWindow, sky.dim != nil { painter.window(sky, weather: weather, step: step, time: time) }
         guard sky.dim != nil, sky.hasLamps else { return }
         // The night dims the screens with the rest: they are lit again on top of it.
         for desk in desks where desk.occupant != nil {
-            painter.screen(at: desk.origin, of: desk.occupant, step: step)
+            painter.screenFace(at: desk.origin, of: desk.occupant, step: step)
         }
         centre.chiefScreens(scene.chief, step: step, isSummaryOpen: isSummaryOpen)
     }

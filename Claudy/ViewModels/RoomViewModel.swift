@@ -51,6 +51,8 @@ final class RoomViewModel: ObservableObject {
     @Published var isSummaryOpen = false
     /// The agent whose card is open over the room.
     @Published var selectedAgentID: String?
+    /// Every project at once, each a small room, instead of one room.
+    @Published var isOverview = false
 
     /// The room is on screen. Opening it seats everyone at once: nobody walks in for a room that
     /// was already at work.
@@ -109,6 +111,22 @@ final class RoomViewModel: ObservableObject {
         selected?.agents.first { $0.id == selectedAgentID }
     }
 
+    /// Shows the room of the project an agent works in, its card open.
+    func show(agent id: String) {
+        guard let project = projects.first(where: { project in project.agents.contains { $0.id == id } }) else { return }
+        selectedID = project.id
+        selectedAgentID = id
+        isOverview = false
+        isSummaryOpen = false
+    }
+
+    /// Enters the room of one project.
+    func enter(_ projectID: String) {
+        selectedID = projectID
+        isOverview = false
+        selectedAgentID = nil
+    }
+
     func toggleAgent(_ id: String) {
         selectedAgentID = selectedAgentID == id ? nil : id
         if selectedAgentID != nil { isSummaryOpen = false }
@@ -141,6 +159,7 @@ final class RoomViewModel: ObservableObject {
         flips = flips.filter { open.contains($0.key) }
         lounges = lounges.filter { open.contains($0.key) }
         if let selectedAgentID, !listed.contains(selectedAgentID) { self.selectedAgentID = nil }
+        if found.count < 2 { isOverview = false }
 
         for project in found {
             seat(project, at: now)

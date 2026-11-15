@@ -228,6 +228,24 @@ final class RoomViewModelTests: XCTestCase {
         XCTAssertNil(room.selectedAgent)
     }
 
+    func testABannerAboutAnAgentLeadsToItsDeskInItsProject() async {
+        let activity = ClaudeActivity(
+            sessions: [session("a", cwd: "/me/Claudy"), session("b", cwd: "/me/Api")],
+            agents: [agent("x", session: "a", calls: [("Read", nil)]), agent("y", session: "b", calls: [("Bash", "swift test")])])
+        let (room, agents) = room([activity])
+        await agents.refresh()
+        room.sync()
+        room.isOverview = true
+        room.show(agent: "y")
+        XCTAssertEqual(room.selected?.id, "Api")
+        XCTAssertEqual(room.selectedAgent?.id, "y")
+        XCTAssertFalse(room.isOverview)
+
+        room.enter("Claudy")
+        XCTAssertEqual(room.selected?.id, "Claudy")
+        XCTAssertNil(room.selectedAgent)
+    }
+
     func testAWaitingSessionShowsOnClaudysScreen() async {
         let activity = ClaudeActivity(sessions: [session("a", cwd: "/me/Claudy", status: .waiting(reason: "permission prompt"))],
                                       agents: [])

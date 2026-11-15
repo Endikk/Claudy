@@ -37,7 +37,12 @@ final class ClaudyMenu: NSObject {
         notifications.submenu = notificationsMenu()
         menu.addItem(notifications)
         menu.addItem(showOrHideItem())
-        menu.addItem(entry("Open agent room", #selector(openRoom)))
+        let room = entry("Open agent room", #selector(openRoom))
+        if (NSApp.delegate as? AppDelegate)?.isRoomHotKeyActive == true {
+            room.keyEquivalent = GlobalHotKey.roomKeyEquivalent
+            room.keyEquivalentModifierMask = GlobalHotKey.modifiers
+        }
+        menu.addItem(room)
         menu.addItem(entry("Export usage as CSV…", #selector(export)))
         if let account = accountItem() {
             menu.addItem(.separator())

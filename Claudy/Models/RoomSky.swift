@@ -149,3 +149,49 @@ struct RoomSky: Equatable, Sendable {
         return channel(16) | channel(8) | channel(0)
     }
 }
+
+/// The weather in the room's window. Nothing is asked of the network: each day has its own,
+/// decided by its date, so it rains some days and, in winter, snows.
+enum RoomWeather: String, CaseIterable, Identifiable, Sendable {
+    case clear, overcast, rain, snow
+
+    static let storageKey = "roomWeather"
+    /// The stored choice that lets each day have its own weather.
+    static let asItComes = "auto"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .clear: "Clear"
+        case .overcast: "Overcast"
+        case .rain: "Rain"
+        case .snow: "Snow"
+        }
+    }
+
+    /// Something falls: the window is redrawn often enough to see it fall.
+    var isFalling: Bool { self == .rain || self == .snow }
+
+    /// The weather of a day: five days in ten are clear, two overcast, three wet, and what falls
+    /// from December to February is snow two times in three.
+    static func of(_ date: Date, calendar: Calendar = .current) -> RoomWeather {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        let month = parts.month ?? 6
+        var seed = UInt32(truncatingIfNeeded: (parts.year ?? 0) &* 372 &+ month &* 31 &+ (parts.day ?? 0))
+        seed = (seed ^ (seed >> 15)) &* 2_246_822_519
+        seed ^= seed >> 13
+        let isWinter = month == 12 || month <= 2
+        switch seed % 10 {
+        case 0, 1: return isWinter ? .snow : .rain
+        case 2: return .rain
+        case 3, 4: return .overcast
+        default: return .clear
+        }
+    }
+
+    /// The weather to show for a stored choice: the one chosen, or the day's own.
+    static func chosen(_ stored: String, at date: Date, calendar: Calendar = .current) -> RoomWeather {
+        RoomWeather(rawValue: stored) ?? of(date, calendar: calendar)
+    }
+}

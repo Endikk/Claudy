@@ -66,6 +66,39 @@ final class RoomSkyTests: XCTestCase {
         XCTAssertEqual(RoomSky(hour: -1).hour, 23)
     }
 
+    func testADayAlwaysHasTheSameWeather() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let morning = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 15, hour: 8)))
+        let evening = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 11, day: 15, hour: 22)))
+        XCTAssertEqual(RoomWeather.of(morning, calendar: calendar), RoomWeather.of(evening, calendar: calendar))
+    }
+
+    func testAYearHasEveryWeatherAndSnowOnlyInWinter() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+        let start = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1, hour: 12)))
+        var seen: [RoomWeather: Int] = [:]
+        for day in 0..<365 {
+            let date = try XCTUnwrap(calendar.date(byAdding: .day, value: day, to: start))
+            let weather = RoomWeather.of(date, calendar: calendar)
+            seen[weather, default: 0] += 1
+            if weather == .snow {
+                XCTAssertTrue([12, 1, 2].contains(calendar.component(.month, from: date)), "snow on \(date)")
+            }
+        }
+        XCTAssertEqual(Set(seen.keys), Set(RoomWeather.allCases))
+        XCTAssertGreaterThan(seen[.clear] ?? 0, 120)
+    }
+
+    func testAChosenWeatherWinsOverTheDaysOwn() {
+        let date = Date(timeIntervalSince1970: 1_793_468_000)
+        XCTAssertEqual(RoomWeather.chosen("snow", at: date), .snow)
+        XCTAssertEqual(RoomWeather.chosen(RoomWeather.asItComes, at: date), RoomWeather.of(date))
+        XCTAssertTrue(RoomWeather.rain.isFalling)
+        XCTAssertFalse(RoomWeather.overcast.isFalling)
+    }
+
     func testAHeldLightGivesItsOwnHourAndTheClockGivesTheMacs() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))

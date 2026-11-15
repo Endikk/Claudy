@@ -5,6 +5,8 @@ import SwiftUI
 struct RoomPainter {
     var context: GraphicsContext
     let unit: CGFloat
+    /// The symbols the canvas made into images once, by `RoomGlyph.tag`.
+    var stamps: [String: Image] = [:]
 
     static let ink: UInt32 = 0x1F1A17
     static let bubble: UInt32 = 0xF1E6D2
@@ -74,12 +76,18 @@ struct RoomPainter {
     // MARK: - Screens
 
     /// A system symbol centred on a point of the scene. `points` is its size at the room's
-    /// usual scale.
-    func symbol(_ name: String, centre: CGPoint, points: CGFloat, color: Color) {
+    /// usual scale. The canvas hands over the symbols it made into images once; one it does not
+    /// have is resolved here, on every frame.
+    func symbol(_ name: String, centre: CGPoint, points: CGFloat, color: UInt32) {
+        let place = CGPoint(x: centre.x * unit, y: centre.y * unit)
+        if let stamp = stamps[RoomGlyph.tag(name, color: color, points: points)] {
+            context.draw(stamp, at: place, anchor: .center)
+            return
+        }
         let image = Text(Image(systemName: name))
             .font(.system(size: points * unit / 2, weight: .semibold))
-            .foregroundColor(color)
-        context.draw(context.resolve(image), at: CGPoint(x: centre.x * unit, y: centre.y * unit), anchor: .center)
+            .foregroundColor(Color(hex: color))
+        context.draw(context.resolve(image), at: place, anchor: .center)
     }
 
     /// The work a walking Claudy goes to, in a bubble over its head.
@@ -90,7 +98,7 @@ struct RoomPainter {
         fill(Self.bubble, x, y + 1, 11, 9)
         fill(Self.bubble, x + 4, y + 11, 3, 1)
         fill(Self.bubble, x + 5, y + 12, 1, 1)
-        symbol(name, centre: CGPoint(x: x + 5.5, y: y + 5.5), points: 12, color: Color(hex: Self.ink))
+        symbol(name, centre: CGPoint(x: x + 5.5, y: y + 5.5), points: 12, color: Self.ink)
     }
 
     /// A monitor facing the viewer, 15 by 13 plus its stand, a glyph on its screen.
@@ -105,44 +113,61 @@ struct RoomPainter {
         fill(Color.white.opacity(0.07), x + 1, y + 1, 13, 3)
         fill(0x2B2F36, x + 0.5, y + 11.5, 14, 1)
         fill(name == nil ? 0x4A505B : 0x4CC38A, x + 12.5, y + 11.75, 1, 0.5)
-        if let name { symbol(name, centre: CGPoint(x: x + 7.5, y: y + 6.25), points: 13, color: Color(hex: color)) }
+        if let name { symbol(name, centre: CGPoint(x: x + 7.5, y: y + 6.25), points: 13, color: color) }
     }
 
-    /// The monitor of a desk alone, so the scene can light its screens again after dimming the
-    /// room for the night.
+    /// What a desk's screen shows for its occupant: the colour of its glass, its symbol and the
+    /// symbol's colour. `nil` for an empty desk.
+    private func look(of occupant: RoomOccupant?, step: Int) -> (screen: UInt32, name: String?, color: UInt32)? {
+        guard let occupant else { return nil }
+        let beat = step + occupant.phase
+        var look: (screen: UInt32, name: String?, color: UInt32)
+        switch occupant.state {
+        case .working: look = (0x1E2B36, occupant.glyph, 0xC8E4FF)
+        case .idle: look = (0x1E2B36, occupant.glyph, 0x5E7C93)
+        case .waiting: look = (beat % 4 >= 2 ? 0xC98A2C : 0xF2A93B, RoomGlyph.waiting, Self.ink)
+        case .stalled: look = (0x3A1E1B, RoomGlyph.stalled, 0xF0604D)
+        case .done: look = (0x1F3A2C, RoomGlyph.done, 0x4CC38A)
+        }
+        if occupant.isFlashing { look.screen = 0xC8E4FF }
+        return look
+    }
+
+    /// The whole monitor of a desk, with what it shows.
     func screen(at desk: CGPoint, of occupant: RoomOccupant?, step: Int) {
-        guard let occupant else {
+        guard let look = look(of: occupant, step: step) else {
             monitor(x: desk.x + 1, y: desk.y + 1, screen: 0x16181C, glyph: nil)
             return
         }
-        let beat = step + occupant.phase
-        var look: (screen: UInt32, glyph: UInt32)
-        var name = occupant.glyph
-        switch occupant.state {
-        case .working: look = (0x1E2B36, 0xC8E4FF)
-        case .idle: look = (0x1E2B36, 0x5E7C93)
-        case .waiting:
-            look = (beat % 4 >= 2 ? 0xC98A2C : 0xF2A93B, Self.ink)
-            name = RoomGlyph.waiting
-        case .stalled:
-            look = (0x3A1E1B, 0xF0604D)
-            name = RoomGlyph.stalled
-        case .done:
-            look = (0x1F3A2C, 0x4CC38A)
-            name = RoomGlyph.done
-        }
-        if occupant.isFlashing { look.screen = 0xC8E4FF }
-        monitor(x: desk.x + 1, y: desk.y + 1, screen: look.screen, glyph: name, color: look.glyph)
+        monitor(x: desk.x + 1, y: desk.y + 1, screen: look.screen, glyph: look.name, color: look.color)
+    }
+
+    /// The glass of a desk's monitor alone, over a monitor already drawn: for the desks drawn
+    /// from their kept image, and to light the screens again after the night dimmed the room.
+    func screenFace(at desk: CGPoint, of occupant: RoomOccupant?, step: Int) {
+        guard let look = look(of: occupant, step: step) else { return }
+        let x = desk.x + 1, y = desk.y + 1
+        fill(look.screen, x + 1, y + 1, 13, 10.5)
+        fill(Color.white.opacity(0.07), x + 1, y + 1, 13, 3)
+        fill(0x4CC38A, x + 12.5, y + 11.75, 1, 0.5)
+        if let name = look.name { symbol(name, centre: CGPoint(x: x + 7.5, y: y + 6.25), points: 13, color: look.color) }
     }
 
     // MARK: - Desks
 
-    /// One desk seen from the front and a little above, 36 by 31: the monitor at the back left
-    /// of the top, Claudy behind it on the right, its arms on the keyboard.
-    func desk(at origin: CGPoint, occupant: RoomOccupant?, step: Int) {
+    /// The furniture of a desk, which never changes, in two layers kept as images: the chair,
+    /// behind whoever sits there, and the desk itself with its dark monitor and its keyboard.
+    struct DeskArt {
+        let chair: Image
+        let desk: Image
+        /// Units of margin round the desk in both images, for its shadow.
+        static let margin: CGFloat = 2
+        static let size = CGSize(width: RoomGeometry.deskSize.width + margin * 2, height: RoomGeometry.deskSize.height + margin * 2)
+    }
+
+    /// The chair of a desk and the shadow under the desk: what is behind its occupant.
+    func deskChair(at origin: CGPoint) {
         let x = origin.x, y = origin.y
-        let isWorking = occupant?.state == .working
-        let beat = step + (occupant?.phase ?? 0)
         shadow(x + 1, y + 29, 34, 2)
         fill(0x2A2320, x + 19, y + 2.5, 12, 14)
         fill(0x2A2320, x + 18.5, y + 3, 13, 13)
@@ -152,34 +177,72 @@ struct RoomPainter {
         fill(0x2A2320, x + 31.5, y + 9.5, 1.5, 6)
         fill(0x3A302B, x + 17, y + 9.5, 1.5, 0.5)
         fill(0x3A302B, x + 31.5, y + 9.5, 1.5, 0.5)
-        if let occupant {
-            sprite(RoomSprite.frame(beat % 23 == 0 ? .sitBlink : .sit), x: x + 17, y: y + 4, tint: occupant.tint)
-        }
+    }
+
+    /// The desk in front of its occupant: its top, its front, its monitor switched off and its
+    /// keyboard.
+    func deskBody(at origin: CGPoint) {
+        let x = origin.x, y = origin.y
         top(x: x, y: y + 15, width: 36, depth: 8, grain: [(3, 3, 9), (14, 7, 12)])
         front(x: x, y: y + 23, width: 36, height: 6, dividers: [12, 24], handles: [4.5, 16.5, 28.5])
+        monitor(x: x + 1, y: y + 1, screen: 0x16181C, glyph: nil)
+        keyboard(x: x + 18, y: y + 18, keys: 8, isLit: false)
+    }
+
+    /// One desk seen from the front and a little above, 36 by 31: the monitor at the back left
+    /// of the top, Claudy behind it on the right, its arms on the keyboard. With `art` the
+    /// furniture comes from its kept images and only what lives is drawn.
+    func desk(at origin: CGPoint, occupant: RoomOccupant?, step: Int, art: DeskArt? = nil) {
+        let x = origin.x, y = origin.y
+        let beat = step + (occupant?.phase ?? 0)
+        let margin = DeskArt.margin
+        let frame = CGRect(x: (x - margin) * unit, y: (y - margin) * unit,
+                           width: DeskArt.size.width * unit, height: DeskArt.size.height * unit)
+        if let art { context.draw(art.chair, in: frame) } else { deskChair(at: origin) }
+        if let occupant {
+            sprite(RoomSprite.frame(beat % 23 == 0 || occupant.state == .idle ? .sitBlink : .sit), x: x + 17, y: y + 4,
+                   tint: occupant.tint)
+        }
+        if let art { context.draw(art.desk, in: frame) } else { deskBody(at: origin) }
+        guard let occupant else { return }
         // A lit screen throws its light on the desk.
-        if let occupant, occupant.state != .stalled {
+        if occupant.state != .stalled {
             fill(0xC8E4FF, x + 2, y + 16.5, 13, 1.5, opacity: 0.16)
             fill(0xC8E4FF, x + 3, y + 18, 11, 1, opacity: 0.08)
         }
-        screen(at: origin, of: occupant, step: step)
-        keyboard(x: x + 18, y: y + 18, keys: 8, isLit: occupant != nil)
-        if let occupant {
-            arms(x: x + 17, y: y + 12, tint: occupant.tint, isTyping: isWorking, beat: beat)
-        }
-        switch occupant.map({ $0.phase % 3 }) {
+        screenFace(at: origin, of: occupant, step: step)
+        fill(0x9A9CA6, x + 18.5, y + 18.5, 13, 2.5)
+        for key in 0..<8 { fill(0x3A3F48, x + 19.5 + CGFloat(key) * 1.5, y + 18.5, 0.5, 2.5) }
+        arms(x: x + 17, y: y + 12, tint: occupant.tint, isTyping: occupant.state == .working, beat: beat)
+        if occupant.state == .idle { doze(x: x + 30, y: y + 2, step: step + occupant.phase) }
+        switch occupant.phase % 3 {
         case 0:
             fill(Self.bubble, x + 33, y + 19, 2, 2.5)
             fill(0x8C6248, x + 33.5, y + 19.5, 1, 0.5)
         case 1:
             fill(0xEDE3D3, x + 32.5, y + 19.5, 3, 2)
             fill(0xB5A898, x + 33, y + 20, 2, 0.5)
-        case 2:
+        default:
             fill(0x9B4E45, x + 32.5, y + 19.5, 3, 2.5)
             fill(0x6FAE8F, x + 32, y + 17, 4, 3)
             fill(0x8FC7A8, x + 33.5, y + 16.5, 1.5, 1.5)
-        default:
-            break
+        }
+    }
+
+    /// Three small z's rising from a Claudy that waits, eyes closed: it dozes until its command
+    /// or its parent answers.
+    func doze(x: CGFloat, y: CGFloat, step: Int) {
+        let glyph = [[1, 1, 1], [0, 1, 0], [1, 1, 1]]
+        for letter in 0..<3 {
+            let rise = CGFloat((step + letter * 3) % 9)
+            let left = x + CGFloat(letter) * 2.5 + rise * 0.3, top = y - CGFloat(letter) * 2.5 - rise * 0.5
+            let size: CGFloat = 0.5 + CGFloat(letter) * 0.25
+            for (row, cells) in glyph.enumerated() {
+                for (column, cell) in cells.enumerated() where cell == 1 {
+                    fill(Color(hex: Self.bubble).opacity(0.85 - Double(rise) * 0.08),
+                         left + CGFloat(column) * size, top + CGFloat(row) * size, size, size)
+                }
+            }
         }
     }
 
